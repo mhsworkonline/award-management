@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 20% 16%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 20% 16%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 20% 16%;
+
+    /* Asana-ish coral/rose accent, muted enough for long sessions */
+    --primary: 351 62% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 22% 96%;
+    --secondary-foreground: 224 20% 24%;
+
+    --muted: 220 22% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 220 22% 95%;
+    --accent-foreground: 224 20% 20%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 55% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 35 92% 48%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 16% 90%;
+    --input: 220 16% 88%;
+    --ring: 351 62% 55%;
+
+    --sidebar: 228 24% 98%;
+    --sidebar-foreground: 224 18% 28%;
+
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 225 16% 9%;
+    --foreground: 220 16% 92%;
+
+    --card: 225 15% 12%;
+    --card-foreground: 220 16% 92%;
+
+    --popover: 225 15% 12%;
+    --popover-foreground: 220 16% 92%;
+
+    --primary: 351 66% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 225 12% 18%;
+    --secondary-foreground: 220 16% 90%;
+
+    --muted: 225 12% 17%;
+    --muted-foreground: 220 10% 62%;
+
+    --accent: 225 12% 19%;
+    --accent-foreground: 220 16% 92%;
+
+    --destructive: 0 62% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 45% 44%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 35 86% 54%;
+    --warning-foreground: 0 0% 12%;
+
+    --border: 225 10% 22%;
+    --input: 225 10% 24%;
+    --ring: 351 66% 60%;
+
+    --sidebar: 225 16% 11%;
+    --sidebar-foreground: 220 14% 80%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+  /* Keyboard-first: visible focus, but only for keyboard users */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border-radius: 9999px;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
