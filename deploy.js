@@ -2,8 +2,8 @@
 /**
  * Deploy — commit and push the working tree to GitHub.
  *
- *   node deploy.js                  # stage everything, prompt for a commit message, push
- *   node deploy.js "message"        # use this commit message instead of prompting
+ *   node deploy.js                  # stage everything, auto-generate a commit message, push
+ *   node deploy.js "message"        # use this commit message instead of the auto one
  *   node deploy.js --skip-checks    # skip `npm run typecheck` before committing
  *   node deploy.js --no-push        # commit locally only, don't push
  *
@@ -13,7 +13,6 @@
  */
 
 const { spawnSync } = require("node:child_process");
-const readline = require("node:readline");
 
 const ROOT = __dirname;
 const WIN = process.platform === "win32";
@@ -22,27 +21,21 @@ const skipChecks = args.includes("--skip-checks");
 const noPush = args.includes("--no-push");
 const messageArg = args.find((a) => !a.startsWith("--"));
 
-function run(cmd, cmdArgs) {
-  return spawnSync(cmd, cmdArgs, { cwd: ROOT, stdio: "inherit", shell: WIN });
+// `shell` is opt-in per call, not global: on Windows, npm is npm.cmd and
+// needs a shell to resolve; git.exe doesn't, and routing it through cmd.exe
+// re-splits quoted arguments (a commit message with spaces gets torn apart
+// into separate argv entries) — so git calls always run shell-free.
+function run(cmd, cmdArgs, { shell = false } = {}) {
+  return spawnSync(cmd, cmdArgs, { cwd: ROOT, stdio: "inherit", shell });
 }
 
-function capture(cmd, cmdArgs) {
-  return spawnSync(cmd, cmdArgs, { cwd: ROOT, encoding: "utf8", shell: WIN });
+function capture(cmd, cmdArgs, { shell = false } = {}) {
+  return spawnSync(cmd, cmdArgs, { cwd: ROOT, encoding: "utf8", shell });
 }
 
 function fail(msg) {
   console.error(`\n✖ ${msg}`);
   process.exit(1);
-}
-
-function ask(question) {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
 }
 
 async function main() {
@@ -60,7 +53,7 @@ async function main() {
 
   if (!skipChecks) {
     console.log("→ Running typecheck...");
-    if (run("npm", ["run", "typecheck"]).status !== 0) {
+    if (run("npm", ["run", "typecheck"], { shell: WIN }).status !== 0) {
       fail("Typecheck failed — fix the errors above, or run with --skip-checks to bypass.");
     }
     console.log("✓ Typecheck passed\n");
@@ -72,14 +65,8 @@ async function main() {
     console.log("→ Staging changes...");
     run("git", ["add", "-A"]);
 
-    let message = messageArg;
-    if (!message) message = await ask("Commit message: ");
-    if (!message) {
-      message = `Update ${new Date().toISOString().slice(0, 19).replace("T", " ")}`;
-      console.log(`(no message given — using "${message}")`);
-    }
-
-    console.log("→ Committing...");
+    const message = messageArg || `Update ${new Date().toISOString().slice(0, 19).replace("T", " ")}`;
+    console.log(`→ Committing ("${message}")...`);
     if (run("git", ["commit", "-m", message]).status !== 0) fail("Commit failed.");
     console.log("✓ Committed\n");
   } else {

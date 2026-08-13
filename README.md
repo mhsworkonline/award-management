@@ -94,6 +94,6 @@ npm run typecheck  # tsc --noEmit
 npm run deploy      # typecheck, then commit + push to GitHub (node deploy.js)
 ```
 
-`deploy.js` stages everything, runs the typecheck, prompts for a commit message (or pass one:
-`node deploy.js "message"`), and pushes to the current branch's remote. `--skip-checks` skips the
-typecheck; `--no-push` commits locally only.
+`deploy.js` stages everything, runs the typecheck, commits with an auto-generated message (or pass
+one: `node deploy.js "message"`), and pushes to the current branch's remote — no prompts.
+`--skip-checks` skips the typecheck; `--no-push` commits locally only.
