@@ -62,6 +62,8 @@ export function StudentSheet({
   const [duplicates, setDuplicates] = React.useState<DuplicateMatch[]>([]);
   const [checking, setChecking] = React.useState(false);
   const [serverError, setServerError] = React.useState<string | null>(null);
+  const [instType, setInstType] = React.useState<"school" | "college" | "">("");
+  const [boardId, setBoardId] = React.useState("");
 
   const {
     register,
@@ -78,14 +80,34 @@ export function StudentSheet({
   const middleName = watch("middle_name");
   const lastName = watch("last_name");
 
-  const institution = lookups.institutions.find((i) => i.id === institutionId);
-  const isCollege = institution?.type === "college";
+  const isCollege = instType === "college";
   const course = lookups.courses.find((c) => c.id === courseId);
+
+  const availableInstitutions = lookups.institutions.filter((i) => {
+    if (!instType || i.type !== instType) return false;
+    if (boardId) return i.board_id === boardId;
+    return true;
+  });
+
+  function handleInstTypeChange(v: "school" | "college") {
+    setInstType(v);
+    setBoardId("");
+    setValue("institution_id", "", { shouldValidate: true });
+  }
+
+  function handleBoardChange(v: string) {
+    setBoardId(v);
+    setValue("institution_id", "", { shouldValidate: true });
+  }
 
   React.useEffect(() => {
     if (!open || !record) return;
     setDuplicates([]);
     setServerError(null);
+
+    const inst = lookups.institutions.find((i) => i.id === record.institution_id);
+    setInstType(inst?.type ?? "");
+    setBoardId(inst?.board_id ?? "");
 
     reset({
       first_name: record.students?.first_name ?? "",
@@ -100,7 +122,7 @@ export function StudentSheet({
       period_no: record.period_no ? String(record.period_no) : "",
       roll_no: record.roll_no ?? "",
     });
-  }, [open, record, reset]);
+  }, [open, record, reset, lookups.institutions]);
 
   React.useEffect(() => {
     if (!institutionId) return;
@@ -205,20 +227,68 @@ export function StudentSheet({
             </FieldGrid>
 
             <FieldGrid>
-              <Field label="Institution" required>
+              <Field label="Institution type" required>
+                <Select value={instType} onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="School or college" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="school">School (Std 1–12)</SelectItem>
+                    <SelectItem value="college">College (degree / diploma)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {instType === "school" && (
+                <Field label="Board" required>
+                  <Select value={boardId} onValueChange={handleBoardChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select board" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lookups.boards.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+            </FieldGrid>
+
+            <FieldGrid>
+              <Field
+                label="Institution"
+                required
+                hint={
+                  !instType
+                    ? "Select a type first"
+                    : instType === "school" && !boardId
+                      ? "Select a board first"
+                      : undefined
+                }
+              >
                 <Select
                   value={institutionId}
                   onValueChange={(v) => setValue("institution_id", v, { shouldValidate: true })}
+                  disabled={!instType}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select institution" />
                   </SelectTrigger>
                   <SelectContent>
-                    {lookups.institutions.map((i) => (
-                      <SelectItem key={i.id} value={i.id}>
-                        {i.name} · {i.type === "college" ? "College" : "School"}
-                      </SelectItem>
-                    ))}
+                    {availableInstitutions.length === 0 ? (
+                      <div className="px-2 py-3 text-[13px] text-muted-foreground">
+                        No institutions on this board
+                      </div>
+                    ) : (
+                      availableInstitutions.map((i) => (
+                        <SelectItem key={i.id} value={i.id}>
+                          {i.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
                 <input type="hidden" {...register("institution_id", { required: "Required" })} />

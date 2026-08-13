@@ -16,6 +16,9 @@ export type DashboardStats = {
   ungraded: number;
   byCategory: { name: string; count: number }[];
   byInstitution: { name: string; type: string; count: number }[];
+  /** School students only, grouped by board — board is a school-only concept,
+   *  colleges don't carry one. */
+  byBoard: { name: string; count: number }[];
   recentAudit: {
     id: number;
     entity_name: string;
@@ -99,7 +102,7 @@ export async function getDashboardStats(academicYearId: string | null): Promise<
       .limit(5000),
     supabase
       .from(T.academicRecords)
-      .select("institutions:am_institutions!inner(name,type)")
+      .select("institutions:am_institutions!inner(name,type,boards:am_boards(name))")
       .eq("org_id", ORG_ID)
       .eq(academicYearId ? "academic_year_id" : "org_id", academicYearId ?? ORG_ID)
       .limit(5000),
@@ -118,14 +121,20 @@ export async function getDashboardStats(academicYearId: string | null): Promise<
   );
 
   const institutionTally = new Map<string, { name: string; type: string; count: number }>();
+  const boardTally = new Map<string, number>();
   for (const row of (institutionRows.data ?? []) as unknown as {
-    institutions: { name: string; type: string } | null;
+    institutions: { name: string; type: string; boards: { name: string } | null } | null;
   }[]) {
     const inst = row.institutions;
     if (!inst) continue;
     const existing = institutionTally.get(inst.name);
     if (existing) existing.count += 1;
     else institutionTally.set(inst.name, { name: inst.name, type: inst.type, count: 1 });
+
+    if (inst.type === "school") {
+      const boardName = inst.boards?.name ?? "No board set";
+      boardTally.set(boardName, (boardTally.get(boardName) ?? 0) + 1);
+    }
   }
 
   return {
@@ -142,6 +151,9 @@ export async function getDashboardStats(academicYearId: string | null): Promise<
     ungraded: ungraded.count ?? 0,
     byCategory,
     byInstitution: [...institutionTally.values()].sort((a, b) => b.count - a.count).slice(0, 8),
+    byBoard: [...boardTally.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count),
     recentAudit: audit.data ?? [],
   };
 }

@@ -52,6 +52,7 @@ const SELECT = `
 export async function listDistribution(filters: {
   academic_year_id?: string;
   institution_id?: string;
+  board_id?: string;
   award_category_id?: string;
   status?: DistributionStatus;
   q?: string;
@@ -71,6 +72,12 @@ export async function listDistribution(filters: {
     query = query.eq(
       "gift_allocations.student_awards.academic_records.institution_id",
       filters.institution_id,
+    );
+  }
+  if (filters.board_id) {
+    query = query.eq(
+      "gift_allocations.student_awards.academic_records.institutions.board_id",
+      filters.board_id,
     );
   }
   if (filters.award_category_id) {

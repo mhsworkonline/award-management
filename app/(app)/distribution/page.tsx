@@ -23,6 +23,7 @@ export default async function DistributionPage({
     rows = await listDistribution({
       academic_year_id: yearId,
       institution_id: searchParams.institution_id,
+      board_id: searchParams.board_id,
       award_category_id: searchParams.award_category_id,
       status,
       q: searchParams.q,
@@ -35,6 +36,7 @@ export default async function DistributionPage({
   const pdfParams = new URLSearchParams();
   if (yearId) pdfParams.set("academic_year_id", yearId);
   if (searchParams.institution_id) pdfParams.set("institution_id", searchParams.institution_id);
+  if (searchParams.board_id) pdfParams.set("board_id", searchParams.board_id);
   if (searchParams.award_category_id) {
     pdfParams.set("award_category_id", searchParams.award_category_id);
   }

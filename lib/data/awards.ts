@@ -50,6 +50,7 @@ type Raw = {
 export async function listAwards(filters: {
   academic_year_id?: string;
   institution_id?: string;
+  board_id?: string;
   award_category_id?: string;
   q?: string;
 }) {
@@ -84,6 +85,7 @@ export async function listAwards(filters: {
   }
   if (filters.award_category_id) query = query.eq("award_category_id", filters.award_category_id);
   if (filters.institution_id) query = query.eq("academic_records.institution_id", filters.institution_id);
+  if (filters.board_id) query = query.eq("academic_records.institutions.board_id", filters.board_id);
   if (filters.q) {
     const term = filters.q.replace(/[%,]/g, " ").trim();
     if (term) {

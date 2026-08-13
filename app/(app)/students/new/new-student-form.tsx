@@ -19,8 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldGrid } from "@/components/form/field";
+import { QuickAddInstitution } from "@/components/form/quick-add-institution";
 import { PageHeader } from "@/components/shell/page-header";
 import { checkDuplicateStudents, createStudentWithRecord, type DuplicateMatch } from "@/lib/actions/students";
+import { loadRememberedDefaults, saveRememberedDefaults } from "@/lib/remember";
 import type { Lookups } from "@/lib/types";
 
 type Values = {
@@ -35,6 +37,8 @@ type Values = {
   course_id: string;
   period_no: string;
   roll_no: string;
+  percentage: string;
+  grade: string;
 };
 
 const EMPTY: Values = {
@@ -49,6 +53,8 @@ const EMPTY: Values = {
   course_id: "",
   period_no: "",
   roll_no: "",
+  percentage: "",
+  grade: "",
 };
 
 /** The primary data-entry surface — a full page rather than a slide-over so an
@@ -71,6 +77,21 @@ export function NewStudentForm({
   const [addedCount, setAddedCount] = React.useState(0);
   const firstNameRef = React.useRef<HTMLInputElement | null>(null);
 
+  // Type → Board → Institution cascade. An explicit deep link
+  // (defaultInstitutionId, e.g. "Add student" from an institution page) wins;
+  // otherwise the operator's last selection is remembered across visits
+  // (lib/remember.ts) so repeat data entry doesn't start from scratch.
+  const defaultInstitution = lookups.institutions.find((i) => i.id === defaultInstitutionId);
+  const [instType, setInstType] = React.useState<"school" | "college" | "">(
+    defaultInstitution?.type ?? "",
+  );
+  const [boardId, setBoardId] = React.useState(defaultInstitution?.board_id ?? "");
+  const [pendingInstitutions, setPendingInstitutions] = React.useState<Lookups["institutions"]>([]);
+  const institutions = [
+    ...lookups.institutions,
+    ...pendingInstitutions.filter((p) => !lookups.institutions.some((i) => i.id === p.id)),
+  ];
+
   const {
     register,
     handleSubmit,
@@ -87,6 +108,7 @@ export function NewStudentForm({
   });
 
   const institutionId = watch("institution_id");
+  const academicYearId = watch("academic_year_id");
   const courseId = watch("course_id");
   const firstName = watch("first_name");
   const middleName = watch("middle_name");
@@ -96,9 +118,72 @@ export function NewStudentForm({
     required: "First name is required",
   });
 
-  const institution = lookups.institutions.find((i) => i.id === institutionId);
-  const isCollege = institution?.type === "college";
+  const isCollege = instType === "college";
   const course = lookups.courses.find((c) => c.id === courseId);
+  const selectedBoard = lookups.boards.find((b) => b.id === boardId);
+
+  const availableInstitutions = institutions.filter((i) => {
+    if (!instType || i.type !== instType) return false;
+    if (boardId) return i.board_id === boardId;
+    return true;
+  });
+
+  function handleInstTypeChange(v: "school" | "college") {
+    setInstType(v);
+    setBoardId("");
+    setValue("institution_id", "", { shouldValidate: true });
+  }
+
+  function handleBoardChange(v: string) {
+    setBoardId(v);
+    setValue("institution_id", "", { shouldValidate: true });
+  }
+
+  function handleInstitutionCreated(inst: Lookups["institutions"][number]) {
+    setPendingInstitutions((prev) => [...prev, inst]);
+    setValue("institution_id", inst.id, { shouldValidate: true });
+  }
+
+  // Apply the remembered selection once on mount — but only when there's no
+  // explicit deep link, which always wins.
+  const [hydrated, setHydrated] = React.useState(false);
+  React.useEffect(() => {
+    if (!defaultInstitution) {
+      const remembered = loadRememberedDefaults();
+      const rememberedInstitution = remembered.institutionId
+        ? lookups.institutions.find((i) => i.id === remembered.institutionId)
+        : undefined;
+
+      if (rememberedInstitution) {
+        setInstType(rememberedInstitution.type);
+        setBoardId(rememberedInstitution.board_id ?? "");
+        setValue("institution_id", rememberedInstitution.id);
+      } else if (remembered.instType) {
+        setInstType(remembered.instType);
+        if (remembered.boardId) setBoardId(remembered.boardId);
+      }
+
+      const rememberedYear = remembered.academicYearId
+        ? lookups.academicYears.find((y) => y.id === remembered.academicYearId)
+        : undefined;
+      if (rememberedYear) setValue("academic_year_id", rememberedYear.id);
+    }
+    setHydrated(true);
+    // Deliberately mount-only — this is a one-time hydration from storage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Remember every change so the next visit to this page starts where the
+  // operator left off.
+  React.useEffect(() => {
+    if (!hydrated) return;
+    saveRememberedDefaults({
+      instType: instType || undefined,
+      boardId: boardId || undefined,
+      institutionId: institutionId || undefined,
+      academicYearId: academicYearId || undefined,
+    });
+  }, [hydrated, instType, boardId, institutionId, academicYearId]);
 
   React.useEffect(() => {
     if (!institutionId) return;
@@ -142,6 +227,8 @@ export function NewStudentForm({
       course_id: values.course_id || null,
       period_no: values.period_no ? Number(values.period_no) : null,
       roll_no: values.roll_no || null,
+      percentage: values.percentage ? Number(values.percentage) : null,
+      grade: values.grade || null,
     });
 
     if (!result.ok) {
@@ -263,29 +350,82 @@ export function NewStudentForm({
             <CardTitle>This year&apos;s enrollment</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <FieldGrid>
-              <Field label="Institution" required error={errors.institution_id?.message}>
+            <FieldGrid cols={1} className="sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Institution type" required>
                 <Select
-                  value={institutionId}
-                  onValueChange={(v) => setValue("institution_id", v, { shouldValidate: true })}
+                  value={instType}
+                  onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select institution" />
+                    <SelectValue placeholder="School or college" />
                   </SelectTrigger>
                   <SelectContent>
-                    {lookups.institutions.length === 0 ? (
-                      <div className="px-2 py-3 text-[13px] text-muted-foreground">
-                        Add an institution first
-                      </div>
-                    ) : (
-                      lookups.institutions.map((i) => (
-                        <SelectItem key={i.id} value={i.id}>
-                          {i.name} · {i.type === "college" ? "College" : "School"}
-                        </SelectItem>
-                      ))
-                    )}
+                    <SelectItem value="school">School (Std 1–12)</SelectItem>
+                    <SelectItem value="college">College (degree / diploma)</SelectItem>
                   </SelectContent>
                 </Select>
+              </Field>
+
+              {instType === "school" && (
+                <Field label="Board" required hint={lookups.boards.length === 0 ? "Add a board under Settings first" : undefined}>
+                  <Select value={boardId} onValueChange={handleBoardChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select board" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lookups.boards.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+
+              <Field
+                label="Institution"
+                required
+                error={errors.institution_id?.message}
+                hint={
+                  !instType
+                    ? "Select a type first"
+                    : instType === "school" && !boardId
+                      ? "Select a board first"
+                      : undefined
+                }
+              >
+                <div className="flex gap-2">
+                  <Select
+                    value={institutionId}
+                    onValueChange={(v) => setValue("institution_id", v, { shouldValidate: true })}
+                    disabled={!instType}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select institution" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableInstitutions.length === 0 ? (
+                        <div className="px-2 py-3 text-[13px] text-muted-foreground">
+                          {boardId ? "No institutions on this board" : "None yet"}
+                        </div>
+                      ) : (
+                        availableInstitutions.map((i) => (
+                          <SelectItem key={i.id} value={i.id}>
+                            {i.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <QuickAddInstitution
+                    instType={instType}
+                    boardId={boardId}
+                    boardName={selectedBoard?.name ?? ""}
+                    mediums={lookups.mediums}
+                    onCreated={handleInstitutionCreated}
+                  />
+                </div>
                 <input type="hidden" {...register("institution_id", { required: "Required" })} />
               </Field>
 
@@ -374,9 +514,27 @@ export function NewStudentForm({
               </Field>
             )}
 
-            <FieldGrid>
+            <FieldGrid cols={1} className="sm:grid-cols-3">
               <Field label="Roll / GR no" htmlFor="roll_no">
                 <Input id="roll_no" autoComplete="off" {...register("roll_no")} />
+              </Field>
+              <Field label="Percentage" htmlFor="percentage" error={errors.percentage?.message} hint="Optional">
+                <Input
+                  id="percentage"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  className="tabular"
+                  {...register("percentage", {
+                    min: { value: 0, message: "0 to 100" },
+                    max: { value: 100, message: "0 to 100" },
+                  })}
+                />
+              </Field>
+              <Field label="Grade" htmlFor="grade" hint="Optional — e.g. A+, Distinction">
+                <Input id="grade" autoComplete="off" {...register("grade")} />
               </Field>
             </FieldGrid>
 

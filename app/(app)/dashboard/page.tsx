@@ -141,7 +141,35 @@ export default async function DashboardPage({
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle>School students by board</CardTitle>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/students?institution_type=school">View all</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {stats.byBoard.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">
+                No school students recorded for this year yet.
+              </p>
+            ) : (
+              <ul className="space-y-2.5">
+                {stats.byBoard.map((b) => (
+                  <li key={b.name} className="flex items-center justify-between gap-3 text-[13px]">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <School className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{b.name}</span>
+                    </span>
+                    <span className="tabular font-medium">{b.count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>Top institutions</CardTitle>

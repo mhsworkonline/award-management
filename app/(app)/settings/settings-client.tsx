@@ -58,39 +58,12 @@ export function SettingsClient({ lookups }: { lookups: Lookups }) {
           <ConfigSection
             table="boards"
             title="Boards"
-            description="Education boards or affiliating universities — CBSE, State Board, ICSE, Gujarat University and any others you add. Schools and colleges both pick one."
+            description="Education boards — CBSE, State Board, ICSE and any others you add. Schools only; colleges don't carry a board."
             addLabel="Add board"
             rows={lookups.boards as unknown as Record<string, unknown>[]}
-            columns={[
-              { key: "name", label: "Name" },
-              {
-                key: "applies_to",
-                label: "Applies to",
-                render: (r) => (
-                  <Badge variant="secondary">
-                    {r.applies_to === "both"
-                      ? "Schools & colleges"
-                      : r.applies_to === "college"
-                        ? "Colleges"
-                        : "Schools"}
-                  </Badge>
-                ),
-              },
-            ]}
+            columns={[{ key: "name", label: "Name" }]}
             fields={[
-              { name: "name", label: "Name", type: "text", required: true, hint: "e.g. CBSE, Gujarat University" },
-              {
-                name: "applies_to",
-                label: "Applies to",
-                type: "select",
-                required: true,
-                default: "both",
-                options: [
-                  { value: "school", label: "Schools" },
-                  { value: "college", label: "Colleges" },
-                  { value: "both", label: "Schools & colleges" },
-                ],
-              },
+              { name: "name", label: "Name", type: "text", required: true, hint: "e.g. CBSE, State Board" },
             ]}
           />
         </TabsContent>

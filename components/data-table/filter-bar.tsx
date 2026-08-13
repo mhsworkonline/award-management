@@ -68,8 +68,14 @@ export function FilterBar({
     return () => window.clearTimeout(timer);
   }, [term, searchParams, setParams]);
 
-  const activeAdvanced = advanced.filter((key) => searchParams.get(key));
-  const options = optionsFor(lookups);
+  // Board is the primary bifurcation for schools — promoted out of the
+  // "advanced" popover into an always-visible select, same treatment as
+  // academic year. Strip it from `advanced` defensively in case a caller
+  // still lists it there.
+  const boardId = searchParams.get("board_id") ?? "all";
+  const advancedKeys = advanced.filter((key) => key !== "board_id");
+  const activeAdvanced = advancedKeys.filter((key) => searchParams.get(key));
+  const options = optionsFor(lookups, boardId);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -114,7 +120,26 @@ export function FilterBar({
         </Select>
       )}
 
-      {advanced.length > 0 && (
+      {lookups.boards.length > 0 && (
+        <Select
+          value={boardId}
+          onValueChange={(v) => setParams({ board_id: v, institution_id: null })}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Board" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All boards</SelectItem>
+            {lookups.boards.map((b) => (
+              <SelectItem key={b.id} value={b.id}>
+                {b.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      {advancedKeys.length > 0 && (
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="default">
@@ -130,7 +155,7 @@ export function FilterBar({
           <PopoverContent className="w-80 space-y-3.5" align="end">
             <p className="text-[13px] font-semibold">Advanced filters</p>
 
-            {advanced.map((key) => (
+            {advancedKeys.map((key) => (
               <Field key={key} label={LABELS[key]}>
                 <Select
                   value={searchParams.get(key) ?? "all"}
@@ -155,7 +180,7 @@ export function FilterBar({
               variant="ghost"
               size="sm"
               className="w-full"
-              onClick={() => clearParams(["academic_year_id", "q", "size"])}
+              onClick={() => clearParams(["academic_year_id", "board_id", "q", "size"])}
             >
               Reset advanced filters
             </Button>
@@ -163,7 +188,7 @@ export function FilterBar({
         </Popover>
       )}
 
-      {(activeAdvanced.length > 0 || term) && (
+      {(activeAdvanced.length > 0 || term || boardId !== "all") && (
         <Button variant="ghost" size="sm" onClick={() => clearParams(["size"])}>
           <X /> Clear all
         </Button>
@@ -174,13 +199,18 @@ export function FilterBar({
   );
 }
 
-function optionsFor(lookups: Lookups): Record<FilterKey, { value: string; label: string }[]> {
+function optionsFor(
+  lookups: Lookups,
+  boardId: string,
+): Record<FilterKey, { value: string; label: string }[]> {
   return {
     academic_year_id: lookups.academicYears.map((y) => ({ value: y.id, label: y.label })),
-    institution_id: lookups.institutions.map((i) => ({
-      value: i.id,
-      label: `${i.name} (${i.type === "college" ? "College" : "School"})`,
-    })),
+    institution_id: lookups.institutions
+      .filter((i) => boardId === "all" || i.board_id === boardId)
+      .map((i) => ({
+        value: i.id,
+        label: `${i.name} (${i.type === "college" ? "College" : "School"})`,
+      })),
     institution_type: [
       { value: "school", label: "School" },
       { value: "college", label: "College" },

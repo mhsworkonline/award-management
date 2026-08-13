@@ -150,6 +150,9 @@ export async function createStudentWithRecord(input: {
   course_id?: string | null;
   period_no?: number | null;
   roll_no?: string | null;
+  percentage?: number | null;
+  grade?: string | null;
+  rank?: number | null;
 }): Promise<ActionResult<{ studentId: string; recordId: string }>> {
   const studentParsed = studentSchema.safeParse({
     first_name: input.first_name,
@@ -174,6 +177,9 @@ export async function createStudentWithRecord(input: {
     course_id: input.course_id,
     period_no: input.period_no,
     roll_no: input.roll_no,
+    percentage: input.percentage,
+    grade: input.grade,
+    rank: input.rank,
   });
   if (!recordParsed.success) {
     return {

@@ -38,6 +38,8 @@ export function GradesClient({
   lookups: Lookups;
   defaultYearId: string | null;
 }) {
+  const [instType, setInstType] = React.useState<"school" | "college" | "">("");
+  const [boardId, setBoardId] = React.useState("");
   const [institutionId, setInstitutionId] = React.useState("");
   const [yearId, setYearId] = React.useState(defaultYearId ?? "");
   const [standardId, setStandardId] = React.useState("");
@@ -48,9 +50,25 @@ export function GradesClient({
   const [entries, setEntries] = React.useState<DraftEntry[]>([]);
   const [loaded, setLoaded] = React.useState(false);
 
-  const institution = lookups.institutions.find((i) => i.id === institutionId);
-  const isCollege = institution?.type === "college";
+  const isCollege = instType === "college";
   const course = lookups.courses.find((c) => c.id === courseId);
+
+  const availableInstitutions = lookups.institutions.filter((i) => {
+    if (!instType || i.type !== instType) return false;
+    if (boardId) return i.board_id === boardId;
+    return true;
+  });
+
+  function handleInstTypeChange(v: "school" | "college") {
+    setInstType(v);
+    setBoardId("");
+    setInstitutionId("");
+  }
+
+  function handleBoardChange(v: string) {
+    setBoardId(v);
+    setInstitutionId("");
+  }
 
   React.useEffect(() => {
     setStandardId("");
@@ -138,21 +156,67 @@ export function GradesClient({
           <CardTitle>Choose scope</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <FieldGrid>
-            <Field label="Institution" required>
-              <Select value={institutionId} onValueChange={setInstitutionId}>
+          <FieldGrid cols={1} className="sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Institution type" required>
+              <Select value={instType} onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="School or college" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="school">School (Std 1–12)</SelectItem>
+                  <SelectItem value="college">College (degree / diploma)</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {instType === "school" && (
+              <Field label="Board" required>
+                <Select value={boardId} onValueChange={handleBoardChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select board" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lookups.boards.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+
+            <Field
+              label="Institution"
+              required
+              hint={
+                !instType
+                  ? "Select a type first"
+                  : instType === "school" && !boardId
+                    ? "Select a board first"
+                    : undefined
+              }
+            >
+              <Select value={institutionId} onValueChange={setInstitutionId} disabled={!instType}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select institution" />
                 </SelectTrigger>
                 <SelectContent>
-                  {lookups.institutions.map((i) => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.name} · {i.type === "college" ? "College" : "School"}
-                    </SelectItem>
-                  ))}
+                  {availableInstitutions.length === 0 ? (
+                    <div className="px-2 py-3 text-[13px] text-muted-foreground">
+                      No institutions on this board
+                    </div>
+                  ) : (
+                    availableInstitutions.map((i) => (
+                      <SelectItem key={i.id} value={i.id}>
+                        {i.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </Field>
+
             <Field label="Academic year" required>
               <Select value={yearId} onValueChange={setYearId}>
                 <SelectTrigger>

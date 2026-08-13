@@ -17,6 +17,7 @@ export default async function AwardsPage({
     listAwards({
       academic_year_id: yearId,
       institution_id: searchParams.institution_id,
+      board_id: searchParams.board_id,
       award_category_id: searchParams.award_category_id,
       q: searchParams.q,
     }),

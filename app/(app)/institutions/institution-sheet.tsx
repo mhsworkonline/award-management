@@ -118,13 +118,15 @@ export function InstitutionSheet({
     onOpenChange(false);
   }
 
-  // Medium is school-only; clear it if the type flips to college. Board
-  // applies to both — a college's board is its affiliating university.
+  // Board and medium are both school-only; clear them if the type flips to college.
   React.useEffect(() => {
-    if (type === "college") setValue("medium_id", "");
+    if (type === "college") {
+      setValue("medium_id", "");
+      setValue("board_id", "");
+    }
   }, [type, setValue]);
 
-  const availableBoards = lookups.boards.filter((b) => b.applies_to === type || b.applies_to === "both");
+  const availableBoards = lookups.boards.filter((b) => b.applies_to === "school" || b.applies_to === "both");
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -133,8 +135,7 @@ export function InstitutionSheet({
           <SheetHeader>
             <SheetTitle>{isEdit ? "Edit institution" : "Add institution"}</SheetTitle>
             <SheetDescription>
-              Both types carry a board (school board or affiliating university). Medium applies to
-              schools only.
+              Board and medium apply to schools only.
             </SheetDescription>
           </SheetHeader>
 
@@ -165,12 +166,12 @@ export function InstitutionSheet({
               <input type="hidden" {...register("type", { required: "Select a type" })} />
             </Field>
 
-            {type && (
+            {isSchool && (
               <FieldGrid>
-                <Field label={isSchool ? "Board" : "Board / University"}>
+                <Field label="Board">
                   <Select value={watch("board_id")} onValueChange={(v) => setValue("board_id", v)}>
                     <SelectTrigger>
-                      <SelectValue placeholder={isSchool ? "Select board" : "Select affiliating university"} />
+                      <SelectValue placeholder="Select board" />
                     </SelectTrigger>
                     <SelectContent>
                       {availableBoards.map((b) => (
@@ -182,22 +183,20 @@ export function InstitutionSheet({
                   </Select>
                 </Field>
 
-                {isSchool && (
-                  <Field label="Medium">
-                    <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select medium" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {lookups.mediums.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>
-                            {m.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                )}
+                <Field label="Medium">
+                  <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select medium" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lookups.mediums.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
               </FieldGrid>
             )}
 

@@ -58,18 +58,26 @@ export function InstitutionsClient({
   const [pendingDelete, setPendingDelete] = React.useState<Institution | null>(null);
   const [term, setTerm] = React.useState("");
   const [typeFilter, setTypeFilter] = React.useState("all");
+  const [boardFilter, setBoardFilter] = React.useState("all");
 
-  // Small dataset — filtering client-side keeps this page instant.
-  const filtered = institutions.filter((i) => {
-    if (typeFilter !== "all" && i.type !== typeFilter) return false;
-    if (!term.trim()) return true;
-    const needle = term.trim().toLowerCase();
-    return (
-      i.name.toLowerCase().includes(needle) ||
-      (i.city ?? "").toLowerCase().includes(needle) ||
-      (i.contact_person ?? "").toLowerCase().includes(needle)
+  // Small dataset — filtering client-side keeps this page instant. Sorted by
+  // board first (the primary bifurcation for schools), then name.
+  const filtered = institutions
+    .filter((i) => {
+      if (typeFilter !== "all" && i.type !== typeFilter) return false;
+      if (boardFilter !== "all" && i.board_id !== boardFilter) return false;
+      if (!term.trim()) return true;
+      const needle = term.trim().toLowerCase();
+      return (
+        i.name.toLowerCase().includes(needle) ||
+        (i.city ?? "").toLowerCase().includes(needle) ||
+        (i.contact_person ?? "").toLowerCase().includes(needle)
+      );
+    })
+    .sort(
+      (a, b) =>
+        (a.boards?.name ?? "").localeCompare(b.boards?.name ?? "") || a.name.localeCompare(b.name),
     );
-  });
 
   return (
     <>
@@ -104,6 +112,19 @@ export function InstitutionsClient({
             <SelectItem value="all">All types</SelectItem>
             <SelectItem value="school">Schools</SelectItem>
             <SelectItem value="college">Colleges</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={boardFilter} onValueChange={setBoardFilter}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Board" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All boards</SelectItem>
+            {lookups.boards.map((b) => (
+              <SelectItem key={b.id} value={b.id}>
+                {b.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <p className="ml-auto text-[13px] text-muted-foreground">

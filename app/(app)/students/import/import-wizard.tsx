@@ -60,6 +60,8 @@ export function ImportWizard({
 }) {
   const router = useRouter();
   const [step, setStep] = React.useState<Step>("select");
+  const [instType, setInstType] = React.useState<"school" | "college" | "">("");
+  const [boardId, setBoardId] = React.useState("");
   const [institutionId, setInstitutionId] = React.useState("");
   const [yearId, setYearId] = React.useState(defaultYearId ?? "");
   const [file, setFile] = React.useState<File | null>(null);
@@ -73,6 +75,23 @@ export function ImportWizard({
 
   const institution = lookups.institutions.find((i) => i.id === institutionId);
   const importable = rows.filter((r) => r.errors.length === 0);
+
+  const availableInstitutions = lookups.institutions.filter((i) => {
+    if (!instType || i.type !== instType) return false;
+    if (boardId) return i.board_id === boardId;
+    return true;
+  });
+
+  function handleInstTypeChange(v: "school" | "college") {
+    setInstType(v);
+    setBoardId("");
+    setInstitutionId("");
+  }
+
+  function handleBoardChange(v: string) {
+    setBoardId(v);
+    setInstitutionId("");
+  }
 
   async function upload() {
     if (!file || !institutionId || !yearId) return;
@@ -233,22 +252,57 @@ export function ImportWizard({
             <CardTitle>1 · Choose destination and file</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <FieldGrid>
+            <FieldGrid cols={1} className="sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Institution type" required>
+                <Select value={instType} onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="School or college" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="school">School (Std 1–12)</SelectItem>
+                    <SelectItem value="college">College (degree / diploma)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              {instType === "school" && (
+                <Field label="Board" required>
+                  <Select value={boardId} onValueChange={handleBoardChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select board" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lookups.boards.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+
               <Field
                 label="Institution"
                 required
                 hint="Every row in the file is imported into this institution"
               >
-                <Select value={institutionId} onValueChange={setInstitutionId}>
+                <Select value={institutionId} onValueChange={setInstitutionId} disabled={!instType}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select institution" />
                   </SelectTrigger>
                   <SelectContent>
-                    {lookups.institutions.map((i) => (
-                      <SelectItem key={i.id} value={i.id}>
-                        {i.name} · {i.type === "college" ? "College" : "School"}
-                      </SelectItem>
-                    ))}
+                    {availableInstitutions.length === 0 ? (
+                      <div className="px-2 py-3 text-[13px] text-muted-foreground">
+                        No institutions on this board
+                      </div>
+                    ) : (
+                      availableInstitutions.map((i) => (
+                        <SelectItem key={i.id} value={i.id}>
+                          {i.name}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </Field>
