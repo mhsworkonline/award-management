@@ -72,7 +72,7 @@ function tryPort(port, triesLeft) {
     process.stdout.write(chunk);
     if (!settled && text.includes("- Local:")) {
       settled = true;
-      console.log(`\nSign in: admin@awards.local / Admin@2026\n`);
+      console.log(`\nSign in: admin@awardmanagement.com / 99999999\n`);
     }
   });
   child.stderr.on("data", (chunk) => {

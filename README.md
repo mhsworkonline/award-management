@@ -16,11 +16,11 @@ npm install
 npm run dev   # http://localhost:3000
 ```
 
-**Login:** `admin@awards.local` / `Admin@2026`
+**Login:** `admin@awardmanagement.com` / `99999999`
 
 Supabase Auth identifies users by email, so the requested `admin` username is stored as
-`admin@awards.local` (the `username` claim on the user record is `admin`). Sign in with the
-full email.
+`admin@awardmanagement.com` (the `username` claim on the user record is `admin`). Sign in with
+the full email.
 
 To provision a fresh project instead, run `supabase/migrations/0001_init.sql` in the SQL
 editor and create a user via Dashboard → Authentication → Users → Add user (Auto Confirm on).
