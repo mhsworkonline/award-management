@@ -599,7 +599,7 @@ export function ApplyForm({
           {fieldConfig.show_attachments && (
             <Field
               label={L.attachments}
-              hint={`Optional — up to ${MAX_FILES} files, image/PDF/DOCX, 5MB each`}
+              hint={`Optional — upload your marksheet(s), up to ${MAX_FILES} files, image/PDF/DOCX, 5MB each`}
             >
               <div className="space-y-2">
                 {files.map((f, i) => (
@@ -630,7 +630,7 @@ export function ApplyForm({
                 {files.length < MAX_FILES && (
                   <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-input px-4 py-4 text-center text-[13px] text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent/40">
                     <Paperclip className="h-4 w-4" />
-                    Add a file (image, PDF or DOCX)
+                    Add a marksheet (image, PDF or DOCX)
                     <input
                       ref={fileInputRef}
                       type="file"

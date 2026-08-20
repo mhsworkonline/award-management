@@ -44,7 +44,7 @@ const FIELD_TOGGLES: { key: keyof ApplicationFormFieldConfig; label: string; hin
   { key: "show_contact_no", label: "Contact number" },
   { key: "show_roll_no", label: "Roll / GR number" },
   { key: "show_notes", label: "Notes / additional info" },
-  { key: "show_attachments", label: "Attachments" },
+  { key: "show_attachments", label: "Marksheets" },
 ];
 
 function slugify(v: string) {

@@ -70,7 +70,7 @@ export async function submitPublicApplication(
 
   // Honeypot tripped — pretend success so the bot doesn't learn it was caught.
   if (parsed.data.website) {
-    return { ok: true, data: { id: "00000000-0000-0000-0000-000000000000", referenceCode: "AWD-000000" } };
+    return { ok: true, data: { id: "00000000-0000-0000-0000-000000000000", referenceCode: "S00-0" } };
   }
 
   try {

@@ -11,3 +11,10 @@ Sign in: admin@awards.local / Admin@2026
  ✓ Compiled /middleware in 5s (127 modules)
  ○ Compiling /apply ...
  ✓ Compiled /apply in 34.4s (1104 modules)
+ GET /apply 200 in 38427ms
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (106kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (258kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ○ Compiling /forms ...
+ ✓ Compiled /apply in 11.5s (1348 modules)
+ GET /apply 200 in 7819ms
+ GET /forms 200 in 15716ms

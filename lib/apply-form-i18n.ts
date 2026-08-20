@@ -35,6 +35,6 @@ export const APPLY_LABELS = {
     "તમારી ટકાવારી, ગ્રેડ અથવા બંને આપો — ઓછામાં ઓછું એક જરૂરી છે.",
   ),
   notes: bl("Anything else you'd like to add?", "બીજું કંઈ ઉમેરવા માંગો છો?"),
-  attachments: bl("Attachments", "જોડાણો"),
+  attachments: bl("Marksheets", "માર્કશીટ"),
   submit: bl("Submit application", "અરજી સબમિટ કરો"),
 } as const;
