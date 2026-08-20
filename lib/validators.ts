@@ -12,6 +12,13 @@ const optionalText = z
   .optional()
   .transform((v) => (v ? v : null));
 
+export const SALUTATION_VALUES = ["Mr.", "Ms.", "Mrs.", "Miss", "Dr."] as const;
+const optionalSalutation = z
+  .union([z.enum(SALUTATION_VALUES), z.literal("")])
+  .nullable()
+  .optional()
+  .transform((v) => (v ? v : null));
+
 export const academicYearSchema = z.object({
   id: uuid.optional(),
   label: z.string().trim().min(1, "Label is required").max(50),
@@ -78,12 +85,24 @@ export const institutionSchema = z
     v.type === "college" ? { ...v, board_id: null, medium_id: null } : v,
   );
 
+const optionalEmail = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Enter a valid email")
+  .nullable()
+  .optional()
+  .or(z.literal(""))
+  .transform((v) => (v ? v : null));
+
 /** Persistent student identity only — no institution/year/standard here. */
 export const studentSchema = z.object({
   id: uuid.optional(),
+  salutation: optionalSalutation,
   first_name: z.string().trim().min(1, "First name is required").max(100),
   middle_name: optionalText,
   last_name: z.string().trim().min(1, "Last name is required").max(100),
+  email: optionalEmail,
   contact_no: optionalText,
   remarks: z.string().trim().max(500).nullable().optional().transform((v) => (v ? v : null)),
 });
@@ -147,6 +166,166 @@ export const distributionSyncSchema = z.object({
     )
     .max(1000),
 });
+
+const OTHER = "__other__";
+const courseStructure = z.enum(["year", "semester"]);
+
+/** The public /apply form. Institution and course each accept either a real
+ *  id or a free-text "Other" name (never both) — resolved to a real row only
+ *  when staff approves. No id/student_id/academic_year_id here; those are
+ *  resolved server-side. */
+export const publicApplicationSchema = z
+  .object({
+    salutation: optionalSalutation,
+    first_name: z.string().trim().min(1, "First name is required").max(100),
+    middle_name: optionalText,
+    last_name: z.string().trim().min(1, "Last name is required").max(100),
+    email: z.string().trim().toLowerCase().min(1, "Email is required").email("Enter a valid email"),
+    contact_no: optionalText,
+    institution_id: z.string(),
+    other_institution_name: optionalText,
+    board_id: z.string().nullable().optional().transform((v) => v || null),
+    other_board_name: optionalText,
+    medium_id: z.string().nullable().optional().transform((v) => v || null),
+    standard_id: z.string().nullable().optional().transform((v) => v || null),
+    course_id: z.string().nullable().optional().transform((v) => v || null),
+    other_course_name: optionalText,
+    other_course_structure: z.union([courseStructure, z.literal("")]).nullable().optional().transform((v) => (v ? v : null)),
+    period_no: z.coerce.number().int().min(1).max(12).nullable().optional().transform((v) => v ?? null),
+    roll_no: optionalText,
+    // Schools/colleges report results differently — some give percentage, some
+    // grade, some both. Neither is individually required; superRefine below
+    // requires at least one. z.coerce.number() alone would silently turn a
+    // blank field into 0 (Number("") === 0) rather than "not provided", so an
+    // empty/nullish value is normalized to undefined *before* coercion.
+    percentage: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : v),
+      z.coerce.number().min(0).max(100).optional(),
+    ).transform((v) => v ?? null),
+    grade: optionalText,
+    notes: z.string().trim().max(1000).optional().transform((v) => (v ? v : null)),
+    // Honeypot — real visitors never see or fill this field.
+    website: z.string().max(200).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.percentage === null && !v.grade) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Enter your percentage or grade (at least one is required)",
+        path: ["percentage"],
+      });
+    }
+
+    if (v.institution_id === OTHER) {
+      if (!v.other_institution_name) {
+        ctx.addIssue({ code: "custom", message: "Enter your institution's name", path: ["other_institution_name"] });
+      }
+    } else if (!v.institution_id) {
+      ctx.addIssue({ code: "custom", message: "Select your institution", path: ["institution_id"] });
+    }
+
+    const usingOtherCourse = v.course_id === OTHER;
+    const hasRealPlacement = Boolean(v.standard_id) || (v.course_id && v.course_id !== OTHER);
+
+    if (v.standard_id) {
+      if (v.board_id === OTHER) {
+        if (!v.other_board_name) {
+          ctx.addIssue({ code: "custom", message: "Enter your board's name", path: ["other_board_name"] });
+        }
+      } else if (!v.board_id) {
+        ctx.addIssue({ code: "custom", message: "Select your board", path: ["board_id"] });
+      }
+      if (!v.medium_id) {
+        ctx.addIssue({ code: "custom", message: "Select your medium of instruction", path: ["medium_id"] });
+      }
+    }
+
+    if (!hasRealPlacement && !usingOtherCourse) {
+      ctx.addIssue({ code: "custom", message: "Select a standard or a course", path: ["standard_id"] });
+    }
+    if (usingOtherCourse) {
+      if (!v.other_course_name) {
+        ctx.addIssue({ code: "custom", message: "Enter your course name", path: ["other_course_name"] });
+      }
+      if (!v.other_course_structure) {
+        ctx.addIssue({ code: "custom", message: "Select year or semester", path: ["other_course_structure"] });
+      }
+      if (!v.period_no) {
+        ctx.addIssue({ code: "custom", message: "Enter your current year/semester", path: ["period_no"] });
+      }
+    } else if (v.course_id && v.course_id !== OTHER && !v.period_no) {
+      ctx.addIssue({ code: "custom", message: "Year/semester is required for a course", path: ["period_no"] });
+    }
+  })
+  .transform((v) => ({
+    ...v,
+    institution_id: v.institution_id === OTHER ? null : v.institution_id || null,
+    course_id: v.course_id === OTHER ? null : v.course_id || null,
+    board_id: v.board_id === OTHER ? null : v.board_id || null,
+  }));
+
+export type PublicApplicationInput = z.input<typeof publicApplicationSchema>;
+export const OTHER_OPTION_VALUE = OTHER;
+
+/** Staff editing a submission before approval. institution_id/course_id are
+ *  nullable here — an unresolved "Other" submission is a valid draft state;
+ *  approveSubmission (not this schema) enforces that they're resolved before
+ *  the record actually gets created. */
+export const submissionEditSchema = z
+  .object({
+    id: uuid,
+    salutation: optionalSalutation,
+    first_name: z.string().trim().min(1, "First name is required").max(100),
+    middle_name: optionalText,
+    last_name: z.string().trim().min(1, "Last name is required").max(100),
+    email: z.string().trim().toLowerCase().min(1, "Email is required").email("Enter a valid email"),
+    contact_no: optionalText,
+    institution_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
+    other_institution_name: optionalText,
+    board_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
+    other_board_name: optionalText,
+    medium_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
+    standard_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
+    course_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
+    other_course_name: optionalText,
+    other_course_structure: z.union([courseStructure, z.literal("")]).nullable().optional().transform((v) => (v ? v : null)),
+    period_no: z.coerce.number().int().min(1).max(12).nullable().optional().transform((v) => v ?? null),
+    roll_no: optionalText,
+    // At least one of percentage/grade is required — see superRefine below.
+    // (Empty string is normalized to undefined before coercion — Number("")
+    // is 0, not NaN, so coercing a blank field directly would silently save 0%.)
+    percentage: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : v),
+      z.coerce.number().min(0).max(100).optional(),
+    ).transform((v) => v ?? null),
+    grade: optionalText,
+    notes: z.string().trim().max(1000).nullable().optional().transform((v) => (v ? v : null)),
+  })
+  .superRefine((v, ctx) => {
+    if (v.percentage === null && !v.grade) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Enter percentage or grade (at least one is required)",
+        path: ["percentage"],
+      });
+    }
+  });
+
+/** Creating/editing a public application form (Forms module). */
+export const applicationFormSchema = z.object({
+  id: uuid.optional(),
+  title: z.string().trim().min(1, "Title is required").max(150),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, "Slug is required")
+    .max(60)
+    .regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers and hyphens only"),
+  academic_year_id: uuid,
+  is_enabled: z.boolean().default(true),
+});
+export type ApplicationFormInput = z.input<typeof applicationFormSchema>;
 
 export const academicRecordFilterSchema = z.object({
   q: z.string().trim().optional(),

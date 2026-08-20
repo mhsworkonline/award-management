@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getPendingSubmissionCount } from "@/lib/data/submissions";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 
@@ -11,9 +12,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!user) redirect("/login");
 
+  const pendingSubmissions = await getPendingSubmissionCount();
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar className="hidden md:flex" />
+      <Sidebar className="hidden md:flex" pendingSubmissions={pendingSubmissions} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar email={user.email ?? "Signed in"} />
         <main className="scrollbar-thin flex-1 overflow-y-auto">

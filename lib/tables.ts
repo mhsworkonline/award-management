@@ -24,7 +24,14 @@ export const T = {
   distributionRecords: "am_distribution_records",
   auditLogs: "am_audit_logs",
   errorLogs: "am_error_logs",
+  publicSubmissions: "am_public_submissions",
+  applicationForms: "am_application_forms",
+  submissionAttachments: "am_submission_attachments",
 } as const;
+
+/** Storage bucket for public-application attachments — private, anon can only
+ *  insert into it (see migration), never list or read. */
+export const ATTACHMENTS_BUCKET = "am-submission-attachments";
 
 /** Aliased embedded-relation fragments for `.select()`.
  *  `institutions:am_institutions` keeps the JSON key as `institutions`. */
@@ -47,6 +54,10 @@ export const REL = {
 /** Postgres function names. */
 export const FN = {
   allocateGift: "am_allocate_gift",
+  publicFormOptions: "am_public_form_options",
+  submitPublicApplication: "am_submit_public_application",
+  resolveApplicationForm: "am_resolve_application_form",
+  registerAttachment: "am_register_submission_attachment",
 } as const;
 
 /** Logical entity name → physical table, for the config CRUD surface. */

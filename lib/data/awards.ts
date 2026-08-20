@@ -68,7 +68,7 @@ export async function listAwards(filters: {
         standards:am_standards ( label ),
         courses:am_courses ( name, structure_type ),
         institutions:am_institutions!inner ( name, type ),
-        students:am_students!inner ( id, first_name, middle_name, last_name )
+        students:am_students!inner ( id, salutation, first_name, middle_name, last_name )
       ),
       gift_allocations:am_gift_allocations (
         id, quantity,
@@ -150,7 +150,7 @@ export async function searchAwardableRecords(input: {
     .from(T.academicRecords)
     .select(
       `id, period_no,
-       students:am_students!inner ( id, first_name, middle_name, last_name ),
+       students:am_students!inner ( id, salutation, first_name, middle_name, last_name ),
        institutions:am_institutions!inner ( name, type ),
        standards:am_standards ( label ),
        courses:am_courses ( name, structure_type )`,

@@ -6,8 +6,10 @@ import { usePathname } from "next/navigation";
 import {
   Award,
   ClipboardList,
+  FileEdit,
   GraduationCap,
   Gift,
+  Inbox,
   LayoutDashboard,
   School,
   ScrollText,
@@ -22,6 +24,8 @@ import { useOffline } from "@/components/offline/offline-sync-provider";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/submissions", label: "Submissions", icon: Inbox },
+  { href: "/forms", label: "Forms", icon: FileEdit },
   { href: "/students", label: "Students", icon: Users },
   { href: "/academic-records/grades", label: "Grade Entry", icon: GraduationCap },
   { href: "/institutions", label: "Institutions", icon: School },
@@ -36,7 +40,13 @@ const FOOTER_NAV = [
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
-export function Sidebar({ className }: { className?: string }) {
+export function Sidebar({
+  className,
+  pendingSubmissions = 0,
+}: {
+  className?: string;
+  pendingSubmissions?: number;
+}) {
   const pathname = usePathname();
   const { pending } = useOffline();
 
@@ -73,6 +83,11 @@ export function Sidebar({ className }: { className?: string }) {
             {href === "/distribution" && pending > 0 && (
               <Badge variant="warning" className="ml-auto">
                 {pending}
+              </Badge>
+            )}
+            {href === "/submissions" && pendingSubmissions > 0 && (
+              <Badge variant="warning" className="ml-auto">
+                {pendingSubmissions}
               </Badge>
             )}
           </Link>

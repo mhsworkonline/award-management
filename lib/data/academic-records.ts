@@ -6,7 +6,7 @@ import { REL, T } from "@/lib/tables";
 
 const SELECT = `
   *,
-  students:am_students!inner ( id, first_name, middle_name, last_name, contact_no ),
+  students:am_students!inner ( id, salutation, first_name, middle_name, last_name, email, contact_no ),
   institutions:am_institutions!inner ( id, name, type, board_id, medium_id ),
   academic_years:am_academic_years ( id, label ),
   standards:am_standards ( id, label ),
@@ -117,7 +117,7 @@ export async function listRosterForGrading(input: {
     .from(T.academicRecords)
     .select(
       `id, roll_no, percentage, grade, rank,
-       students:am_students!inner ( id, first_name, middle_name, last_name )`,
+       students:am_students!inner ( id, salutation, first_name, middle_name, last_name )`,
     )
     .eq("org_id", ORG_ID)
     .eq("institution_id", input.institution_id)
@@ -170,7 +170,7 @@ export async function listTopPerformers(input: {
     .from(T.academicRecords)
     .select(
       `id, percentage, rank, roll_no,
-       students:am_students!inner ( id, first_name, middle_name, last_name ),
+       students:am_students!inner ( id, salutation, first_name, middle_name, last_name ),
        institutions:am_institutions!inner ( id, name, type ),
        standards:am_standards ( id, label ),
        courses:am_courses ( id, name, structure_type ),

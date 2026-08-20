@@ -139,9 +139,11 @@ export async function deleteStudent(id: string): Promise<ActionResult<null>> {
 /** The full-page "Add Student" flow: create the persistent identity and this
  *  year's enrollment together, as one unit from the operator's point of view. */
 export async function createStudentWithRecord(input: {
+  salutation?: string | null;
   first_name: string;
   middle_name?: string | null;
   last_name: string;
+  email?: string | null;
   contact_no?: string | null;
   remarks?: string | null;
   institution_id: string;
@@ -155,9 +157,11 @@ export async function createStudentWithRecord(input: {
   rank?: number | null;
 }): Promise<ActionResult<{ studentId: string; recordId: string }>> {
   const studentParsed = studentSchema.safeParse({
+    salutation: input.salutation,
     first_name: input.first_name,
     middle_name: input.middle_name,
     last_name: input.last_name,
+    email: input.email,
     contact_no: input.contact_no,
     remarks: input.remarks,
   });

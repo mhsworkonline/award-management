@@ -36,12 +36,19 @@ export function titleCase(value: string) {
 }
 
 /** Given name + surname — how a student is referred to day-to-day. Middle name
- *  (the father's name) is shown separately wherever that context matters. */
-export function studentName(s: { first_name: string; last_name: string }) {
-  return `${s.first_name} ${s.last_name}`.trim();
+ *  (the father's name) is shown separately wherever that context matters.
+ *  Salutation (Mr./Ms./…) is prepended when present — callers that don't pass
+ *  it (or pass a row without the column) get the old unprefixed behavior. */
+export function studentName(s: { salutation?: string | null; first_name: string; last_name: string }) {
+  return [s.salutation, s.first_name, s.last_name].filter(Boolean).join(" ").trim();
 }
 
 /** Full legal name including the father's name, for certificates/official use. */
-export function studentFullName(s: { first_name: string; middle_name?: string | null; last_name: string }) {
-  return [s.first_name, s.middle_name, s.last_name].filter(Boolean).join(" ");
+export function studentFullName(s: {
+  salutation?: string | null;
+  first_name: string;
+  middle_name?: string | null;
+  last_name: string;
+}) {
+  return [s.salutation, s.first_name, s.middle_name, s.last_name].filter(Boolean).join(" ");
 }

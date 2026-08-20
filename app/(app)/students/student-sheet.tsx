@@ -28,12 +28,15 @@ import {
 import { Field, FieldGrid } from "@/components/form/field";
 import { checkDuplicateStudents, saveStudent, type DuplicateMatch } from "@/lib/actions/students";
 import { saveAcademicRecord } from "@/lib/actions/academic-records";
+import { SALUTATIONS } from "@/lib/types";
 import type { AcademicRecordRow, Lookups } from "@/lib/types";
 
 type Values = {
+  salutation: string;
   first_name: string;
   middle_name: string;
   last_name: string;
+  email: string;
   contact_no: string;
   remarks: string;
   institution_id: string;
@@ -110,9 +113,11 @@ export function StudentSheet({
     setBoardId(inst?.board_id ?? "");
 
     reset({
+      salutation: record.students?.salutation ?? "",
       first_name: record.students?.first_name ?? "",
       middle_name: record.students?.middle_name ?? "",
       last_name: record.students?.last_name ?? "",
+      email: record.students?.email ?? "",
       contact_no: record.students?.contact_no ?? "",
       remarks: record.remarks ?? "",
       institution_id: record.institution_id,
@@ -158,9 +163,11 @@ export function StudentSheet({
 
     const studentResult = await saveStudent({
       id: record.student_id,
+      salutation: values.salutation || null,
       first_name: values.first_name,
       middle_name: values.middle_name || undefined,
       last_name: values.last_name,
+      email: values.email || undefined,
       contact_no: values.contact_no || undefined,
     });
     if (!studentResult.ok) {
@@ -214,7 +221,21 @@ export function StudentSheet({
           </SheetHeader>
 
           <SheetBody className="space-y-5">
-            <FieldGrid cols={1} className="sm:grid-cols-3">
+            <FieldGrid cols={1} className="sm:grid-cols-4">
+              <Field label="Salutation" htmlFor="salutation">
+                <Select value={watch("salutation")} onValueChange={(v) => setValue("salutation", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SALUTATIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="First name" htmlFor="first_name" required error={errors.first_name?.message}>
                 <Input id="first_name" autoFocus autoComplete="off" {...register("first_name", { required: "Required" })} />
               </Field>
@@ -272,7 +293,7 @@ export function StudentSheet({
                 <Select
                   value={institutionId}
                   onValueChange={(v) => setValue("institution_id", v, { shouldValidate: true })}
-                  disabled={!instType}
+                  disabled={!instType || (instType === "school" && !boardId)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select institution" />
@@ -383,6 +404,10 @@ export function StudentSheet({
                 <Input id="contact_no" inputMode="tel" autoComplete="off" {...register("contact_no")} />
               </Field>
             </FieldGrid>
+
+            <Field label="Email" htmlFor="email" error={errors.email?.message}>
+              <Input id="email" type="email" autoComplete="off" {...register("email")} />
+            </Field>
 
             <Field label="Remarks" htmlFor="remarks" hint="For this enrollment year">
               <Textarea id="remarks" rows={2} {...register("remarks")} />

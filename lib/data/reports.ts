@@ -45,7 +45,7 @@ export async function getReportRows(filters: AcademicRecordFilters, limit = 1000
     .select(
       `
       roll_no, period_no, percentage, grade, rank,
-      students:am_students!inner ( first_name, middle_name, last_name, contact_no ),
+      students:am_students!inner ( salutation, first_name, middle_name, last_name, contact_no ),
       institutions:am_institutions!inner ( name, type, boards:am_boards ( name ), mediums:am_mediums ( name ) ),
       academic_years:am_academic_years ( label ),
       standards:am_standards ( label ),

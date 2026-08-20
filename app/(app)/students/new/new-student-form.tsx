@@ -23,12 +23,15 @@ import { QuickAddInstitution } from "@/components/form/quick-add-institution";
 import { PageHeader } from "@/components/shell/page-header";
 import { checkDuplicateStudents, createStudentWithRecord, type DuplicateMatch } from "@/lib/actions/students";
 import { loadRememberedDefaults, saveRememberedDefaults } from "@/lib/remember";
+import { SALUTATIONS } from "@/lib/types";
 import type { Lookups } from "@/lib/types";
 
 type Values = {
+  salutation: string;
   first_name: string;
   middle_name: string;
   last_name: string;
+  email: string;
   contact_no: string;
   remarks: string;
   institution_id: string;
@@ -42,9 +45,11 @@ type Values = {
 };
 
 const EMPTY: Values = {
+  salutation: "",
   first_name: "",
   middle_name: "",
   last_name: "",
+  email: "",
   contact_no: "",
   remarks: "",
   institution_id: "",
@@ -216,9 +221,11 @@ export function NewStudentForm({
     setServerError(null);
 
     const result = await createStudentWithRecord({
+      salutation: values.salutation || null,
       first_name: values.first_name,
       middle_name: values.middle_name || null,
       last_name: values.last_name,
+      email: values.email || null,
       contact_no: values.contact_no || null,
       remarks: values.remarks || null,
       institution_id: values.institution_id,
@@ -286,7 +293,21 @@ export function NewStudentForm({
             <CardTitle>Identity</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <FieldGrid cols={1} className="sm:grid-cols-3">
+            <FieldGrid cols={1} className="sm:grid-cols-4">
+              <Field label="Salutation" htmlFor="salutation">
+                <Select value={watch("salutation")} onValueChange={(v) => setValue("salutation", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SALUTATIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="First name" htmlFor="first_name" required error={errors.first_name?.message}>
                 <Input
                   id="first_name"
@@ -313,6 +334,9 @@ export function NewStudentForm({
             </FieldGrid>
 
             <FieldGrid>
+              <Field label="Email" htmlFor="email" error={errors.email?.message}>
+                <Input id="email" type="email" inputMode="email" autoComplete="off" {...register("email")} />
+              </Field>
               <Field label="Contact no" htmlFor="contact_no">
                 <Input id="contact_no" inputMode="tel" autoComplete="off" {...register("contact_no")} />
               </Field>
@@ -399,7 +423,7 @@ export function NewStudentForm({
                   <Select
                     value={institutionId}
                     onValueChange={(v) => setValue("institution_id", v, { shouldValidate: true })}
-                    disabled={!instType}
+                    disabled={!instType || (instType === "school" && !boardId)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select institution" />

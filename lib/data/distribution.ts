@@ -43,7 +43,7 @@ const SELECT = `
         institutions:am_institutions!inner ( name, type ),
         standards:am_standards ( label ),
         courses:am_courses ( name, structure_type ),
-        students:am_students!inner ( id, first_name, middle_name, last_name )
+        students:am_students!inner ( id, salutation, first_name, middle_name, last_name )
       )
     )
   )

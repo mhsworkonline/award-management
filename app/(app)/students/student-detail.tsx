@@ -50,6 +50,7 @@ export function StudentDetail({
                 <Item label="Standard / Course" value={placementLabel(record)} />
                 <Item label="Academic year" value={record.academic_years?.label} />
                 <Item label="Roll / GR no" value={record.roll_no} />
+                <Item label="Email" value={record.students?.email} />
                 <Item label="Contact no" value={record.students?.contact_no} />
                 <Item label="Percentage" value={record.percentage !== null ? `${record.percentage}%` : null} />
                 <Item label="Grade" value={record.grade} />
