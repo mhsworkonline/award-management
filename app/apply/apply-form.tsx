@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useForm } from "react-hook-form";
-import { CheckCircle2, Copy, FileText, Image as ImageIcon, Loader2, Paperclip, Send, X } from "lucide-react";
+import { CheckCircle2, Copy, FileText, Image as ImageIcon, Loader2, Paperclip, Send, Trophy, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,8 @@ import { createClient } from "@/lib/supabase/client";
 import { ATTACHMENTS_BUCKET } from "@/lib/tables";
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
 import { SALUTATIONS } from "@/lib/types";
-import type { PublicFormOptions, ResolvedForm } from "@/lib/types";
+import { APPLY_LABELS as L } from "@/lib/apply-form-i18n";
+import type { PublicBranding, PublicFormOptions, ResolvedForm } from "@/lib/types";
 
 type Values = {
   salutation: string;
@@ -81,10 +82,17 @@ const ALLOWED_TYPES = ALLOWED_ATTACHMENT_TYPES;
 export function ApplyForm({
   form,
   options,
+  branding,
 }: {
   form: NonNullable<ResolvedForm>;
   options: PublicFormOptions;
+  branding: PublicBranding;
 }) {
+  const fieldConfig = form.fieldConfig;
+  const nameFieldCount = 2 + (fieldConfig.show_salutation ? 1 : 0) + (fieldConfig.show_middle_name ? 1 : 0);
+  const nameGridClass =
+    nameFieldCount === 4 ? "sm:grid-cols-4" : nameFieldCount === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2";
+
   const [instType, setInstType] = React.useState<"school" | "college" | "">("");
   const [boardId, setBoardId] = React.useState("");
   const [referenceCode, setReferenceCode] = React.useState<string | null>(null);
@@ -290,15 +298,33 @@ export function ApplyForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{form.title}</CardTitle>
-        <CardDescription>
-          {form.description || (
-            <>
-              For {form.academicYear.label}. Fill in your details below — your institution will
-              verify this before it&apos;s finalized.
-            </>
+        <div className="mb-1 flex items-center gap-2.5">
+          {branding.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
+            <img src={branding.logo_url} alt="" className="h-8 w-8 shrink-0 rounded-md object-contain" />
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <Trophy className="h-4 w-4" />
+            </span>
           )}
-        </CardDescription>
+          <span className="truncate text-[13px] font-semibold tracking-tight text-muted-foreground">
+            {branding.app_name}
+          </span>
+        </div>
+        <CardTitle>
+          {form.title}
+          {form.titleGu && (
+            <span className="mt-0.5 block text-[13px] font-normal text-muted-foreground">
+              {form.titleGu}
+            </span>
+          )}
+        </CardTitle>
+        {(form.description || form.descriptionGu) && (
+          <CardDescription className="space-y-1">
+            {form.description && <span className="block">{form.description}</span>}
+            {form.descriptionGu && <span className="block">{form.descriptionGu}</span>}
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
@@ -311,43 +337,49 @@ export function ApplyForm({
             <input id="website" type="text" tabIndex={-1} autoComplete="off" {...register("website")} />
           </div>
 
-          <FieldGrid cols={1} className="sm:grid-cols-4">
-            <Field label="Salutation" htmlFor="salutation">
-              <Select value={watch("salutation")} onValueChange={(v) => setValue("salutation", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SALUTATIONS.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="First name" htmlFor="first_name" required error={errors.first_name?.message}>
+          <FieldGrid cols={1} className={nameGridClass}>
+            {fieldConfig.show_salutation && (
+              <Field label={L.salutation} htmlFor="salutation">
+                <Select value={watch("salutation")} onValueChange={(v) => setValue("salutation", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SALUTATIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+            <Field label={L.firstName} htmlFor="first_name" required error={errors.first_name?.message}>
               <Input id="first_name" autoComplete="given-name" {...register("first_name", { required: "Required" })} />
             </Field>
-            <Field label="Middle (father's)" htmlFor="middle_name">
-              <Input id="middle_name" autoComplete="off" {...register("middle_name")} />
-            </Field>
-            <Field label="Last name" htmlFor="last_name" required error={errors.last_name?.message}>
+            {fieldConfig.show_middle_name && (
+              <Field label={L.middleName} htmlFor="middle_name">
+                <Input id="middle_name" autoComplete="off" {...register("middle_name")} />
+              </Field>
+            )}
+            <Field label={L.lastName} htmlFor="last_name" required error={errors.last_name?.message}>
               <Input id="last_name" autoComplete="family-name" {...register("last_name", { required: "Required" })} />
             </Field>
           </FieldGrid>
 
-          <FieldGrid>
-            <Field label="Email" htmlFor="email" required error={errors.email?.message}>
+          <FieldGrid cols={1} className={fieldConfig.show_contact_no ? "sm:grid-cols-2" : undefined}>
+            <Field label={L.email} htmlFor="email" required error={errors.email?.message}>
               <Input id="email" type="email" inputMode="email" autoComplete="email" {...register("email", { required: "Required" })} />
             </Field>
-            <Field label="Contact no" htmlFor="contact_no" hint="Your own or a parent's mobile number">
-              <Input id="contact_no" type="tel" inputMode="tel" autoComplete="tel" {...register("contact_no")} />
-            </Field>
+            {fieldConfig.show_contact_no && (
+              <Field label={L.contactNo} htmlFor="contact_no" hint={L.contactNoHint}>
+                <Input id="contact_no" type="tel" inputMode="tel" autoComplete="tel" {...register("contact_no")} />
+              </Field>
+            )}
           </FieldGrid>
 
           <FieldGrid>
-            <Field label="I am from a" required>
+            <Field label={L.institutionType} required>
               <Select value={instType} onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select" />
@@ -360,7 +392,7 @@ export function ApplyForm({
             </Field>
 
             {instType === "school" && (
-              <Field label="Board" required error={errors.board_id?.message}>
+              <Field label={L.board} required error={errors.board_id?.message}>
                 <Select value={boardId} onValueChange={handleBoardChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select board" />
@@ -379,7 +411,7 @@ export function ApplyForm({
 
           {instType === "school" && (
             <FieldGrid>
-              <Field label="Medium of instruction" required error={errors.medium_id?.message}>
+              <Field label={L.medium} required error={errors.medium_id?.message}>
                 <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v, { shouldValidate: true })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select medium" />
@@ -397,7 +429,7 @@ export function ApplyForm({
           )}
 
           <Field
-            label="Institution"
+            label={L.institution}
             required
             error={errors.institution_id?.message}
             hint={
@@ -428,7 +460,7 @@ export function ApplyForm({
           </Field>
 
           {isOtherInstitution && (
-            <Field label="Your institution's name" htmlFor="other_institution_name" required error={errors.other_institution_name?.message}>
+            <Field label={L.otherInstitutionName} htmlFor="other_institution_name" required error={errors.other_institution_name?.message}>
               <Input id="other_institution_name" autoComplete="off" {...register("other_institution_name")} />
             </Field>
           )}
@@ -436,7 +468,7 @@ export function ApplyForm({
           {isCollege ? (
             <>
               <FieldGrid>
-                <Field label="Course" required error={errors.standard_id?.message}>
+                <Field label={L.course} required error={errors.standard_id?.message}>
                   <Select value={courseId} onValueChange={(v) => setValue("course_id", v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select course" />
@@ -453,7 +485,7 @@ export function ApplyForm({
                 </Field>
                 {!isOtherCourse && (
                   <Field
-                    label={course?.structure_type === "semester" ? "Semester" : "Year"}
+                    label={course?.structure_type === "semester" ? L.semester : L.year}
                     required
                     error={errors.period_no?.message}
                     hint={course ? `1 to ${course.total_periods}` : "Select a course first"}
@@ -516,7 +548,7 @@ export function ApplyForm({
             </>
           ) : (
             instType === "school" && (
-              <Field label="Standard" required error={errors.standard_id?.message} hint={!institutionId ? "Select your institution first" : undefined}>
+              <Field label={L.standard} required error={errors.standard_id?.message} hint={!institutionId ? "Select your institution first" : undefined}>
                 <Select value={watch("standard_id")} onValueChange={(v) => setValue("standard_id", v)} disabled={!institutionId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select standard" />
@@ -533,15 +565,15 @@ export function ApplyForm({
             )
           )}
 
-          <Field label="Roll / GR no" htmlFor="roll_no">
-            <Input id="roll_no" autoComplete="off" {...register("roll_no")} />
-          </Field>
+          {fieldConfig.show_roll_no && (
+            <Field label={L.rollNo} htmlFor="roll_no">
+              <Input id="roll_no" autoComplete="off" {...register("roll_no")} />
+            </Field>
+          )}
 
-          <p className="text-[12px] text-muted-foreground">
-            Provide your percentage, grade, or both — at least one is required.
-          </p>
+          <p className="text-[12px] text-muted-foreground">{L.gradeHint}</p>
           <FieldGrid>
-            <Field label="Percentage" htmlFor="percentage" error={errors.percentage?.message}>
+            <Field label={L.percentage} htmlFor="percentage" error={errors.percentage?.message}>
               <Input
                 id="percentage"
                 type="number"
@@ -553,62 +585,66 @@ export function ApplyForm({
                 {...register("percentage")}
               />
             </Field>
-            <Field label="Grade" htmlFor="grade">
+            <Field label={L.grade} htmlFor="grade">
               <Input id="grade" autoComplete="off" {...register("grade")} />
             </Field>
           </FieldGrid>
 
-          <Field label="Anything else you'd like to add?" htmlFor="notes" hint="Optional">
-            <Textarea id="notes" rows={3} {...register("notes")} />
-          </Field>
+          {fieldConfig.show_notes && (
+            <Field label={L.notes} htmlFor="notes" hint="Optional">
+              <Textarea id="notes" rows={3} {...register("notes")} />
+            </Field>
+          )}
 
-          <Field
-            label="Attachments"
-            hint={`Optional — up to ${MAX_FILES} files, image/PDF/DOCX, 5MB each`}
-          >
-            <div className="space-y-2">
-              {files.map((f, i) => (
-                <div
-                  key={`${f.name}-${i}`}
-                  className="flex items-center gap-2.5 rounded-md border bg-muted/40 px-3 py-2"
-                >
-                  {f.type.startsWith("image/") ? (
-                    <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-[13px]">{f.name}</span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {(f.size / 1024 / 1024).toFixed(1)}MB
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removeFile(i)}
-                    className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-                    aria-label={`Remove ${f.name}`}
+          {fieldConfig.show_attachments && (
+            <Field
+              label={L.attachments}
+              hint={`Optional — up to ${MAX_FILES} files, image/PDF/DOCX, 5MB each`}
+            >
+              <div className="space-y-2">
+                {files.map((f, i) => (
+                  <div
+                    key={`${f.name}-${i}`}
+                    className="flex items-center gap-2.5 rounded-md border bg-muted/40 px-3 py-2"
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
+                    {f.type.startsWith("image/") ? (
+                      <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-[13px]">{f.name}</span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      {(f.size / 1024 / 1024).toFixed(1)}MB
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+                      aria-label={`Remove ${f.name}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
 
-              {files.length < MAX_FILES && (
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-input px-4 py-4 text-center text-[13px] text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent/40">
-                  <Paperclip className="h-4 w-4" />
-                  Add a file (image, PDF or DOCX)
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="sr-only"
-                    accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    onChange={(e) => addFiles(e.target.files)}
-                  />
-                </label>
-              )}
+                {files.length < MAX_FILES && (
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-input px-4 py-4 text-center text-[13px] text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent/40">
+                    <Paperclip className="h-4 w-4" />
+                    Add a file (image, PDF or DOCX)
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="sr-only"
+                      accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      onChange={(e) => addFiles(e.target.files)}
+                    />
+                  </label>
+                )}
 
-              {fileError && <p className="text-[12px] font-medium text-destructive">{fileError}</p>}
-            </div>
-          </Field>
+                {fileError && <p className="text-[12px] font-medium text-destructive">{fileError}</p>}
+              </div>
+            </Field>
+          )}
 
           {serverError && (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-[13px] font-medium text-destructive">
@@ -618,7 +654,7 @@ export function ApplyForm({
 
           <Button type="submit" className="h-11 w-full text-[15px]" disabled={busy}>
             {busy ? <Loader2 className="animate-spin" /> : <Send />}
-            {uploading ? "Uploading attachments…" : isSubmitting ? "Submitting…" : "Submit application"}
+            {uploading ? "Uploading attachments…" : isSubmitting ? "Submitting…" : L.submit}
           </Button>
         </form>
       </CardContent>

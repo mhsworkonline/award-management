@@ -311,11 +311,22 @@ export const submissionEditSchema = z
     }
   });
 
+const applicationFormFieldConfigSchema = z.object({
+  show_salutation: z.boolean().default(true),
+  show_middle_name: z.boolean().default(true),
+  show_contact_no: z.boolean().default(true),
+  show_roll_no: z.boolean().default(false),
+  show_notes: z.boolean().default(true),
+  show_attachments: z.boolean().default(true),
+});
+
 /** Creating/editing a public application form (Forms module). */
 export const applicationFormSchema = z.object({
   id: uuid.optional(),
   title: z.string().trim().min(1, "Title is required").max(150),
+  title_gu: z.string().trim().max(150).nullable().optional().transform((v) => (v ? v : null)),
   description: z.string().trim().max(500).nullable().optional().transform((v) => (v ? v : null)),
+  description_gu: z.string().trim().max(500).nullable().optional().transform((v) => (v ? v : null)),
   slug: z
     .string()
     .trim()
@@ -325,6 +336,7 @@ export const applicationFormSchema = z.object({
     .regex(/^[a-z0-9-]+$/, "Lowercase letters, numbers and hyphens only"),
   academic_year_id: uuid,
   is_enabled: z.boolean().default(true),
+  field_config: applicationFormFieldConfigSchema.default({}),
 });
 export type ApplicationFormInput = z.input<typeof applicationFormSchema>;
 

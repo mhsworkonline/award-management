@@ -276,12 +276,36 @@ export type SubmissionAttachment = {
   created_at: string;
 };
 
+/** Which optional fields a given application form shows to applicants.
+ *  Structural fields (name, email, institution, board/medium, standard/course,
+ *  percentage-or-grade) are never toggle-able — only the supplementary ones. */
+export type ApplicationFormFieldConfig = {
+  show_salutation: boolean;
+  show_middle_name: boolean;
+  show_contact_no: boolean;
+  show_roll_no: boolean;
+  show_notes: boolean;
+  show_attachments: boolean;
+};
+
+export const DEFAULT_FIELD_CONFIG: ApplicationFormFieldConfig = {
+  show_salutation: true,
+  show_middle_name: true,
+  show_contact_no: true,
+  show_roll_no: false,
+  show_notes: true,
+  show_attachments: true,
+};
+
 export type ApplicationForm = {
   id: string;
   org_id: string;
   slug: string;
   title: string;
+  title_gu: string | null;
   description: string | null;
+  description_gu: string | null;
+  field_config: ApplicationFormFieldConfig;
   academic_year_id: string;
   is_enabled: boolean;
   created_by: string | null;
@@ -298,8 +322,11 @@ export type ResolvedForm = {
   id: string;
   slug: string;
   title: string;
+  titleGu: string | null;
   description: string | null;
+  descriptionGu: string | null;
   is_enabled: boolean;
+  fieldConfig: ApplicationFormFieldConfig;
   academicYear: { id: string; label: string };
 } | null;
 
