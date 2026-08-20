@@ -1,39 +1,15 @@
   ▲ Next.js 14.2.35
-  - Local:        http://localhost:3000
+  - Local:        http://localhost:3100
   - Environments: .env.local
 
  ✓ Starting...
 
-Sign in: admin@awards.local / Admin@2026
+Sign in: admin@awardmanagement.com / 99999999
 
- ✓ Ready in 7.9s
- ○ Compiling /middleware ...
- ✓ Compiled /middleware in 5s (127 modules)
+ ✓ Ready in 2.6s
+ ✓ Compiled /middleware in 416ms (127 modules)
  ○ Compiling /apply ...
- ✓ Compiled /apply in 34.4s (1104 modules)
- GET /apply 200 in 38427ms
-<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (106kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
-<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (258kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
- ○ Compiling /forms ...
- ✓ Compiled /apply in 11.5s (1348 modules)
- GET /apply 200 in 7819ms
- GET /forms 200 in 15716ms
- ✓ Compiled in 4.1s (1348 modules)
- ✓ Compiled in 3.8s (1348 modules)
- ✓ Compiled in 2.2s (1348 modules)
- ✓ Compiled in 3.9s (1348 modules)
- GET /apply 200 in 1334ms
- ○ Compiling / ...
- ✓ Compiled /_not-found in 6s (1337 modules)
- GET /admin 404 in 5761ms
- GET /apply 200 in 5876ms
- GET / 307 in 317ms
- GET / 307 in 405ms
- ○ Compiling /dashboard ...
- ✓ Compiled /dashboard in 5.2s (1351 modules)
- GET /dashboard 200 in 7983ms
- POST /forms 200 in 2495ms
- ○ Compiling /apply/[slug] ...
- ✓ Compiled /apply/[slug] in 4.2s (1351 modules)
- GET /apply/default 200 in 9072ms
- ✓ Compiled in 7.3s (1365 modules)
+ ✓ Compiled /apply in 4.6s (1095 modules)
+ GET /apply 200 in 6219ms
+ GET /apply 200 in 658ms
+[?25h

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -255,13 +255,14 @@ export function ApplyForm({
 
   if (referenceCode) {
     return (
-      <Card>
+      <Card className="overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-primary via-primary/70 to-primary" />
         <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-success/12 text-success">
-            <CheckCircle2 className="h-5 w-5" />
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success/12 text-success">
+            <CheckCircle2 className="h-6 w-6" />
           </span>
-          <p className="text-base font-semibold">Application received</p>
-          <p className="max-w-sm text-[13px] text-muted-foreground">
+          <p className="text-xl font-semibold">Application received</p>
+          <p className="max-w-sm text-[15px] text-muted-foreground">
             Your school or college will review and confirm your details. Save this code — quote it
             for any follow-up.
           </p>
@@ -296,38 +297,48 @@ export function ApplyForm({
   const busy = isSubmitting || uploading;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="mb-1 flex items-center gap-2.5">
+    <Card className="overflow-hidden">
+      <div className="relative overflow-hidden bg-gradient-to-br from-primary to-primary/80 px-5 py-7 text-primary-foreground sm:px-6 sm:py-8">
+        <Trophy className="pointer-events-none absolute -right-4 -top-4 h-28 w-28 rotate-12 text-primary-foreground/10" />
+        <div className="relative flex items-center gap-3">
           {branding.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
-            <img src={branding.logo_url} alt="" className="h-8 w-8 shrink-0 rounded-md object-contain" />
+            <img
+              src={branding.logo_url}
+              alt=""
+              className="h-11 w-11 shrink-0 rounded-lg bg-white/90 object-contain p-1"
+            />
           ) : (
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Trophy className="h-4 w-4" />
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/15">
+              <Trophy className="h-5 w-5" />
             </span>
           )}
-          <span className="truncate text-[13px] font-semibold tracking-tight text-muted-foreground">
+          <h2 className="truncate text-2xl font-bold leading-tight tracking-tight text-primary-foreground sm:text-3xl">
             {branding.app_name}
-          </span>
+          </h2>
         </div>
-        <CardTitle>
+
+        <CardTitle className="relative mt-3 text-lg font-semibold text-primary-foreground">
           {form.title}
           {form.titleGu && (
-            <span className="mt-0.5 block text-[13px] font-normal text-muted-foreground">
+            <span className="mt-0.5 block text-[15px] font-normal text-primary-foreground/80">
               {form.titleGu}
             </span>
           )}
         </CardTitle>
         {(form.description || form.descriptionGu) && (
-          <CardDescription className="space-y-1">
+          <CardDescription className="relative mt-1.5 space-y-1 text-[15px] text-primary-foreground/80">
             {form.description && <span className="block">{form.description}</span>}
             {form.descriptionGu && <span className="block">{form.descriptionGu}</span>}
           </CardDescription>
         )}
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+      </div>
+      <CardContent className="pt-6">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-6 [&_input]:text-base [&_label]:text-[15px] [&_p]:text-[13.5px] [&_textarea]:text-base [&_button[role=combobox]]:text-base"
+          noValidate
+        >
           {/* Honeypot — visually hidden (sr-only clip technique, not display:none,
               since some bots skip display:none but still fill hidden-but-present
               fields) without pulling the field off-canvas, which would otherwise
@@ -571,7 +582,6 @@ export function ApplyForm({
             </Field>
           )}
 
-          <p className="text-[12px] text-muted-foreground">{L.gradeHint}</p>
           <FieldGrid>
             <Field label={L.percentage} htmlFor="percentage" error={errors.percentage?.message}>
               <Input
@@ -652,7 +662,7 @@ export function ApplyForm({
             </p>
           )}
 
-          <Button type="submit" className="h-11 w-full text-[15px]" disabled={busy}>
+          <Button type="submit" className="h-12 w-full text-base" disabled={busy}>
             {busy ? <Loader2 className="animate-spin" /> : <Send />}
             {uploading ? "Uploading attachments…" : isSubmitting ? "Submitting…" : L.submit}
           </Button>

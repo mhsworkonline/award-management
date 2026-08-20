@@ -30,10 +30,6 @@ export const APPLY_LABELS = {
   rollNo: bl("Roll / GR no", "રોલ / જીઆર નંબર"),
   percentage: bl("Percentage", "ટકાવારી"),
   grade: bl("Grade", "ગ્રેડ"),
-  gradeHint: bl(
-    "Provide your percentage, grade, or both — at least one is required.",
-    "તમારી ટકાવારી, ગ્રેડ અથવા બંને આપો — ઓછામાં ઓછું એક જરૂરી છે.",
-  ),
   notes: bl("Anything else you'd like to add?", "બીજું કંઈ ઉમેરવા માંગો છો?"),
   attachments: bl("Marksheets", "માર્કશીટ"),
   submit: bl("Submit application", "અરજી સબમિટ કરો"),
