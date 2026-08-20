@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -27,7 +28,7 @@ import { Field } from "@/components/form/field";
 import { saveApplicationForm } from "@/lib/actions/application-forms";
 import type { ApplicationFormRow, Lookups } from "@/lib/types";
 
-type Values = { title: string; slug: string; academic_year_id: string };
+type Values = { title: string; description: string; slug: string; academic_year_id: string };
 
 function slugify(v: string) {
   return v
@@ -60,7 +61,7 @@ export function FormSheet({
     setValue,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<Values>({ defaultValues: { title: "", slug: "", academic_year_id: "" } });
+  } = useForm<Values>({ defaultValues: { title: "", description: "", slug: "", academic_year_id: "" } });
 
   const title = watch("title");
 
@@ -70,8 +71,18 @@ export function FormSheet({
     setSlugTouched(isEdit);
     reset(
       form
-        ? { title: form.title, slug: form.slug, academic_year_id: form.academic_year_id }
-        : { title: "", slug: "", academic_year_id: lookups.academicYears.find((y) => y.is_active)?.id ?? "" },
+        ? {
+            title: form.title,
+            description: form.description ?? "",
+            slug: form.slug,
+            academic_year_id: form.academic_year_id,
+          }
+        : {
+            title: "",
+            description: "",
+            slug: "",
+            academic_year_id: lookups.academicYears.find((y) => y.is_active)?.id ?? "",
+          },
     );
   }, [open, form, reset, lookups.academicYears]);
 
@@ -111,6 +122,19 @@ export function FormSheet({
                 autoComplete="off"
                 placeholder="e.g. Award Application 2026-27"
                 {...register("title", { required: "Required" })}
+              />
+            </Field>
+
+            <Field
+              label="Description shown to applicants"
+              htmlFor="description"
+              hint="Optional — shown under the title on the public form. Defaults to a standard message if left blank."
+            >
+              <Textarea
+                id="description"
+                rows={3}
+                placeholder={`For ${lookups.academicYears.find((y) => y.id === watch("academic_year_id"))?.label ?? "this year"}. Fill in your details below — your institution will verify this before it's finalized.`}
+                {...register("description")}
               />
             </Field>
 

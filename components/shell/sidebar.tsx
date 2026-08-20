@@ -43,9 +43,13 @@ const FOOTER_NAV = [
 export function Sidebar({
   className,
   pendingSubmissions = 0,
+  appName = "Awards",
+  logoUrl = null,
 }: {
   className?: string;
   pendingSubmissions?: number;
+  appName?: string;
+  logoUrl?: string | null;
 }) {
   const pathname = usePathname();
   const { pending } = useOffline();
@@ -60,10 +64,17 @@ export function Sidebar({
       )}
     >
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <Trophy className="h-4 w-4" />
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
+          <img src={logoUrl} alt="" className="h-7 w-7 shrink-0 rounded-md object-contain" />
+        ) : (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Trophy className="h-4 w-4" />
+          </span>
+        )}
+        <span className="truncate text-[15px] font-semibold tracking-tight text-foreground">
+          {appName}
         </span>
-        <span className="text-[15px] font-semibold tracking-tight text-foreground">Awards</span>
       </div>
 
       <nav className="scrollbar-thin flex-1 space-y-0.5 overflow-y-auto px-2.5 py-2">

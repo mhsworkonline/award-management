@@ -33,6 +33,10 @@ export const T = {
  *  insert into it (see migration), never list or read. */
 export const ATTACHMENTS_BUCKET = "am-submission-attachments";
 
+/** Storage bucket for the org logo — public (readable by anyone via its plain
+ *  URL, no signing), writable only by authenticated staff. */
+export const BRANDING_BUCKET = "am-branding";
+
 /** Aliased embedded-relation fragments for `.select()`.
  *  `institutions:am_institutions` keeps the JSON key as `institutions`. */
 export const REL = {
@@ -58,6 +62,7 @@ export const FN = {
   submitPublicApplication: "am_submit_public_application",
   resolveApplicationForm: "am_resolve_application_form",
   registerAttachment: "am_register_submission_attachment",
+  publicBranding: "am_public_branding",
 } as const;
 
 /** Logical entity name → physical table, for the config CRUD surface. */

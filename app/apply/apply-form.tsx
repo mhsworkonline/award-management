@@ -292,8 +292,12 @@ export function ApplyForm({
       <CardHeader>
         <CardTitle>{form.title}</CardTitle>
         <CardDescription>
-          For {form.academicYear.label}. Fill in your details below — your institution will verify
-          this before it&apos;s finalized.
+          {form.description || (
+            <>
+              For {form.academicYear.label}. Fill in your details below — your institution will
+              verify this before it&apos;s finalized.
+            </>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>

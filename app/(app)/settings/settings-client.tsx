@@ -4,10 +4,17 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shell/page-header";
 import { ConfigSection } from "./config-section";
+import { BrandingSection } from "./branding-section";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Lookups } from "@/lib/types";
+import type { Lookups, Organization } from "@/lib/types";
 
-export function SettingsClient({ lookups }: { lookups: Lookups }) {
+export function SettingsClient({
+  lookups,
+  organization,
+}: {
+  lookups: Lookups;
+  organization: Organization | null;
+}) {
   return (
     <>
       <PageHeader
@@ -15,8 +22,9 @@ export function SettingsClient({ lookups }: { lookups: Lookups }) {
         description="Everything here is data, not code — add a board, medium, course or award category and it appears in every form immediately."
       />
 
-      <Tabs defaultValue="years">
+      <Tabs defaultValue="branding">
         <TabsList>
+          <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="years">Academic years</TabsTrigger>
           <TabsTrigger value="boards">Boards</TabsTrigger>
           <TabsTrigger value="mediums">Mediums</TabsTrigger>
@@ -24,6 +32,14 @@ export function SettingsClient({ lookups }: { lookups: Lookups }) {
           <TabsTrigger value="courses">Courses</TabsTrigger>
           <TabsTrigger value="categories">Award categories</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="branding">
+          {organization ? (
+            <BrandingSection organization={organization} />
+          ) : (
+            <p className="text-[13px] text-muted-foreground">Could not load organization settings.</p>
+          )}
+        </TabsContent>
 
         <TabsContent value="years">
           <ConfigSection

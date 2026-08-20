@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { getPublicBranding } from "@/lib/actions/organization";
 import "./globals.css";
 
 const inter = Inter({
@@ -9,10 +10,15 @@ const inter = Inter({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: { default: "Award Management", template: "%s · Award Management" },
-  description: "Annual student merit awards and prize distribution",
-};
+/** Browser-tab title, site-wide — driven by Settings → Branding so it stays
+ *  in sync with the name shown on the sign-in page and the public form. */
+export async function generateMetadata(): Promise<Metadata> {
+  const branding = await getPublicBranding();
+  return {
+    title: { default: branding.app_name, template: `%s · ${branding.app_name}` },
+    description: "Annual student merit awards and prize distribution",
+  };
+}
 
 export const viewport: Viewport = {
   width: "device-width",

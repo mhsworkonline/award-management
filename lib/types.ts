@@ -281,6 +281,7 @@ export type ApplicationForm = {
   org_id: string;
   slug: string;
   title: string;
+  description: string | null;
   academic_year_id: string;
   is_enabled: boolean;
   created_by: string | null;
@@ -297,9 +298,26 @@ export type ResolvedForm = {
   id: string;
   slug: string;
   title: string;
+  description: string | null;
   is_enabled: boolean;
   academicYear: { id: string; label: string };
 } | null;
+
+/** Org-level branding — name/logo shown on the public /apply page. Read via a
+ *  security-definer RPC for anon visitors; read/written directly by staff
+ *  (the `am_organizations_authenticated_all` policy covers both). */
+export type Organization = {
+  id: string;
+  name: string;
+  app_name: string;
+  logo_path: string | null;
+  created_at: string;
+};
+
+export type PublicBranding = {
+  app_name: string;
+  logo_url: string | null;
+};
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }

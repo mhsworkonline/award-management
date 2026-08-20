@@ -315,6 +315,7 @@ export const submissionEditSchema = z
 export const applicationFormSchema = z.object({
   id: uuid.optional(),
   title: z.string().trim().min(1, "Title is required").max(150),
+  description: z.string().trim().max(500).nullable().optional().transform((v) => (v ? v : null)),
   slug: z
     .string()
     .trim()
@@ -326,6 +327,11 @@ export const applicationFormSchema = z.object({
   is_enabled: z.boolean().default(true),
 });
 export type ApplicationFormInput = z.input<typeof applicationFormSchema>;
+
+/** Org branding — the name shown on the public /apply header. */
+export const organizationBrandingSchema = z.object({
+  app_name: z.string().trim().min(1, "Name is required").max(80),
+});
 
 export const academicRecordFilterSchema = z.object({
   q: z.string().trim().optional(),

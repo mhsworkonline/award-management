@@ -1,15 +1,24 @@
 #!/usr/bin/env node
 /**
- * Deploy — commit and push the working tree to GitHub.
+ * Deploy — commit and push the working tree to GitHub, then ship it to Vercel.
  *
- *   node deploy.js                  # stage everything, auto-generate a commit message, push
+ *   node deploy.js                  # stage everything, auto-generate a commit message, push, deploy
  *   node deploy.js "message"        # use this commit message instead of the auto one
  *   node deploy.js --skip-checks    # skip `npm run typecheck` before committing
- *   node deploy.js --no-push        # commit locally only, don't push
+ *   node deploy.js --no-push        # commit locally only, don't push (still deploys, from local files)
+ *   node deploy.js --no-deploy      # push to GitHub only, skip the Vercel deploy
+ *   node deploy.js --preview        # deploy to a Vercel Preview instead of Production
  *
  * Always works on whatever branch is currently checked out and pushes to its
  * tracking remote (origin/<branch> by default, set up on first push) — it
  * never switches branches, force-pushes, or touches history.
+ *
+ * The Vercel deploy runs from the local working directory (not from GitHub),
+ * via the `vercel` CLI, which must already be logged in and linked to this
+ * project (`vercel link` — see .vercel/project.json). It's a second, explicit
+ * path to production independent of Vercel's GitHub integration, which also
+ * auto-deploys on push to main — running both isn't harmful, just briefly
+ * redundant; whichever build finishes last is what stays live.
  */
 
 const { spawnSync } = require("node:child_process");
@@ -19,6 +28,8 @@ const WIN = process.platform === "win32";
 const args = process.argv.slice(2);
 const skipChecks = args.includes("--skip-checks");
 const noPush = args.includes("--no-push");
+const noDeploy = args.includes("--no-deploy");
+const preview = args.includes("--preview");
 const messageArg = args.find((a) => !a.startsWith("--"));
 
 // `shell` is opt-in per call, not global: on Windows, npm is npm.cmd and
@@ -87,8 +98,30 @@ async function main() {
 
   const hash = capture("git", ["rev-parse", "--short", "HEAD"]).stdout.trim();
   const remoteUrl = capture("git", ["remote", "get-url", "origin"]).stdout.trim();
-  console.log(`✅ Done — ${hash} on ${branch}`);
+  console.log(`✅ GitHub — ${hash} on ${branch}`);
   console.log(`   ${remoteUrl}\n`);
+
+  if (noDeploy) {
+    console.log("→ Skipping Vercel deploy (--no-deploy).\n");
+    return;
+  }
+
+  const target = preview ? "Preview" : "Production";
+  console.log(`→ Deploying to Vercel (${target})...`);
+  const deployArgs = ["deploy", "--yes"];
+  if (!preview) deployArgs.push("--prod");
+  // Vercel CLI itself resolves to npx on machines without a global install;
+  // shell is required on Windows to find npx.cmd, same reasoning as npm above.
+  const deployResult = run("npx", ["vercel", ...deployArgs], { shell: WIN });
+
+  if (deployResult.status !== 0) {
+    // A failed Vercel deploy doesn't unwind the git push that already
+    // succeeded — surface it as a warning, not a fatal exit.
+    console.error(`\n⚠ Vercel deploy failed (exit ${deployResult.status}) — GitHub push already completed above.`);
+    console.error("  Run `npx vercel deploy --prod --yes` manually to retry, or check `npx vercel whoami` / `vercel link`.\n");
+    return;
+  }
+  console.log(`✅ Deployed to Vercel (${target})\n`);
 }
 
 main().catch((e) => fail(e.message ?? String(e)));
