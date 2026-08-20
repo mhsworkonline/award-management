@@ -9,6 +9,8 @@ npm-debug.log*
 .env.local
 .env*.local
 .vercel
+.dev-server.log
+.vercel-deploy.log
 next-env.d.ts
 tsconfig.tsbuildinfo
 

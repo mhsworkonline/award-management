@@ -18,3 +18,22 @@ Sign in: admin@awards.local / Admin@2026
  ✓ Compiled /apply in 11.5s (1348 modules)
  GET /apply 200 in 7819ms
  GET /forms 200 in 15716ms
+ ✓ Compiled in 4.1s (1348 modules)
+ ✓ Compiled in 3.8s (1348 modules)
+ ✓ Compiled in 2.2s (1348 modules)
+ ✓ Compiled in 3.9s (1348 modules)
+ GET /apply 200 in 1334ms
+ ○ Compiling / ...
+ ✓ Compiled /_not-found in 6s (1337 modules)
+ GET /admin 404 in 5761ms
+ GET /apply 200 in 5876ms
+ GET / 307 in 317ms
+ GET / 307 in 405ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 5.2s (1351 modules)
+ GET /dashboard 200 in 7983ms
+ POST /forms 200 in 2495ms
+ ○ Compiling /apply/[slug] ...
+ ✓ Compiled /apply/[slug] in 4.2s (1351 modules)
+ GET /apply/default 200 in 9072ms
+ ✓ Compiled in 7.3s (1365 modules)

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Deploy — commit and push the working tree to GitHub, then ship it to Vercel.
+ * Deploy — commit and push the working tree to GitHub, then kick off a Vercel deploy.
  *
  *   node deploy.js                  # stage everything, auto-generate a commit message, push, deploy
  *   node deploy.js "message"        # use this commit message instead of the auto one
@@ -19,9 +19,16 @@
  * path to production independent of Vercel's GitHub integration, which also
  * auto-deploys on push to main — running both isn't harmful, just briefly
  * redundant; whichever build finishes last is what stays live.
+ *
+ * The deploy step only *notifies* Vercel and moves on — it does not wait for
+ * the build to finish. `vercel deploy` is spawned detached and unref'd so
+ * this script exits right away; its output goes to .vercel-deploy.log, and
+ * `npx vercel ls <project>` shows build status if you want to check later.
  */
 
-const { spawnSync } = require("node:child_process");
+const { spawnSync, spawn } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const ROOT = __dirname;
 const WIN = process.platform === "win32";
@@ -42,6 +49,22 @@ function run(cmd, cmdArgs, { shell = false } = {}) {
 
 function capture(cmd, cmdArgs, { shell = false } = {}) {
   return spawnSync(cmd, cmdArgs, { cwd: ROOT, encoding: "utf8", shell });
+}
+
+// Launches cmd detached from this process and returns immediately without
+// waiting for it to exit — the point being that `node deploy.js` finishes as
+// soon as GitHub has the push, rather than sitting through a ~1min Vercel
+// build. Output goes to a log file since there's no terminal left attached
+// once this process exits.
+function fireAndForget(cmd, cmdArgs, { shell = false, logFile } = {}) {
+  const out = fs.openSync(logFile, "w");
+  const child = spawn(cmd, cmdArgs, {
+    cwd: ROOT,
+    shell,
+    detached: true,
+    stdio: ["ignore", out, out],
+  });
+  child.unref();
 }
 
 function fail(msg) {
@@ -107,21 +130,15 @@ async function main() {
   }
 
   const target = preview ? "Preview" : "Production";
-  console.log(`→ Deploying to Vercel (${target})...`);
+  const logFile = path.join(ROOT, ".vercel-deploy.log");
   const deployArgs = ["deploy", "--yes"];
   if (!preview) deployArgs.push("--prod");
   // Vercel CLI itself resolves to npx on machines without a global install;
   // shell is required on Windows to find npx.cmd, same reasoning as npm above.
-  const deployResult = run("npx", ["vercel", ...deployArgs], { shell: WIN });
+  fireAndForget("npx", ["vercel", ...deployArgs], { shell: WIN, logFile });
 
-  if (deployResult.status !== 0) {
-    // A failed Vercel deploy doesn't unwind the git push that already
-    // succeeded — surface it as a warning, not a fatal exit.
-    console.error(`\n⚠ Vercel deploy failed (exit ${deployResult.status}) — GitHub push already completed above.`);
-    console.error("  Run `npx vercel deploy --prod --yes` manually to retry, or check `npx vercel whoami` / `vercel link`.\n");
-    return;
-  }
-  console.log(`✅ Deployed to Vercel (${target})\n`);
+  console.log(`→ Vercel (${target}) notified — not waiting for the build to finish.`);
+  console.log(`   Progress: npx vercel ls saraswati-sanmaan   (or see ${path.basename(logFile)})\n`);
 }
 
 main().catch((e) => fail(e.message ?? String(e)));
