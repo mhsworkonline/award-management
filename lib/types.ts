@@ -212,7 +212,13 @@ export type Lookups = {
  *  RPC — deliberately a narrower shape than Lookups (no gift items, award
  *  categories, or institution contact details). */
 export type PublicFormOptions = {
-  institutions: { id: string; name: string; type: InstitutionType; board_id: string | null }[];
+  institutions: {
+    id: string;
+    name: string;
+    type: InstitutionType;
+    board_id: string | null;
+    medium_id: string | null;
+  }[];
   boards: { id: string; name: string }[];
   mediums: { id: string; name: string }[];
   standards: { id: string; label: string; level: number }[];

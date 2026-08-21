@@ -94,7 +94,6 @@ export function ApplyForm({
     nameFieldCount === 4 ? "sm:grid-cols-4" : nameFieldCount === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2";
 
   const [instType, setInstType] = React.useState<"school" | "college" | "">("");
-  const [boardId, setBoardId] = React.useState("");
   const [referenceCode, setReferenceCode] = React.useState<string | null>(null);
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [files, setFiles] = React.useState<File[]>([]);
@@ -119,15 +118,25 @@ export function ApplyForm({
   const isOtherCourse = courseId === OTHER;
   const course = options.courses.find((c) => c.id === courseId);
 
-  const availableInstitutions = options.institutions.filter((i) => {
-    if (!instType || i.type !== instType) return false;
-    if (instType === "school") return Boolean(boardId) && i.board_id === boardId;
-    return true;
-  });
+  const availableInstitutions = options.institutions.filter((i) => Boolean(instType) && i.type === instType);
+  const selectedInstitution = isOtherInstitution
+    ? undefined
+    : options.institutions.find((i) => i.id === institutionId);
+
+  // Board is always 1:1 with an institution — safe to fill in silently.
+  // Medium isn't: an institution flagged "Both" teaches in more than one
+  // language, so which one *this* applicant is in still needs asking.
+  const selectedMedium = options.mediums.find((m) => m.id === selectedInstitution?.medium_id);
+  const mediumIsAmbiguous = selectedMedium?.name.trim().toLowerCase() === "both";
+  const needsBoardInput =
+    instType === "school" && (isOtherInstitution || (Boolean(institutionId) && !selectedInstitution?.board_id));
+  const needsMediumInput =
+    instType === "school" &&
+    Boolean(institutionId) &&
+    (isOtherInstitution || !selectedInstitution?.medium_id || mediumIsAmbiguous);
 
   function handleInstTypeChange(v: "school" | "college") {
     setInstType(v);
-    setBoardId("");
     setValue("board_id", "");
     setValue("other_board_name", "");
     setValue("medium_id", "");
@@ -138,10 +147,19 @@ export function ApplyForm({
     setValue("period_no", "");
   }
 
-  function handleBoardChange(v: string) {
-    setBoardId(v);
-    setValue("board_id", v);
-    setValue("institution_id", "");
+  // Every listed institution already carries a board and medium on file —
+  // pick it and they fill in silently. They're only asked directly when
+  // there's no institution row to read from (Other), or the value on file
+  // isn't a single clear answer (see needsBoardInput/needsMediumInput above).
+  function handleInstitutionChange(v: string) {
+    setValue("institution_id", v, { shouldValidate: true });
+    setValue("other_institution_name", "");
+    setValue("other_board_name", "");
+    const matched = v === OTHER ? undefined : options.institutions.find((i) => i.id === v);
+    setValue("board_id", matched?.board_id ?? "", { shouldValidate: true });
+    const matchedMedium = options.mediums.find((m) => m.id === matched?.medium_id);
+    const ambiguous = matchedMedium?.name.trim().toLowerCase() === "both";
+    setValue("medium_id", ambiguous ? "" : (matched?.medium_id ?? ""), { shouldValidate: true });
   }
 
   function addFiles(list: FileList | null) {
@@ -204,6 +222,14 @@ export function ApplyForm({
 
   async function onSubmit(values: Values) {
     setServerError(null);
+
+    // The marksheet is the only proof behind the percentage/grade claimed
+    // above — required whenever this form even shows the field (staff can
+    // still turn attachments off per-form via field_config).
+    if (fieldConfig.show_attachments && files.length === 0) {
+      setFileError("Upload your marksheet — required to verify your application");
+      return;
+    }
 
     const result = await submitPublicApplication(form.id, {
       salutation: values.salutation || undefined,
@@ -282,7 +308,6 @@ export function ApplyForm({
             onClick={() => {
               setReferenceCode(null);
               setInstType("");
-              setBoardId("");
               setFiles([]);
               reset(EMPTY);
             }}
@@ -389,22 +414,54 @@ export function ApplyForm({
             )}
           </FieldGrid>
 
-          <FieldGrid>
-            <Field label={L.institutionType} required>
-              <Select value={instType} onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}>
+          <Field label={L.institutionType} required>
+            <Select value={instType} onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="school">School (Std 1–12)</SelectItem>
+                <SelectItem value="college">College (degree / diploma)</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          {instType && (
+            <Field
+              label={L.institution}
+              required
+              error={errors.institution_id?.message}
+            >
+              <Select value={institutionId} onValueChange={handleInstitutionChange}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select" />
+                  <SelectValue placeholder="Select your institution" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="school">School (Std 1–12)</SelectItem>
-                  <SelectItem value="college">College (degree / diploma)</SelectItem>
+                  {availableInstitutions.map((i) => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={OTHER}>Other — not listed</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
+          )}
 
-            {instType === "school" && (
+          {isOtherInstitution && (
+            <Field label={L.otherInstitutionName} htmlFor="other_institution_name" required error={errors.other_institution_name?.message}>
+              <Input id="other_institution_name" autoComplete="off" {...register("other_institution_name")} />
+            </Field>
+          )}
+
+          {/* Every listed institution already carries a board, filled in
+              silently on selection above — only asked directly when there's
+              no institution row to read it from (Other), or that row simply
+              never had one set. */}
+          {needsBoardInput && (
+            <>
               <Field label={L.board} required error={errors.board_id?.message}>
-                <Select value={boardId} onValueChange={handleBoardChange}>
+                <Select value={watch("board_id")} onValueChange={(v) => setValue("board_id", v, { shouldValidate: true })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select board" />
                   </SelectTrigger>
@@ -414,13 +471,21 @@ export function ApplyForm({
                         {b.name}
                       </SelectItem>
                     ))}
+                    <SelectItem value={OTHER}>Other — not listed</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>
-            )}
-          </FieldGrid>
+              {watch("board_id") === OTHER && (
+                <Field label={L.otherBoardName} htmlFor="other_board_name" required error={errors.other_board_name?.message}>
+                  <Input id="other_board_name" autoComplete="off" {...register("other_board_name")} />
+                </Field>
+              )}
+            </>
+          )}
 
-          {instType === "school" && (
+          {/* Same idea for medium — skipped when the institution teaches in
+              one clear language, asked when it's "Both", unlisted, or unset. */}
+          {needsMediumInput && (
             <FieldGrid>
               <Field label={L.medium} required error={errors.medium_id?.message}>
                 <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v, { shouldValidate: true })}>
@@ -437,43 +502,6 @@ export function ApplyForm({
                 </Select>
               </Field>
             </FieldGrid>
-          )}
-
-          <Field
-            label={L.institution}
-            required
-            error={errors.institution_id?.message}
-            hint={
-              !instType
-                ? "Select school or college first"
-                : instType === "school" && !boardId
-                  ? "Select a board first"
-                  : undefined
-            }
-          >
-            <Select
-              value={institutionId}
-              onValueChange={(v) => setValue("institution_id", v, { shouldValidate: true })}
-              disabled={!instType || (instType === "school" && !boardId)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select your institution" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableInstitutions.map((i) => (
-                  <SelectItem key={i.id} value={i.id}>
-                    {i.name}
-                  </SelectItem>
-                ))}
-                <SelectItem value={OTHER}>Other — not listed</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-
-          {isOtherInstitution && (
-            <Field label={L.otherInstitutionName} htmlFor="other_institution_name" required error={errors.other_institution_name?.message}>
-              <Input id="other_institution_name" autoComplete="off" {...register("other_institution_name")} />
-            </Field>
           )}
 
           {isCollege ? (
@@ -607,53 +635,56 @@ export function ApplyForm({
           )}
 
           {fieldConfig.show_attachments && (
-            <Field
-              label={L.attachments}
-              hint={`Optional — upload your marksheet(s), up to ${MAX_FILES} files, image/PDF/DOCX, 5MB each`}
-            >
-              <div className="space-y-2">
-                {files.map((f, i) => (
-                  <div
-                    key={`${f.name}-${i}`}
-                    className="flex items-center gap-2.5 rounded-md border bg-muted/40 px-3 py-2"
-                  >
-                    {f.type.startsWith("image/") ? (
-                      <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-[13px]">{f.name}</span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground">
-                      {(f.size / 1024 / 1024).toFixed(1)}MB
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(i)}
-                      className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-                      aria-label={`Remove ${f.name}`}
+            <div className="rounded-xl border-2 border-primary/30 bg-primary/[0.05] p-4">
+              <Field
+                label={L.attachments}
+                required
+                hint={`Required — this is your proof of the result above. Up to ${MAX_FILES} files, image/PDF/DOCX, 5MB each.`}
+              >
+                <div className="space-y-2">
+                  {files.map((f, i) => (
+                    <div
+                      key={`${f.name}-${i}`}
+                      className="flex items-center gap-2.5 rounded-md border bg-card px-3 py-2"
                     >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
+                      {f.type.startsWith("image/") ? (
+                        <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      ) : (
+                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-[13px]">{f.name}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {(f.size / 1024 / 1024).toFixed(1)}MB
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(i)}
+                        className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+                        aria-label={`Remove ${f.name}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
 
-                {files.length < MAX_FILES && (
-                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-input px-4 py-4 text-center text-[13px] text-muted-foreground transition-colors hover:border-primary/50 hover:bg-accent/40">
-                    <Paperclip className="h-4 w-4" />
-                    Add a marksheet (image, PDF or DOCX)
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="sr-only"
-                      accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      onChange={(e) => addFiles(e.target.files)}
-                    />
-                  </label>
-                )}
+                  {files.length < MAX_FILES && (
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/40 bg-card px-4 py-5 text-center text-[13px] font-medium text-primary transition-colors hover:border-primary hover:bg-primary/10">
+                      <Paperclip className="h-4 w-4" />
+                      Add a marksheet (image, PDF or DOCX)
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="sr-only"
+                        accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        onChange={(e) => addFiles(e.target.files)}
+                      />
+                    </label>
+                  )}
 
-                {fileError && <p className="text-[12px] font-medium text-destructive">{fileError}</p>}
-              </div>
-            </Field>
+                  {fileError && <p className="text-[12px] font-medium text-destructive">{fileError}</p>}
+                </div>
+              </Field>
+            </div>
           )}
 
           {serverError && (

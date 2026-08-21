@@ -1,15 +1,36 @@
   ▲ Next.js 14.2.35
-  - Local:        http://localhost:3100
+  - Local:        http://localhost:3000
   - Environments: .env.local
 
  ✓ Starting...
 
 Sign in: admin@awardmanagement.com / 99999999
 
- ✓ Ready in 2.6s
- ✓ Compiled /middleware in 416ms (127 modules)
+ ✓ Ready in 2.5s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 1085ms (127 modules)
+ ○ Compiling /apply/[slug] ...
+ ✓ Compiled /apply/[slug] in 9s (1104 modules)
+ GET /apply/default 200 in 10601ms
  ○ Compiling /apply ...
- ✓ Compiled /apply in 4.6s (1095 modules)
- GET /apply 200 in 6219ms
- GET /apply 200 in 658ms
-[?25h
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (106kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (258kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled /apply in 3.8s (1097 modules)
+ GET /apply 200 in 4408ms
+ GET /apply/default 200 in 361ms
+ GET /apply/default 200 in 388ms
+ GET /apply/default 200 in 574ms
+ GET /apply/default 200 in 2531ms
+ GET /apply 200 in 325ms
+ GET /apply/default 200 in 548ms
+ GET /apply/default 200 in 550ms
+ ○ Compiling / ...
+ ✓ Compiled / in 1822ms (928 modules)
+ ○ Compiling /apply/[slug] ...
+ ✓ Compiled /apply/[slug] in 579ms (595 modules)
+ GET /apply/default 200 in 3606ms
+ POST /apply/default 200 in 57ms
+ POST /apply/default 200 in 851ms
+ POST /apply/default 200 in 305ms
+ ○ Compiling /submissions ...
+ ✓ Compiled /submissions in 2s (1353 modules)

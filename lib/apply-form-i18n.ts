@@ -23,6 +23,7 @@ export const APPLY_LABELS = {
   medium: bl("Medium of instruction", "શિક્ષણનું માધ્યમ"),
   institution: bl("Institution", "સંસ્થા"),
   otherInstitutionName: bl("Your institution's name", "તમારી સંસ્થાનું નામ"),
+  otherBoardName: bl("Your board's name", "તમારા બોર્ડનું નામ"),
   course: bl("Course", "અભ્યાસક્રમ"),
   standard: bl("Standard", "ધોરણ"),
   year: bl("Year", "વર્ષ"),
