@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useForm } from "react-hook-form";
-import { CheckCircle2, Copy, FileText, Image as ImageIcon, Loader2, Paperclip, Send, Trophy, X } from "lucide-react";
+import { CheckCircle2, Copy, FileText, Image as ImageIcon, Loader2, Paperclip, Send, Trophy, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,15 @@ import { Field, FieldGrid } from "@/components/form/field";
 import { registerAttachment, submitPublicApplication } from "@/lib/actions/public-application";
 import { OTHER_OPTION_VALUE as OTHER } from "@/lib/validators";
 import { createClient } from "@/lib/supabase/client";
-import { ATTACHMENTS_BUCKET } from "@/lib/tables";
-import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
+import { ATTACHMENTS_BUCKET, STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
+import {
+  ALLOWED_ATTACHMENT_TYPES,
+  ALLOWED_PHOTO_TYPES,
+  MAX_ATTACHMENTS,
+  MAX_ATTACHMENT_BYTES,
+  MAX_PHOTO_BYTES,
+} from "@/lib/attachments";
+import { MAX_SOURCE_IMAGE_BYTES, compressMarksheetImage, compressStudentPhoto } from "@/lib/image-compression";
 import { SALUTATIONS } from "@/lib/types";
 import { APPLY_LABELS as L } from "@/lib/apply-form-i18n";
 import type { PublicBranding, PublicFormOptions, ResolvedForm } from "@/lib/types";
@@ -98,8 +105,27 @@ export function ApplyForm({
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [files, setFiles] = React.useState<File[]>([]);
   const [fileError, setFileError] = React.useState<string | null>(null);
+  const [processingFile, setProcessingFile] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // The student's photograph — compulsory, a single file. Uploaded to Storage
+  // as soon as it's picked (not deferred to submit, unlike the marksheet
+  // attachments above) so `photoPath` is what the submit RPC actually
+  // requires; the preview next to it is a local object URL, so it appears
+  // instantly regardless of how the upload itself is going.
+  const [photoFile, setPhotoFile] = React.useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = React.useState<string | null>(null);
+  const [photoPath, setPhotoPath] = React.useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = React.useState(false);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
+  const photoInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
 
   const {
     register,
@@ -162,33 +188,116 @@ export function ApplyForm({
     setValue("medium_id", ambiguous ? "" : (matched?.medium_id ?? ""), { shouldValidate: true });
   }
 
-  function addFiles(list: FileList | null) {
+  async function addFiles(list: FileList | null) {
     if (!list) return;
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setFileError(null);
     const incoming = Array.from(list);
-    const combined = [...files, ...incoming];
 
-    if (combined.length > MAX_FILES) {
+    if (files.length + incoming.length > MAX_FILES) {
       setFileError(`Maximum ${MAX_FILES} files`);
       return;
     }
+
+    const processed: File[] = [];
     for (const f of incoming) {
       if (!ALLOWED_TYPES.includes(f.type)) {
         setFileError(`${f.name}: only images, PDF or DOCX are allowed`);
         return;
       }
-      if (f.size > MAX_FILE_BYTES) {
-        setFileError(`${f.name}: must be 5MB or smaller`);
+      const isImage = f.type.startsWith("image/");
+      const sourceCap = isImage ? MAX_SOURCE_IMAGE_BYTES : MAX_FILE_BYTES;
+      if (f.size > sourceCap) {
+        setFileError(`${f.name}: must be ${Math.round(sourceCap / (1024 * 1024))}MB or smaller`);
+        return;
+      }
+      if (!isImage) {
+        processed.push(f);
+        continue;
+      }
+      setProcessingFile(true);
+      try {
+        processed.push(await compressMarksheetImage(f));
+      } catch {
+        setProcessingFile(false);
+        setFileError(`${f.name}: could not process this image — try a different file`);
         return;
       }
     }
-    setFiles(combined);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setProcessingFile(false);
+
+    setFiles((prev) => [...prev, ...processed]);
   }
 
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
     setFileError(null);
+  }
+
+  async function handlePhotoFile(file: File | null) {
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    if (!file) return;
+    setPhotoError(null);
+
+    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+      setPhotoError("Only JPEG, PNG or WebP images are allowed");
+      return;
+    }
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+      setPhotoError(`Must be ${MAX_SOURCE_IMAGE_BYTES / (1024 * 1024)}MB or smaller`);
+      return;
+    }
+
+    setPhotoUploading(true);
+    let compressed: File;
+    try {
+      compressed = await compressStudentPhoto(file);
+    } catch {
+      setPhotoUploading(false);
+      setPhotoError("Could not process this image — try a different file");
+      return;
+    }
+    if (compressed.size > MAX_PHOTO_BYTES) {
+      // Defensive only — the compression target is well under the bucket's
+      // hard limit, so this should never actually trip.
+      setPhotoUploading(false);
+      setPhotoError("This image is too large even after compression — try a different file");
+      return;
+    }
+
+    // Preview reflects the compressed file — visually identical to the
+    // original (resizing/re-encoding doesn't change what it looks like) and
+    // it's what actually gets uploaded.
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(compressed);
+    setPhotoPreview(URL.createObjectURL(compressed));
+    setPhotoPath(null);
+
+    const supabase = createClient();
+    const safeName = compressed.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    // No submission row exists yet at this point, so the path can't be
+    // scoped under one the way marksheet attachments are — a random name
+    // under `pending/` is enough since the bucket only accepts inserts, not
+    // listing, from anon.
+    const path = `pending/${crypto.randomUUID()}-${safeName}`;
+
+    const upload = await supabase.storage.from(STUDENT_PHOTOS_BUCKET).upload(path, compressed, {
+      contentType: compressed.type,
+    });
+    setPhotoUploading(false);
+    if (upload.error) {
+      setPhotoError("Upload failed — please try again");
+      return;
+    }
+    setPhotoPath(path);
+  }
+
+  function removePhoto() {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoPath(null);
+    setPhotoError(null);
   }
 
   async function uploadAttachments(submissionId: string) {
@@ -231,13 +340,21 @@ export function ApplyForm({
       return;
     }
 
+    if (!photoPath) {
+      setPhotoError(
+        photoUploading ? "Still uploading — wait a moment and try again" : "Upload a photograph of the student",
+      );
+      return;
+    }
+
     const result = await submitPublicApplication(form.id, {
       salutation: values.salutation || undefined,
       first_name: values.first_name,
       middle_name: values.middle_name || undefined,
       last_name: values.last_name,
       email: values.email,
-      contact_no: values.contact_no || undefined,
+      contact_no: values.contact_no,
+      photo_path: photoPath,
       institution_id: values.institution_id,
       other_institution_name: values.other_institution_name || undefined,
       board_id: values.board_id || null,
@@ -309,6 +426,7 @@ export function ApplyForm({
               setReferenceCode(null);
               setInstType("");
               setFiles([]);
+              removePhoto();
               reset(EMPTY);
             }}
           >
@@ -319,7 +437,7 @@ export function ApplyForm({
     );
   }
 
-  const busy = isSubmitting || uploading;
+  const busy = isSubmitting || uploading || photoUploading || processingFile;
 
   return (
     <Card className="overflow-hidden">
@@ -403,16 +521,68 @@ export function ApplyForm({
             </Field>
           </FieldGrid>
 
-          <FieldGrid cols={1} className={fieldConfig.show_contact_no ? "sm:grid-cols-2" : undefined}>
+          <FieldGrid cols={1} className="sm:grid-cols-2">
             <Field label={L.email} htmlFor="email" required error={errors.email?.message}>
               <Input id="email" type="email" inputMode="email" autoComplete="email" {...register("email", { required: "Required" })} />
             </Field>
-            {fieldConfig.show_contact_no && (
-              <Field label={L.contactNo} htmlFor="contact_no" hint={L.contactNoHint}>
-                <Input id="contact_no" type="tel" inputMode="tel" autoComplete="tel" {...register("contact_no")} />
-              </Field>
-            )}
+            <Field label={L.contactNo} htmlFor="contact_no" required hint={L.contactNoHint} error={errors.contact_no?.message}>
+              <Input
+                id="contact_no"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                {...register("contact_no", { required: "Required" })}
+              />
+            </Field>
           </FieldGrid>
+
+          <div className="rounded-xl border-2 border-primary/30 bg-primary/[0.05] p-4">
+            <Field
+              label={L.photograph}
+              required
+              error={photoError ?? undefined}
+              hint="Any recent photo — JPEG, PNG or WebP. Resized automatically, no need to shrink it yourself."
+            >
+              <div className="flex items-center gap-4">
+                <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-card">
+                  {photoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+                    <img src={photoPreview} alt="Student photograph preview" className="h-full w-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </span>
+                <div className="flex flex-col items-start gap-2">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    className="sr-only"
+                    accept={ALLOWED_PHOTO_TYPES.join(",")}
+                    onChange={(e) => void handlePhotoFile(e.target.files?.[0] ?? null)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={photoUploading}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    {photoUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    {photoUploading ? "Processing…" : photoFile ? "Replace photo" : "Choose photo"}
+                  </Button>
+                  {photoFile && !photoUploading && (
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      className="text-[12px] font-medium text-muted-foreground hover:text-destructive"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </Field>
+          </div>
 
           <Field label={L.institutionType} required>
             <Select value={instType} onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}>
@@ -639,7 +809,7 @@ export function ApplyForm({
               <Field
                 label={L.attachments}
                 required
-                hint={`Required — this is your proof of the result above. Up to ${MAX_FILES} files, image/PDF/DOCX, 5MB each.`}
+                hint={`Required — this is your proof of the result above. Up to ${MAX_FILES} files. Photos are resized automatically; PDF/DOCX up to 5MB each.`}
               >
                 <div className="space-y-2">
                   {files.map((f, i) => (
@@ -668,15 +838,18 @@ export function ApplyForm({
                   ))}
 
                   {files.length < MAX_FILES && (
-                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/40 bg-card px-4 py-5 text-center text-[13px] font-medium text-primary transition-colors hover:border-primary hover:bg-primary/10">
-                      <Paperclip className="h-4 w-4" />
-                      Add a marksheet (image, PDF or DOCX)
+                    <label
+                      className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/40 bg-card px-4 py-5 text-center text-[13px] font-medium text-primary transition-colors hover:border-primary hover:bg-primary/10 ${processingFile ? "pointer-events-none opacity-60" : ""}`}
+                    >
+                      {processingFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+                      {processingFile ? "Processing…" : "Add a marksheet (image, PDF or DOCX)"}
                       <input
                         ref={fileInputRef}
                         type="file"
                         className="sr-only"
+                        disabled={processingFile}
                         accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        onChange={(e) => addFiles(e.target.files)}
+                        onChange={(e) => void addFiles(e.target.files)}
                       />
                     </label>
                   )}

@@ -41,7 +41,6 @@ type Values = {
 const FIELD_TOGGLES: { key: keyof ApplicationFormFieldConfig; label: string; hint?: string }[] = [
   { key: "show_salutation", label: "Salutation (Mr. / Ms. / …)" },
   { key: "show_middle_name", label: "Middle (father's) name" },
-  { key: "show_contact_no", label: "Contact number" },
   { key: "show_roll_no", label: "Roll / GR number" },
   { key: "show_notes", label: "Notes / additional info" },
   { key: "show_attachments", label: "Marksheets" },
@@ -127,12 +126,11 @@ export function FormSheet({
 
   async function onSubmit(values: Values) {
     setServerError(null);
-    const { show_salutation, show_middle_name, show_contact_no, show_roll_no, show_notes, show_attachments, ...rest } =
-      values;
+    const { show_salutation, show_middle_name, show_roll_no, show_notes, show_attachments, ...rest } = values;
     const result = await saveApplicationForm({
       id: form?.id,
       ...rest,
-      field_config: { show_salutation, show_middle_name, show_contact_no, show_roll_no, show_notes, show_attachments },
+      field_config: { show_salutation, show_middle_name, show_roll_no, show_notes, show_attachments },
     });
     if (!result.ok) {
       setServerError(result.fieldErrors ? Object.values(result.fieldErrors).flat().join(" · ") : result.error);
@@ -224,7 +222,7 @@ export function FormSheet({
               <input type="hidden" {...register("academic_year_id", { required: "Required" })} />
             </Field>
 
-            <Field label="Fields shown on this form" hint="Name, email, institution, board/medium, standard/course and percentage-or-grade are always required — these are optional.">
+            <Field label="Fields shown on this form" hint="Name, email, contact number, photograph, institution, board/medium, standard/course and percentage-or-grade are always required — these are optional.">
               <div className="space-y-2 rounded-md border p-3">
                 {FIELD_TOGGLES.map((f) => (
                   <label key={f.key} className="flex cursor-pointer select-none items-center gap-2.5 text-[13px]">

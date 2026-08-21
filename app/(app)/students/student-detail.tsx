@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/sheet";
 import { placementLabel } from "@/lib/placement";
 import { formatDateTime, studentName } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
 import type { AcademicRecordRow } from "@/lib/types";
 
 export function StudentDetail({
@@ -33,11 +35,29 @@ export function StudentDetail({
         {record && (
           <>
             <SheetHeader>
-              <SheetTitle>{record.students ? studentName(record.students) : "—"}</SheetTitle>
-              <SheetDescription>
-                {record.students?.middle_name ? `s/o ${record.students.middle_name} · ` : ""}
-                {record.institutions?.name ?? "—"}
-              </SheetDescription>
+              <div className="flex items-center gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted/30">
+                  {record.students?.photo_path ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
+                    <img
+                      src={createClient().storage.from(STUDENT_PHOTOS_BUCKET).getPublicUrl(record.students.photo_path).data.publicUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[13px] font-semibold text-muted-foreground">
+                      {record.students?.first_name?.[0] ?? "—"}
+                    </span>
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <SheetTitle className="truncate">{record.students ? studentName(record.students) : "—"}</SheetTitle>
+                  <SheetDescription className="truncate">
+                    {record.students?.middle_name ? `s/o ${record.students.middle_name} · ` : ""}
+                    {record.institutions?.name ?? "—"}
+                  </SheetDescription>
+                </div>
+              </div>
             </SheetHeader>
 
             <SheetBody className="space-y-5">

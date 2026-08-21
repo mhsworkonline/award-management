@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { AlertTriangle, ArrowLeft, Loader2, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Image as ImageIcon, Loader2, Save, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,10 @@ import { QuickAddInstitution } from "@/components/form/quick-add-institution";
 import { PageHeader } from "@/components/shell/page-header";
 import { checkDuplicateStudents, createStudentWithRecord, type DuplicateMatch } from "@/lib/actions/students";
 import { loadRememberedDefaults, saveRememberedDefaults } from "@/lib/remember";
+import { createClient } from "@/lib/supabase/client";
+import { STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
+import { ALLOWED_PHOTO_TYPES, MAX_PHOTO_BYTES } from "@/lib/attachments";
+import { MAX_SOURCE_IMAGE_BYTES, compressStudentPhoto } from "@/lib/image-compression";
 import { SALUTATIONS } from "@/lib/types";
 import type { Lookups } from "@/lib/types";
 
@@ -81,6 +85,79 @@ export function NewStudentForm({
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [addedCount, setAddedCount] = React.useState(0);
   const firstNameRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Compulsory, single photograph. Uploaded to Storage the moment it's picked
+  // (there's no student id to scope the path to yet) so the path is ready by
+  // the time the form submits; the preview shown is a local object URL, so it
+  // appears immediately regardless of upload progress.
+  const [photoFile, setPhotoFile] = React.useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = React.useState<string | null>(null);
+  const [photoPath, setPhotoPath] = React.useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = React.useState(false);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
+  const photoInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
+
+  async function handlePhotoFile(file: File | null) {
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    if (!file) return;
+    setPhotoError(null);
+
+    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+      setPhotoError("Only JPEG, PNG or WebP images are allowed");
+      return;
+    }
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+      setPhotoError(`Must be ${MAX_SOURCE_IMAGE_BYTES / (1024 * 1024)}MB or smaller`);
+      return;
+    }
+
+    setPhotoUploading(true);
+    let compressed: File;
+    try {
+      compressed = await compressStudentPhoto(file);
+    } catch {
+      setPhotoUploading(false);
+      setPhotoError("Could not process this image — try a different file");
+      return;
+    }
+    if (compressed.size > MAX_PHOTO_BYTES) {
+      setPhotoUploading(false);
+      setPhotoError("This image is too large even after compression — try a different file");
+      return;
+    }
+
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(compressed);
+    setPhotoPreview(URL.createObjectURL(compressed));
+    setPhotoPath(null);
+
+    const supabase = createClient();
+    const safeName = compressed.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${crypto.randomUUID()}-${safeName}`;
+    const upload = await supabase.storage
+      .from(STUDENT_PHOTOS_BUCKET)
+      .upload(path, compressed, { contentType: compressed.type });
+    setPhotoUploading(false);
+    if (upload.error) {
+      setPhotoError("Upload failed — please try again");
+      return;
+    }
+    setPhotoPath(path);
+  }
+
+  function removePhoto() {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoPath(null);
+    setPhotoError(null);
+  }
 
   // Type → Board → Institution cascade. An explicit deep link
   // (defaultInstitutionId, e.g. "Add student" from an institution page) wins;
@@ -220,13 +297,21 @@ export function NewStudentForm({
   async function onSubmit(values: Values) {
     setServerError(null);
 
+    if (!photoPath) {
+      setPhotoError(
+        photoUploading ? "Still uploading — wait a moment and try again" : "A photograph of the student is required",
+      );
+      return;
+    }
+
     const result = await createStudentWithRecord({
       salutation: values.salutation || null,
       first_name: values.first_name,
       middle_name: values.middle_name || null,
       last_name: values.last_name,
       email: values.email || null,
-      contact_no: values.contact_no || null,
+      contact_no: values.contact_no,
+      photo_path: photoPath,
       remarks: values.remarks || null,
       institution_id: values.institution_id,
       academic_year_id: values.academic_year_id,
@@ -263,6 +348,7 @@ export function NewStudentForm({
       period_no: values.period_no,
     });
     setDuplicates([]);
+    removePhoto();
     firstNameRef.current?.focus();
   }
 
@@ -337,10 +423,61 @@ export function NewStudentForm({
               <Field label="Email" htmlFor="email" error={errors.email?.message}>
                 <Input id="email" type="email" inputMode="email" autoComplete="off" {...register("email")} />
               </Field>
-              <Field label="Contact no" htmlFor="contact_no">
-                <Input id="contact_no" inputMode="tel" autoComplete="off" {...register("contact_no")} />
+              <Field label="Contact no" htmlFor="contact_no" required error={errors.contact_no?.message}>
+                <Input
+                  id="contact_no"
+                  inputMode="tel"
+                  autoComplete="off"
+                  {...register("contact_no", { required: "Required" })}
+                />
               </Field>
             </FieldGrid>
+
+            <Field
+              label="Photograph"
+              required
+              error={photoError ?? undefined}
+              hint="JPEG, PNG or WebP — resized automatically."
+            >
+              <div className="flex items-center gap-4">
+                <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/30">
+                  {photoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+                    <img src={photoPreview} alt="Student photograph preview" className="h-full w-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </span>
+                <div className="flex flex-col items-start gap-2">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    className="sr-only"
+                    accept={ALLOWED_PHOTO_TYPES.join(",")}
+                    onChange={(e) => void handlePhotoFile(e.target.files?.[0] ?? null)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={photoUploading}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    {photoUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    {photoUploading ? "Processing…" : photoFile ? "Replace photo" : "Choose photo"}
+                  </Button>
+                  {photoFile && !photoUploading && (
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      className="text-[12px] font-medium text-muted-foreground hover:text-destructive"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </Field>
 
             {duplicates.length > 0 && (
               <div className="rounded-lg border border-warning/40 bg-warning/8 p-3.5">
@@ -594,7 +731,7 @@ export function NewStudentForm({
               <Badge variant="success">{addedCount} added this session</Badge>
             )}
           </div>
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" disabled={isSubmitting || photoUploading}>
             {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
             {isSubmitting ? "Saving…" : "Add student"}
           </Button>

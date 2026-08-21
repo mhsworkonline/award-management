@@ -37,6 +37,12 @@ export const ATTACHMENTS_BUCKET = "am-submission-attachments";
  *  URL, no signing), writable only by authenticated staff. */
 export const BRANDING_BUCKET = "am-branding";
 
+/** Storage bucket for student photographs — public (readable by anyone via
+ *  its plain URL, no signing, so thumbnails render instantly with no signed-URL
+ *  round trip) but writable only by authenticated staff or, for the /apply
+ *  form, anon insert (see migration). */
+export const STUDENT_PHOTOS_BUCKET = "am-student-photos";
+
 /** Aliased embedded-relation fragments for `.select()`.
  *  `institutions:am_institutions` keeps the JSON key as `institutions`. */
 export const REL = {

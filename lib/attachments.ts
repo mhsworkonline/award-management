@@ -11,3 +11,10 @@ export const ALLOWED_ATTACHMENT_TYPES = [
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
+
+/** The student's photograph — a single, compulsory image, distinct from the
+ *  optional marksheet attachments above. Matches the storage bucket's own
+ *  `file_size_limit` / `allowed_mime_types` (see migration), so a rejection
+ *  reads the same client-side as it would server-side. */
+export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+export const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];

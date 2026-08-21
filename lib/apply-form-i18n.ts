@@ -32,6 +32,7 @@ export const APPLY_LABELS = {
   percentage: bl("Percentage", "ટકાવારી"),
   grade: bl("Grade", "ગ્રેડ"),
   notes: bl("Anything else you'd like to add?", "બીજું કંઈ ઉમેરવા માંગો છો?"),
+  photograph: bl("Photograph of student", "વિદ્યાર્થીનો ફોટોગ્રાફ"),
   attachments: bl("Marksheets", "માર્કશીટ"),
   submit: bl("Submit application", "અરજી સબમિટ કરો"),
 } as const;

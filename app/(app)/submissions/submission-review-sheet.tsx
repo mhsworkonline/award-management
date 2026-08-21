@@ -52,8 +52,9 @@ import {
   updateSubmission,
 } from "@/lib/actions/submissions";
 import { createClient } from "@/lib/supabase/client";
-import { ATTACHMENTS_BUCKET } from "@/lib/tables";
+import { ATTACHMENTS_BUCKET, STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
+import { MAX_SOURCE_IMAGE_BYTES, compressMarksheetImage } from "@/lib/image-compression";
 import { formatDateTime } from "@/lib/utils";
 import { SALUTATIONS } from "@/lib/types";
 import type { Board, Course, Lookups, PublicSubmissionRow } from "@/lib/types";
@@ -143,10 +144,31 @@ export function SubmissionReviewSheet({
     window.open(result.data.url, "_blank", "noopener,noreferrer");
   }
 
-  function validateFile(file: File): string | null {
+  function validateFileType(file: File): string | null {
     if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type)) return `${file.name}: only images, PDF or DOCX are allowed`;
-    if (file.size > MAX_ATTACHMENT_BYTES) return `${file.name}: must be 5MB or smaller`;
+    const isImage = file.type.startsWith("image/");
+    const cap = isImage ? MAX_SOURCE_IMAGE_BYTES : MAX_ATTACHMENT_BYTES;
+    if (file.size > cap) return `${file.name}: must be ${Math.round(cap / (1024 * 1024))}MB or smaller`;
     return null;
+  }
+
+  /** Compresses an image attachment before it ever reaches Storage; PDF/DOCX
+   *  pass through untouched. Returns null (with a toast already shown) if the
+   *  file is invalid or compression itself fails, so callers just bail out
+   *  without uploading anything. */
+  async function prepareFile(file: File): Promise<File | null> {
+    const invalid = validateFileType(file);
+    if (invalid) {
+      toast.error(invalid);
+      return null;
+    }
+    if (!file.type.startsWith("image/")) return file;
+    try {
+      return await compressMarksheetImage(file);
+    } catch {
+      toast.error(`${file.name}: could not process this image — try a different file`);
+      return null;
+    }
   }
 
   function uploadPath(submissionId: string, file: File) {
@@ -160,16 +182,19 @@ export function SubmissionReviewSheet({
       toast.error(`Maximum ${MAX_ATTACHMENTS} attachments per application`);
       return;
     }
-    const invalid = validateFile(file);
-    if (invalid) {
-      toast.error(invalid);
+
+    setAddingFile(true);
+    const prepared = await prepareFile(file);
+    if (!prepared) {
+      setAddingFile(false);
       return;
     }
 
-    setAddingFile(true);
-    const path = uploadPath(submission.id, file);
+    const path = uploadPath(submission.id, prepared);
     const supabase = createClient();
-    const upload = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file, { contentType: file.type });
+    const upload = await supabase.storage
+      .from(ATTACHMENTS_BUCKET)
+      .upload(path, prepared, { contentType: prepared.type });
     if (upload.error) {
       toast.error("Upload failed", { description: upload.error.message });
       setAddingFile(false);
@@ -179,9 +204,9 @@ export function SubmissionReviewSheet({
     const result = await addSubmissionAttachment({
       submissionId: submission.id,
       filePath: path,
-      fileName: file.name,
-      mimeType: file.type,
-      sizeBytes: file.size,
+      fileName: prepared.name,
+      mimeType: prepared.type,
+      sizeBytes: prepared.size,
     });
     setAddingFile(false);
     if (!result.ok) {
@@ -195,9 +220,9 @@ export function SubmissionReviewSheet({
         id: result.data.id,
         submission_id: submission.id,
         file_path: path,
-        file_name: file.name,
-        mime_type: file.type,
-        size_bytes: file.size,
+        file_name: prepared.name,
+        mime_type: prepared.type,
+        size_bytes: prepared.size,
         created_at: new Date().toISOString(),
       },
     ]);
@@ -207,16 +232,19 @@ export function SubmissionReviewSheet({
 
   async function handleReplaceFile(attachmentId: string, file: File) {
     if (!submission) return;
-    const invalid = validateFile(file);
-    if (invalid) {
-      toast.error(invalid);
+
+    setMutatingAttachmentId(attachmentId);
+    const prepared = await prepareFile(file);
+    if (!prepared) {
+      setMutatingAttachmentId(null);
       return;
     }
 
-    setMutatingAttachmentId(attachmentId);
-    const path = uploadPath(submission.id, file);
+    const path = uploadPath(submission.id, prepared);
     const supabase = createClient();
-    const upload = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file, { contentType: file.type });
+    const upload = await supabase.storage
+      .from(ATTACHMENTS_BUCKET)
+      .upload(path, prepared, { contentType: prepared.type });
     if (upload.error) {
       toast.error("Upload failed", { description: upload.error.message });
       setMutatingAttachmentId(null);
@@ -226,9 +254,9 @@ export function SubmissionReviewSheet({
     const result = await replaceSubmissionAttachment({
       id: attachmentId,
       filePath: path,
-      fileName: file.name,
-      mimeType: file.type,
-      sizeBytes: file.size,
+      fileName: prepared.name,
+      mimeType: prepared.type,
+      sizeBytes: prepared.size,
     });
     setMutatingAttachmentId(null);
     if (!result.ok) {
@@ -239,7 +267,7 @@ export function SubmissionReviewSheet({
     setAttachments((prev) =>
       prev.map((a) =>
         a.id === attachmentId
-          ? { ...a, file_path: path, file_name: file.name, mime_type: file.type, size_bytes: file.size }
+          ? { ...a, file_path: path, file_name: prepared.name, mime_type: prepared.type, size_bytes: prepared.size }
           : a,
       ),
     );
@@ -319,7 +347,7 @@ export function SubmissionReviewSheet({
       middle_name: values.middle_name || undefined,
       last_name: values.last_name,
       email: values.email,
-      contact_no: values.contact_no || undefined,
+      contact_no: values.contact_no,
       institution_id: values.institution_id || null,
       // Not editable in this form — pass through as-is so saving never wipes
       // the applicant's original free-text "Other" answer out from under the
@@ -449,10 +477,25 @@ export function SubmissionReviewSheet({
                 <Field label="Email" htmlFor="re" required error={errors.email?.message}>
                   <Input id="re" type="email" disabled={!isPending} {...register("email", { required: "Required" })} />
                 </Field>
-                <Field label="Contact no" htmlFor="rc">
-                  <Input id="rc" disabled={!isPending} {...register("contact_no")} />
+                <Field label="Contact no" htmlFor="rc" required error={errors.contact_no?.message}>
+                  <Input id="rc" disabled={!isPending} {...register("contact_no", { required: "Required" })} />
                 </Field>
               </FieldGrid>
+
+              <Field label="Photograph">
+                <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/30">
+                  {submission.photo_path ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
+                    <img
+                      src={createClient().storage.from(STUDENT_PHOTOS_BUCKET).getPublicUrl(submission.photo_path).data.publicUrl}
+                      alt="Applicant's photograph"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </span>
+              </Field>
 
               {needsInstitutionResolve && (
                 <div className="rounded-lg border border-warning/40 bg-warning/8 p-3.5">
@@ -647,7 +690,7 @@ export function SubmissionReviewSheet({
                 </Field>
               )}
 
-              <Field label="Attachments" hint={`Up to ${MAX_ATTACHMENTS}, image/PDF/DOCX, 5MB each`}>
+              <Field label="Attachments" hint={`Up to ${MAX_ATTACHMENTS}; photos resized automatically, PDF/DOCX up to 5MB each`}>
                 <input
                   ref={attachmentInputRef}
                   type="file"

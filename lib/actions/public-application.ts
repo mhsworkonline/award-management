@@ -99,6 +99,7 @@ export async function submitPublicApplication(
       p_grade: parsed.data.grade,
       p_notes: parsed.data.notes,
       p_ip_hash: ipHash(),
+      p_photo_path: parsed.data.photo_path,
     });
 
     if (error) return { ok: false, error: friendlyPublicError(error.message) };

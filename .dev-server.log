@@ -34,3 +34,9 @@ Sign in: admin@awardmanagement.com / 99999999
  POST /apply/default 200 in 305ms
  ○ Compiling /submissions ...
  ✓ Compiled /submissions in 2s (1353 modules)
+ GET /submissions 200 in 1633ms
+ ○ Compiling /forms ...
+ ✓ Compiled /forms in 1135ms (1391 modules)
+ ✓ Compiled in 448ms (574 modules)
+ GET /apply/default 200 in 1006ms
+[?25h

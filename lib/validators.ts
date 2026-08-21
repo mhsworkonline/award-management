@@ -19,6 +19,19 @@ const optionalSalutation = z
   .optional()
   .transform((v) => (v ? v : null));
 
+// Required going forward — mirrors optionalText's shape-collapsing but
+// rejects the empty result instead of passing it through as null.
+const requiredContactNo = z
+  .string()
+  .trim()
+  .min(1, "Contact number is required")
+  .max(20, "Contact number is too long");
+
+// The student's photograph, staged in Storage before the record is created —
+// this holds the storage path (not the file itself). Required: a blank/empty
+// value means no photo was uploaded.
+const requiredPhotoPath = z.string().trim().min(1, "A photograph of the student is required");
+
 export const academicYearSchema = z.object({
   id: uuid.optional(),
   label: z.string().trim().min(1, "Label is required").max(50),
@@ -103,7 +116,8 @@ export const studentSchema = z.object({
   middle_name: optionalText,
   last_name: z.string().trim().min(1, "Last name is required").max(100),
   email: optionalEmail,
-  contact_no: optionalText,
+  contact_no: requiredContactNo,
+  photo_path: requiredPhotoPath,
   remarks: z.string().trim().max(500).nullable().optional().transform((v) => (v ? v : null)),
 });
 
@@ -181,7 +195,8 @@ export const publicApplicationSchema = z
     middle_name: optionalText,
     last_name: z.string().trim().min(1, "Last name is required").max(100),
     email: z.string().trim().toLowerCase().min(1, "Email is required").email("Enter a valid email"),
-    contact_no: optionalText,
+    contact_no: requiredContactNo,
+    photo_path: requiredPhotoPath,
     institution_id: z.string(),
     other_institution_name: optionalText,
     board_id: z.string().nullable().optional().transform((v) => v || null),
@@ -279,7 +294,7 @@ export const submissionEditSchema = z
     middle_name: optionalText,
     last_name: z.string().trim().min(1, "Last name is required").max(100),
     email: z.string().trim().toLowerCase().min(1, "Email is required").email("Enter a valid email"),
-    contact_no: optionalText,
+    contact_no: requiredContactNo,
     institution_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     other_institution_name: optionalText,
     board_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
@@ -314,7 +329,6 @@ export const submissionEditSchema = z
 const applicationFormFieldConfigSchema = z.object({
   show_salutation: z.boolean().default(true),
   show_middle_name: z.boolean().default(true),
-  show_contact_no: z.boolean().default(true),
   show_roll_no: z.boolean().default(false),
   show_notes: z.boolean().default(true),
   show_attachments: z.boolean().default(true),

@@ -145,6 +145,7 @@ export async function createStudentWithRecord(input: {
   last_name: string;
   email?: string | null;
   contact_no?: string | null;
+  photo_path: string;
   remarks?: string | null;
   institution_id: string;
   academic_year_id: string;
@@ -163,6 +164,7 @@ export async function createStudentWithRecord(input: {
     last_name: input.last_name,
     email: input.email,
     contact_no: input.contact_no,
+    photo_path: input.photo_path,
     remarks: input.remarks,
   });
   if (!studentParsed.success) {

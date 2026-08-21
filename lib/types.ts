@@ -91,6 +91,7 @@ export type Student = {
   last_name: string;
   email: string | null;
   contact_no: string | null;
+  photo_path: string | null;
   remarks: string | null;
   created_at: string;
   updated_at: string;
@@ -118,7 +119,10 @@ export type AcademicRecord = {
 /** The primary "roster" row — an enrollment for one year, with the student and
  *  institution embedded. This is what list/filter views actually display. */
 export type AcademicRecordRow = AcademicRecord & {
-  students?: Pick<Student, "id" | "salutation" | "first_name" | "middle_name" | "last_name" | "email" | "contact_no"> | null;
+  students?: Pick<
+    Student,
+    "id" | "salutation" | "first_name" | "middle_name" | "last_name" | "email" | "contact_no" | "photo_path"
+  > | null;
   institutions?: Pick<Institution, "id" | "name" | "type"> | null;
   academic_years?: Pick<AcademicYear, "id" | "label"> | null;
   standards?: Pick<Standard, "id" | "label"> | null;
@@ -251,6 +255,7 @@ export type PublicSubmission = {
   percentage: number | null;
   grade: string | null;
   notes: string | null;
+  photo_path: string | null;
   status: SubmissionStatus;
   reference_code: string;
   student_id: string | null;
@@ -283,12 +288,12 @@ export type SubmissionAttachment = {
 };
 
 /** Which optional fields a given application form shows to applicants.
- *  Structural fields (name, email, institution, board/medium, standard/course,
- *  percentage-or-grade) are never toggle-able — only the supplementary ones. */
+ *  Structural fields (name, email, contact number, photograph, institution,
+ *  board/medium, standard/course, percentage-or-grade) are never toggle-able
+ *  — only the supplementary ones. */
 export type ApplicationFormFieldConfig = {
   show_salutation: boolean;
   show_middle_name: boolean;
-  show_contact_no: boolean;
   show_roll_no: boolean;
   show_notes: boolean;
   show_attachments: boolean;
@@ -297,7 +302,6 @@ export type ApplicationFormFieldConfig = {
 export const DEFAULT_FIELD_CONFIG: ApplicationFormFieldConfig = {
   show_salutation: true,
   show_middle_name: true,
-  show_contact_no: true,
   show_roll_no: false,
   show_notes: true,
   show_attachments: true,

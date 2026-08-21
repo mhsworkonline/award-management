@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Image as ImageIcon, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,10 @@ import {
 import { Field, FieldGrid } from "@/components/form/field";
 import { checkDuplicateStudents, saveStudent, type DuplicateMatch } from "@/lib/actions/students";
 import { saveAcademicRecord } from "@/lib/actions/academic-records";
+import { createClient } from "@/lib/supabase/client";
+import { STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
+import { ALLOWED_PHOTO_TYPES, MAX_PHOTO_BYTES } from "@/lib/attachments";
+import { MAX_SOURCE_IMAGE_BYTES, compressStudentPhoto } from "@/lib/image-compression";
 import { SALUTATIONS } from "@/lib/types";
 import type { AcademicRecordRow, Lookups } from "@/lib/types";
 
@@ -68,6 +72,72 @@ export function StudentSheet({
   const [instType, setInstType] = React.useState<"school" | "college" | "">("");
   const [boardId, setBoardId] = React.useState("");
 
+  // Photograph — starts from the student's existing photo (its public URL, no
+  // upload needed to preview it) and switches to a local object-URL preview
+  // the moment a replacement is picked, uploading in the background so
+  // `photoPath` is ready by the time the form saves.
+  const [photoPreview, setPhotoPreview] = React.useState<string | null>(null);
+  const [photoObjectUrl, setPhotoObjectUrl] = React.useState<string | null>(null);
+  const [photoPath, setPhotoPath] = React.useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = React.useState(false);
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
+  const photoInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
+    };
+  }, [photoObjectUrl]);
+
+  async function handlePhotoFile(file: File | null) {
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    if (!file) return;
+    setPhotoError(null);
+
+    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+      setPhotoError("Only JPEG, PNG or WebP images are allowed");
+      return;
+    }
+    if (file.size > MAX_SOURCE_IMAGE_BYTES) {
+      setPhotoError(`Must be ${MAX_SOURCE_IMAGE_BYTES / (1024 * 1024)}MB or smaller`);
+      return;
+    }
+
+    setPhotoUploading(true);
+    let compressed: File;
+    try {
+      compressed = await compressStudentPhoto(file);
+    } catch {
+      setPhotoUploading(false);
+      setPhotoError("Could not process this image — try a different file");
+      return;
+    }
+    if (compressed.size > MAX_PHOTO_BYTES) {
+      setPhotoUploading(false);
+      setPhotoError("This image is too large even after compression — try a different file");
+      return;
+    }
+
+    if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
+    const objectUrl = URL.createObjectURL(compressed);
+    setPhotoObjectUrl(objectUrl);
+    setPhotoPreview(objectUrl);
+    setPhotoPath(null);
+
+    const supabase = createClient();
+    const safeName = compressed.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${crypto.randomUUID()}-${safeName}`;
+    const upload = await supabase.storage
+      .from(STUDENT_PHOTOS_BUCKET)
+      .upload(path, compressed, { contentType: compressed.type });
+    setPhotoUploading(false);
+    if (upload.error) {
+      setPhotoError("Upload failed — please try again");
+      return;
+    }
+    setPhotoPath(path);
+  }
+
   const {
     register,
     handleSubmit,
@@ -107,6 +177,16 @@ export function StudentSheet({
     if (!open || !record) return;
     setDuplicates([]);
     setServerError(null);
+    setPhotoError(null);
+    if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
+    setPhotoObjectUrl(null);
+    const existingPhotoPath = record.students?.photo_path ?? null;
+    setPhotoPath(existingPhotoPath);
+    setPhotoPreview(
+      existingPhotoPath
+        ? createClient().storage.from(STUDENT_PHOTOS_BUCKET).getPublicUrl(existingPhotoPath).data.publicUrl
+        : null,
+    );
 
     const inst = lookups.institutions.find((i) => i.id === record.institution_id);
     setInstType(inst?.type ?? "");
@@ -161,6 +241,13 @@ export function StudentSheet({
     if (!record) return;
     setServerError(null);
 
+    if (!photoPath) {
+      setPhotoError(
+        photoUploading ? "Still uploading — wait a moment and try again" : "A photograph of the student is required",
+      );
+      return;
+    }
+
     const studentResult = await saveStudent({
       id: record.student_id,
       salutation: values.salutation || null,
@@ -168,7 +255,8 @@ export function StudentSheet({
       middle_name: values.middle_name || undefined,
       last_name: values.last_name,
       email: values.email || undefined,
-      contact_no: values.contact_no || undefined,
+      contact_no: values.contact_no,
+      photo_path: photoPath,
     });
     if (!studentResult.ok) {
       setServerError(
@@ -400,13 +488,55 @@ export function StudentSheet({
               <Field label="Roll / GR no" htmlFor="roll_no">
                 <Input id="roll_no" autoComplete="off" {...register("roll_no")} />
               </Field>
-              <Field label="Contact no" htmlFor="contact_no">
-                <Input id="contact_no" inputMode="tel" autoComplete="off" {...register("contact_no")} />
+              <Field label="Contact no" htmlFor="contact_no" required error={errors.contact_no?.message}>
+                <Input
+                  id="contact_no"
+                  inputMode="tel"
+                  autoComplete="off"
+                  {...register("contact_no", { required: "Required" })}
+                />
               </Field>
             </FieldGrid>
 
             <Field label="Email" htmlFor="email" error={errors.email?.message}>
               <Input id="email" type="email" autoComplete="off" {...register("email")} />
+            </Field>
+
+            <Field
+              label="Photograph"
+              required
+              error={photoError ?? undefined}
+              hint="JPEG, PNG or WebP — resized automatically."
+            >
+              <div className="flex items-center gap-4">
+                <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/30">
+                  {photoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL / local preview
+                    <img src={photoPreview} alt="Student photograph" className="h-full w-full object-cover" />
+                  ) : (
+                    <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </span>
+                <div className="flex flex-col items-start gap-2">
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    className="sr-only"
+                    accept={ALLOWED_PHOTO_TYPES.join(",")}
+                    onChange={(e) => void handlePhotoFile(e.target.files?.[0] ?? null)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={photoUploading}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    {photoUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    {photoUploading ? "Processing…" : photoPreview ? "Replace photo" : "Choose photo"}
+                  </Button>
+                </div>
+              </div>
             </Field>
 
             <Field label="Remarks" htmlFor="remarks" hint="For this enrollment year">
@@ -452,7 +582,7 @@ export function StudentSheet({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || photoUploading}>
               {isSubmitting && <Loader2 className="animate-spin" />}
               Save changes
             </Button>
