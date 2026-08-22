@@ -42,6 +42,7 @@ import { EmptyState } from "@/components/shell/page-header";
 import { Field } from "@/components/form/field";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { deleteConfig, saveConfig, setActiveYear, type ConfigTable } from "@/lib/actions/settings";
+import { usePermissions } from "@/components/providers/permissions-provider";
 
 export type FieldSpec = {
   name: string;
@@ -85,6 +86,10 @@ export function ConfigSection({
   supportsActiveFlag?: boolean;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canCreate = can("settings", "create");
+  const canUpdate = can("settings", "update");
+  const canDelete = can("settings", "delete");
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Record<string, unknown> | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<Record<string, unknown> | null>(null);
@@ -164,9 +169,11 @@ export function ConfigSection({
           <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
           <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>
         </div>
-        <Button onClick={openAdd} size="sm">
-          <Plus /> {addLabel}
-        </Button>
+        {canCreate && (
+          <Button onClick={openAdd} size="sm">
+            <Plus /> {addLabel}
+          </Button>
+        )}
       </div>
 
       <TableWrap className="max-h-[520px]">
@@ -197,9 +204,11 @@ export function ConfigSection({
                     title={`No ${title.toLowerCase()} yet`}
                     description={description}
                     action={
-                      <Button onClick={openAdd} size="sm">
-                        <Plus /> {addLabel}
-                      </Button>
+                      canCreate && (
+                        <Button onClick={openAdd} size="sm">
+                          <Plus /> {addLabel}
+                        </Button>
+                      )
                     }
                   />
                 </TableCell>
@@ -222,7 +231,7 @@ export function ConfigSection({
                         <Badge variant="success">
                           <Star className="h-3 w-3" /> Active
                         </Badge>
-                      ) : (
+                      ) : canUpdate ? (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -235,31 +244,37 @@ export function ConfigSection({
                             "Set active"
                           )}
                         </Button>
-                      )}
+                      ) : null}
                     </TableCell>
                   )}
 
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditing(row);
-                            setOpen(true);
-                          }}
-                        >
-                          <Pencil /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem destructive onClick={() => setPendingDelete(row)}>
-                          <Trash2 /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {(canUpdate || canDelete) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" aria-label="Row actions">
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canUpdate && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditing(row);
+                                setOpen(true);
+                              }}
+                            >
+                              <Pencil /> Edit
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete && (
+                            <DropdownMenuItem destructive onClick={() => setPendingDelete(row)}>
+                              <Trash2 /> Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

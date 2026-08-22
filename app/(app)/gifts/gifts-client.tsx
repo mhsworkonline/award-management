@@ -38,6 +38,7 @@ import { Field, FieldGrid } from "@/components/form/field";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { deleteConfig, saveConfig } from "@/lib/actions/settings";
 import { formatCurrency } from "@/lib/utils";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { GiftItem } from "@/lib/types";
 
 type GiftWithUsage = GiftItem & { allocated: number; distributed: number };
@@ -46,6 +47,10 @@ type Values = { name: string; sku: string; unit_cost: string; quantity_on_hand: 
 
 export function GiftsClient({ gifts }: { gifts: GiftWithUsage[] }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canCreate = can("gifts", "create");
+  const canUpdate = can("gifts", "update");
+  const canDelete = can("gifts", "delete");
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<GiftWithUsage | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<GiftWithUsage | null>(null);
@@ -114,14 +119,16 @@ export function GiftsClient({ gifts }: { gifts: GiftWithUsage[] }) {
         title="Gift inventory"
         description="Stock is reduced automatically when a gift is allocated to an award, and restored if the allocation is removed."
         actions={
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-            }}
-          >
-            <Plus /> Add gift item
-          </Button>
+          canCreate && (
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus /> Add gift item
+            </Button>
+          )
         }
       />
 
@@ -157,14 +164,16 @@ export function GiftsClient({ gifts }: { gifts: GiftWithUsage[] }) {
                     title="No gift items yet"
                     description="Add the prizes you distribute — trophies, book sets, medals — with their stock quantity."
                     action={
-                      <Button
-                        onClick={() => {
-                          setEditing(null);
-                          setOpen(true);
-                        }}
-                      >
-                        <Plus /> Add gift item
-                      </Button>
+                      canCreate && (
+                        <Button
+                          onClick={() => {
+                            setEditing(null);
+                            setOpen(true);
+                          }}
+                        >
+                          <Plus /> Add gift item
+                        </Button>
+                      )
                     }
                   />
                 </TableCell>
@@ -197,26 +206,32 @@ export function GiftsClient({ gifts }: { gifts: GiftWithUsage[] }) {
                     {g.distributed}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditing(g);
-                            setOpen(true);
-                          }}
-                        >
-                          <Pencil /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem destructive onClick={() => setPendingDelete(g)}>
-                          <Trash2 /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {(canUpdate || canDelete) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" aria-label="Row actions">
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canUpdate && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditing(g);
+                                setOpen(true);
+                              }}
+                            >
+                              <Pencil /> Edit
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete && (
+                            <DropdownMenuItem destructive onClick={() => setPendingDelete(g)}>
+                              <Trash2 /> Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

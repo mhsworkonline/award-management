@@ -41,6 +41,7 @@ import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { InstitutionSheet } from "./institution-sheet";
 import { deleteConfig } from "@/lib/actions/settings";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { Institution, Lookups } from "@/lib/types";
 
 export function InstitutionsClient({
@@ -53,6 +54,11 @@ export function InstitutionsClient({
   lookups: Lookups;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canCreate = can("institutions", "create");
+  const canUpdate = can("institutions", "update");
+  const canDelete = can("institutions", "delete");
+  const canViewStudents = can("students", "read");
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Institution | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<Institution | null>(null);
@@ -85,14 +91,16 @@ export function InstitutionsClient({
         title="Institutions"
         description="Schools and colleges participating in the award programme."
         actions={
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-          >
-            <Plus /> Add institution
-          </Button>
+          canCreate && (
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              <Plus /> Add institution
+            </Button>
+          )
         }
       />
 
@@ -163,7 +171,7 @@ export function InstitutionsClient({
                         : "Try a different search term or type filter."
                     }
                     action={
-                      institutions.length === 0 ? (
+                      institutions.length === 0 && canCreate ? (
                         <Button
                           onClick={() => {
                             setEditing(null);
@@ -222,31 +230,39 @@ export function InstitutionsClient({
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditing(i);
-                            setFormOpen(true);
-                          }}
-                        >
-                          <Pencil /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/students?institution_id=${i.id}`}>
-                            <Users /> View students
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem destructive onClick={() => setPendingDelete(i)}>
-                          <Trash2 /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {(canUpdate || canViewStudents || canDelete) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" aria-label="Row actions">
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canUpdate && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditing(i);
+                                setFormOpen(true);
+                              }}
+                            >
+                              <Pencil /> Edit
+                            </DropdownMenuItem>
+                          )}
+                          {canViewStudents && (
+                            <DropdownMenuItem asChild>
+                              <Link href={`/students?institution_id=${i.id}`}>
+                                <Users /> View students
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete && (
+                            <DropdownMenuItem destructive onClick={() => setPendingDelete(i)}>
+                              <Trash2 /> Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

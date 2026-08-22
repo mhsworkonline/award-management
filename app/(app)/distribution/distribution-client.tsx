@@ -36,6 +36,7 @@ import {
   newLocalUuid,
 } from "@/lib/offline/db";
 import { formatDateTime } from "@/lib/utils";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { DistributionRow, Lookups } from "@/lib/types";
 
 export function DistributionClient({
@@ -48,6 +49,8 @@ export function DistributionClient({
   pdfQuery: string;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canUpdate = can("distribution", "update");
   const { online, pending, syncing, runSync, refreshPending } = useOffline();
 
   const [rows, setRows] = React.useState(serverRows);
@@ -235,6 +238,7 @@ export function DistributionClient({
                       ) : (
                         <Checkbox
                           checked={done}
+                          disabled={!canUpdate}
                           onCheckedChange={(c) => void toggle(row, Boolean(c))}
                           aria-label={`Mark ${row.student_name}'s gift as distributed`}
                         />

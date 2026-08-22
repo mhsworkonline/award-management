@@ -57,6 +57,7 @@ import { ATTACHMENTS_BUCKET, STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
 import { MAX_SOURCE_IMAGE_BYTES, compressMarksheetImage } from "@/lib/image-compression";
 import { formatDateTime } from "@/lib/utils";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import { SALUTATIONS } from "@/lib/types";
 import type { Board, Course, Lookups, PublicSubmissionRow } from "@/lib/types";
 
@@ -88,6 +89,11 @@ export function SubmissionReviewSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canUpdateSubmission = can("submissions", "update");
+  // Approving converts the submission into a student + its first academic
+  // record in one action, so it needs both of those Create grants too.
+  const canApproveSubmission = canUpdateSubmission && can("students", "create") && can("academic_records", "create");
   const [saving, setSaving] = React.useState(false);
   const [approving, setApproving] = React.useState(false);
   const [rejecting, setRejecting] = React.useState(false);
@@ -132,7 +138,13 @@ export function SubmissionReviewSheet({
   const needsCourseResolve = isPending && !courseId && !standardId && Boolean(submission?.other_course_name);
   const needsBoardResolve = isPending && Boolean(standardId) && !boardId && Boolean(submission?.other_board_name);
   const needsMediumResolve = isPending && Boolean(standardId) && !mediumId;
-  const canApprove = isPending && !needsInstitutionResolve && !needsCourseResolve && !needsBoardResolve && !needsMediumResolve;
+  const canApprove =
+    isPending &&
+    !needsInstitutionResolve &&
+    !needsCourseResolve &&
+    !needsBoardResolve &&
+    !needsMediumResolve &&
+    canApproveSubmission;
 
   async function downloadAttachment(id: string) {
     setAttachmentLoading(id);
@@ -731,38 +743,42 @@ export function SubmissionReviewSheet({
                           >
                             {attachmentLoading === a.id ? <Loader2 className="animate-spin" /> : <Download />}
                           </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            disabled={busy}
-                            onClick={() => {
-                              setPendingFileAction({ type: "replace", id: a.id });
-                              attachmentInputRef.current?.click();
-                            }}
-                            aria-label={`Replace ${a.file_name}`}
-                            title="Replace file"
-                          >
-                            {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            disabled={busy}
-                            onClick={() => void handleDeleteAttachment(a.id)}
-                            aria-label={`Delete ${a.file_name}`}
-                            title="Delete"
-                          >
-                            {busy ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive" />}
-                          </Button>
+                          {canUpdateSubmission && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={busy}
+                              onClick={() => {
+                                setPendingFileAction({ type: "replace", id: a.id });
+                                attachmentInputRef.current?.click();
+                              }}
+                              aria-label={`Replace ${a.file_name}`}
+                              title="Replace file"
+                            >
+                              {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                            </Button>
+                          )}
+                          {canUpdateSubmission && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              disabled={busy}
+                              onClick={() => void handleDeleteAttachment(a.id)}
+                              aria-label={`Delete ${a.file_name}`}
+                              title="Delete"
+                            >
+                              {busy ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive" />}
+                            </Button>
+                          )}
                         </li>
                       );
                     })}
                   </ul>
                 )}
 
-                {attachments.length < MAX_ATTACHMENTS && (
+                {attachments.length < MAX_ATTACHMENTS && canUpdateSubmission && (
                   <Button
                     type="button"
                     variant="outline"
@@ -799,39 +815,45 @@ export function SubmissionReviewSheet({
               )}
             </SheetBody>
 
-            {isPending && (
+            {isPending && (canUpdateSubmission || canApproveSubmission) && (
               <SheetFooter className="flex-wrap justify-between">
-                {!showReject ? (
-                  <Button type="button" variant="outline" onClick={() => setShowReject(true)}>
-                    <X /> Reject
-                  </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button type="button" variant="ghost" onClick={() => setShowReject(false)}>
-                      Cancel
+                {canUpdateSubmission && (
+                  !showReject ? (
+                    <Button type="button" variant="outline" onClick={() => setShowReject(true)}>
+                      <X /> Reject
                     </Button>
-                    <Button type="button" variant="destructive" onClick={() => void onReject()} disabled={rejecting}>
-                      {rejecting ? <Loader2 className="animate-spin" /> : <X />}
-                      Confirm reject
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button type="button" variant="ghost" onClick={() => setShowReject(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="button" variant="destructive" onClick={() => void onReject()} disabled={rejecting}>
+                        {rejecting ? <Loader2 className="animate-spin" /> : <X />}
+                        Confirm reject
+                      </Button>
+                    </div>
+                  )
                 )}
 
                 {!showReject && (
                   <div className="flex gap-2">
-                    <Button type="button" variant="outline" onClick={handleSubmit(saveDraft)} disabled={saving}>
-                      {saving && <Loader2 className="animate-spin" />}
-                      Save changes
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={handleSubmit(onApprove)}
-                      disabled={approving || !canApprove}
-                      title={!canApprove ? "Resolve the custom institution/course first" : undefined}
-                    >
-                      {approving ? <Loader2 className="animate-spin" /> : <Check />}
-                      Approve
-                    </Button>
+                    {canUpdateSubmission && (
+                      <Button type="button" variant="outline" onClick={handleSubmit(saveDraft)} disabled={saving}>
+                        {saving && <Loader2 className="animate-spin" />}
+                        Save changes
+                      </Button>
+                    )}
+                    {canApproveSubmission && (
+                      <Button
+                        type="button"
+                        onClick={handleSubmit(onApprove)}
+                        disabled={approving || !canApprove}
+                        title={!canApprove ? "Resolve the custom institution/course first" : undefined}
+                      >
+                        {approving ? <Loader2 className="animate-spin" /> : <Check />}
+                        Approve
+                      </Button>
+                    )}
                   </div>
                 )}
               </SheetFooter>

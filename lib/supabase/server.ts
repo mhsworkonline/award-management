@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { MODULES, type ModuleName, type ModulePermissions } from "@/lib/types";
+import { cache } from "react";
+import { MODULES, type ModuleName, type ModulePermissions, type CrudAction } from "@/lib/types";
 
 type CookiesToSet = { name: string; value: string; options: CookieOptions }[];
 
@@ -71,7 +72,10 @@ export async function requireAdmin() {
  *  stale or bypassed value here can never expose data, only mis-render a
  *  link. Admins get every module fully open without needing am_permissions
  *  rows to back it (matches am_has_permission's is_admin OR-bypass). */
-export async function getMyPermissionMap(): Promise<{ isAdmin: boolean; modules: Record<ModuleName, ModulePermissions> }> {
+export const getMyPermissionMap = cache(async function getMyPermissionMap(): Promise<{
+  isAdmin: boolean;
+  modules: Record<ModuleName, ModulePermissions>;
+}> {
   const { supabase, user } = await requireUser();
   const { data: profile } = await supabase
     .from("am_profiles")
@@ -97,14 +101,24 @@ export async function getMyPermissionMap(): Promise<{ isAdmin: boolean; modules:
   }
 
   return { isAdmin, modules };
-}
+});
 
 /** App-layer permission check — a friendly early error before the RLS round
  *  trip, for pages/actions that want to fail fast. RLS on the underlying
  *  table is still the real enforcement; this is never the only gate. */
-export async function requirePermission(module: string, action: "create" | "read" | "update" | "delete") {
+export async function requirePermission(module: ModuleName, action: CrudAction) {
   const { supabase, ...rest } = await requireUser();
   const { data } = await supabase.rpc("am_has_permission", { p_module: module, p_action: action });
   if (!data) throw new Error("You don't have permission to do that");
   return { supabase, ...rest };
+}
+
+/** Non-throwing permission check for a Server Component page to decide what
+ *  to render — a dedicated /new or /import route reachable by direct URL
+ *  regardless of whether its trigger button is shown, so hiding the button
+ *  alone isn't enough. Reuses getMyPermissionMap()'s cache, so pairing this
+ *  with the layout's own call costs no extra round trip. */
+export async function canAccess(module: ModuleName, action: CrudAction) {
+  const { isAdmin, modules } = await getMyPermissionMap();
+  return isAdmin || Boolean(modules[module]?.[action]);
 }

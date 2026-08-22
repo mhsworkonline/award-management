@@ -41,6 +41,7 @@ import { StudentDetail } from "./student-detail";
 import { deleteStudent } from "@/lib/actions/students";
 import { placementLabel } from "@/lib/placement";
 import { studentName } from "@/lib/utils";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { AcademicRecordRow, Lookups } from "@/lib/types";
 
 export function StudentsClient({
@@ -61,6 +62,10 @@ export function StudentsClient({
   exportQuery: string;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canCreate = can("students", "create") && can("academic_records", "create");
+  const canUpdate = can("students", "update");
+  const canDelete = can("students", "delete");
   const [editing, setEditing] = React.useState<AcademicRecordRow | null>(null);
   const [detail, setDetail] = React.useState<AcademicRecordRow | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<AcademicRecordRow | null>(null);
@@ -77,21 +82,25 @@ export function StudentsClient({
         description="Search, filter and record students eligible for merit awards."
         actions={
           <>
-            <Button asChild variant="outline">
-              <Link href="/students/import">
-                <FileSpreadsheet /> Import
-              </Link>
-            </Button>
+            {canCreate && (
+              <Button asChild variant="outline">
+                <Link href="/students/import">
+                  <FileSpreadsheet /> Import
+                </Link>
+              </Button>
+            )}
             <Button asChild variant="outline">
               <a href={`/api/reports/excel${exportQuery}`}>
                 <Download /> Export
               </a>
             </Button>
-            <Button asChild>
-              <Link href={`/students/new${defaultYearId ? `?academic_year_id=${defaultYearId}` : ""}`}>
-                <Plus /> Add student
-              </Link>
-            </Button>
+            {canCreate && (
+              <Button asChild>
+                <Link href={`/students/new${defaultYearId ? `?academic_year_id=${defaultYearId}` : ""}`}>
+                  <Plus /> Add student
+                </Link>
+              </Button>
+            )}
           </>
         }
       />
@@ -139,11 +148,13 @@ export function StudentsClient({
                     title="No students found"
                     description="Adjust the filters, or add your first student for this academic year."
                     action={
-                      <Button asChild>
-                        <Link href={`/students/new${defaultYearId ? `?academic_year_id=${defaultYearId}` : ""}`}>
-                          <Plus /> Add student
-                        </Link>
-                      </Button>
+                      canCreate && (
+                        <Button asChild>
+                          <Link href={`/students/new${defaultYearId ? `?academic_year_id=${defaultYearId}` : ""}`}>
+                            <Plus /> Add student
+                          </Link>
+                        </Button>
+                      )
                     }
                   />
                 </TableCell>
@@ -192,21 +203,27 @@ export function StudentsClient({
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEdit(record)}>
-                          <Pencil /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem destructive onClick={() => setPendingDelete(record)}>
-                          <Trash2 /> Delete student
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {(canUpdate || canDelete) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" aria-label="Row actions">
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canUpdate && (
+                            <DropdownMenuItem onClick={() => openEdit(record)}>
+                              <Pencil /> Edit
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete && (
+                            <DropdownMenuItem destructive onClick={() => setPendingDelete(record)}>
+                              <Trash2 /> Delete student
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

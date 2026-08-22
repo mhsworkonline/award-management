@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -465,25 +465,37 @@ export function ApplyForm({
           </h2>
         </div>
 
-        <CardTitle className="relative mt-3 text-lg font-semibold text-primary-foreground">
-          {form.title}
+        {/* Three deliberate tiers: bold brand name above, a plain medium-weight
+            title/year as the subheading, description smallest and dimmest —
+            each step differs in both size and weight so they don't visually
+            compete with each other. */}
+        <div className="relative mt-2.5">
+          <p className="text-base font-medium leading-snug text-primary-foreground">{form.title}</p>
           {form.titleGu && (
-            <span className="mt-0.5 block text-[15px] font-normal text-primary-foreground/80">
+            <p className="mt-0.5 text-[13px] font-normal leading-snug text-primary-foreground/75">
               {form.titleGu}
-            </span>
+            </p>
           )}
-        </CardTitle>
+        </div>
         {(form.description || form.descriptionGu) && (
-          <CardDescription className="relative mt-1.5 space-y-1 text-[15px] text-primary-foreground/80">
-            {form.description && <span className="block">{form.description}</span>}
-            {form.descriptionGu && <span className="block">{form.descriptionGu}</span>}
-          </CardDescription>
+          <div className="relative mt-2 space-y-0.5">
+            {form.description && (
+              <p className="text-[13.5px] font-normal leading-relaxed text-primary-foreground/75">
+                {form.description}
+              </p>
+            )}
+            {form.descriptionGu && (
+              <p className="text-[13.5px] font-normal leading-relaxed text-primary-foreground/75">
+                {form.descriptionGu}
+              </p>
+            )}
+          </div>
         )}
       </div>
       <CardContent className="pt-6">
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="space-y-6 [&_input]:text-base [&_label]:text-[15px] [&_p]:text-[13.5px] [&_textarea]:text-base [&_button[role=combobox]]:text-base"
+          className="space-y-6 [&_input]:text-[17px] [&_label]:text-[16px] [&_label]:font-medium [&_p]:text-[14px] [&_textarea]:text-[17px] [&_button[role=combobox]]:text-[17px]"
           noValidate
         >
           {/* Honeypot — visually hidden (sr-only clip technique, not display:none,
@@ -516,8 +528,8 @@ export function ApplyForm({
               <Input id="first_name" autoComplete="given-name" {...register("first_name", { required: "Required" })} />
             </Field>
             {fieldConfig.show_middle_name && (
-              <Field label={L.middleName} htmlFor="middle_name">
-                <Input id="middle_name" autoComplete="off" {...register("middle_name")} />
+              <Field label={L.middleName} htmlFor="middle_name" required error={errors.middle_name?.message}>
+                <Input id="middle_name" autoComplete="off" {...register("middle_name", { required: "Required" })} />
               </Field>
             )}
             <Field label={L.lastName} htmlFor="last_name" required error={errors.last_name?.message}>

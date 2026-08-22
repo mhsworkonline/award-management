@@ -27,10 +27,15 @@ import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { FormSheet } from "./form-sheet";
 import { deleteApplicationForm, toggleApplicationForm } from "@/lib/actions/application-forms";
 import { formatDateTime } from "@/lib/utils";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { ApplicationFormRow, Lookups } from "@/lib/types";
 
 export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; lookups: Lookups }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canCreate = can("forms", "create");
+  const canUpdate = can("forms", "update");
+  const canDelete = can("forms", "delete");
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ApplicationFormRow | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<ApplicationFormRow | null>(null);
@@ -61,14 +66,16 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
         title="Forms"
         description="Public application links students can submit through — each one is independently trackable and can be turned off."
         actions={
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setOpen(true);
-            }}
-          >
-            <Plus /> New form
-          </Button>
+          canCreate && (
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus /> New form
+            </Button>
+          )
         }
       />
 
@@ -96,14 +103,16 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
                     title="No forms yet"
                     description="Create a public application link students can submit through."
                     action={
-                      <Button
-                        onClick={() => {
-                          setEditing(null);
-                          setOpen(true);
-                        }}
-                      >
-                        <Plus /> New form
-                      </Button>
+                      canCreate && (
+                        <Button
+                          onClick={() => {
+                            setEditing(null);
+                            setOpen(true);
+                          }}
+                        >
+                          <Plus /> New form
+                        </Button>
+                      )
                     }
                   />
                 </TableCell>
@@ -133,33 +142,45 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDateTime(f.created_at)}</TableCell>
                   <TableCell>
-                    <button type="button" onClick={() => void onToggle(f)}>
-                      <Badge variant={f.is_enabled ? "success" : "outline"} className="cursor-pointer">
+                    {canUpdate ? (
+                      <button type="button" onClick={() => void onToggle(f)}>
+                        <Badge variant={f.is_enabled ? "success" : "outline"} className="cursor-pointer">
+                          {f.is_enabled ? "Enabled" : "Disabled"}
+                        </Badge>
+                      </button>
+                    ) : (
+                      <Badge variant={f.is_enabled ? "success" : "outline"}>
                         {f.is_enabled ? "Enabled" : "Disabled"}
                       </Badge>
-                    </button>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setEditing(f);
-                            setOpen(true);
-                          }}
-                        >
-                          <FileEdit /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem destructive onClick={() => setPendingDelete(f)}>
-                          <Trash2 /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {(canUpdate || canDelete) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" aria-label="Row actions">
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canUpdate && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditing(f);
+                                setOpen(true);
+                              }}
+                            >
+                              <FileEdit /> Edit
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete && (
+                            <DropdownMenuItem destructive onClick={() => setPendingDelete(f)}>
+                              <Trash2 /> Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

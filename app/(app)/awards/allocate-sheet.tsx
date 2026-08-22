@@ -26,6 +26,7 @@ import {
 import { Field, FieldGrid } from "@/components/form/field";
 import { allocateGift, deallocateGift } from "@/lib/actions/awards";
 import { formatCurrency } from "@/lib/utils";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { AwardRow } from "@/lib/data/awards";
 import type { Lookups } from "@/lib/types";
 
@@ -39,6 +40,9 @@ export function AllocateSheet({
   lookups: Lookups;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canCreate = can("awards", "create");
+  const canDelete = can("awards", "delete");
   const [giftId, setGiftId] = React.useState("");
   const [quantity, setQuantity] = React.useState("1");
   const [saving, setSaving] = React.useState(false);
@@ -132,25 +136,28 @@ export function AllocateSheet({
                             {a.distribution_status === "distributed" ? "Distributed" : "Pending"}
                           </Badge>
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Remove allocation"
-                          disabled={removingId === a.id || a.distribution_status === "distributed"}
-                          onClick={() => void remove(a.id)}
-                        >
-                          {removingId === a.id ? (
-                            <Loader2 className="animate-spin" />
-                          ) : (
-                            <Trash2 className="text-destructive" />
-                          )}
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Remove allocation"
+                            disabled={removingId === a.id || a.distribution_status === "distributed"}
+                            onClick={() => void remove(a.id)}
+                          >
+                            {removingId === a.id ? (
+                              <Loader2 className="animate-spin" />
+                            ) : (
+                              <Trash2 className="text-destructive" />
+                            )}
+                          </Button>
+                        )}
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
 
+              {canCreate && (
               <FieldGrid>
                 <Field label="Gift item" required>
                   <Select value={giftId} onValueChange={setGiftId}>
@@ -190,6 +197,7 @@ export function AllocateSheet({
                   />
                 </Field>
               </FieldGrid>
+              )}
 
               {error && (
                 <p className="rounded-md bg-destructive/10 px-3 py-2 text-[13px] font-medium text-destructive">
@@ -202,13 +210,15 @@ export function AllocateSheet({
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 Done
               </Button>
-              <Button
-                onClick={() => void submit()}
-                disabled={!giftId || saving || overStock || requested < 1}
-              >
-                {saving ? <Loader2 className="animate-spin" /> : <Gift />}
-                Allocate
-              </Button>
+              {canCreate && (
+                <Button
+                  onClick={() => void submit()}
+                  disabled={!giftId || saving || overStock || requested < 1}
+                >
+                  {saving ? <Loader2 className="animate-spin" /> : <Gift />}
+                  Allocate
+                </Button>
+              )}
             </SheetFooter>
           </>
         )}

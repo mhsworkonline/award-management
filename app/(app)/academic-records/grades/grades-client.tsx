@@ -26,6 +26,7 @@ import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { Field, FieldGrid } from "@/components/form/field";
 import { PercentInput } from "@/components/form/percent-input";
 import { fetchRosterForGrading, saveGrades, type RosterEntry } from "@/lib/actions/academic-records";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { Lookups } from "@/lib/types";
 
 type DraftEntry = RosterEntry & { dirty: boolean };
@@ -39,6 +40,8 @@ export function GradesClient({
   lookups: Lookups;
   defaultYearId: string | null;
 }) {
+  const { can } = usePermissions();
+  const canUpdate = can("academic_records", "update");
   const [instType, setInstType] = React.useState<"school" | "college" | "">("");
   const [boardId, setBoardId] = React.useState("");
   const [institutionId, setInstitutionId] = React.useState("");
@@ -328,6 +331,7 @@ export function GradesClient({
                         <PercentInput
                           className="h-8 w-28"
                           value={e.percentage ?? ""}
+                          disabled={!canUpdate}
                           onChange={(ev) => update(e.id, "percentage", ev.target.value)}
                         />
                       </TableCell>
@@ -335,6 +339,7 @@ export function GradesClient({
                         <Input
                           className="h-8 w-20"
                           value={e.grade ?? ""}
+                          disabled={!canUpdate}
                           onChange={(ev) => update(e.id, "grade", ev.target.value)}
                         />
                       </TableCell>
@@ -344,6 +349,7 @@ export function GradesClient({
                           min={1}
                           className="tabular h-8 w-20"
                           value={e.rank ?? ""}
+                          disabled={!canUpdate}
                           onChange={(ev) => update(e.id, "rank", ev.target.value)}
                         />
                       </TableCell>
@@ -363,10 +369,12 @@ export function GradesClient({
                   "No unsaved changes"
                 )}
               </p>
-              <Button onClick={() => void saveAll()} disabled={saving || dirtyCount === 0}>
-                {saving ? <Loader2 className="animate-spin" /> : <Save />}
-                {saving ? "Saving…" : `Save ${dirtyCount || ""} grade${dirtyCount === 1 ? "" : "s"}`}
-              </Button>
+              {canUpdate && (
+                <Button onClick={() => void saveAll()} disabled={saving || dirtyCount === 0}>
+                  {saving ? <Loader2 className="animate-spin" /> : <Save />}
+                  {saving ? "Saving…" : `Save ${dirtyCount || ""} grade${dirtyCount === 1 ? "" : "s"}`}
+                </Button>
+              )}
             </div>
           )}
         </>

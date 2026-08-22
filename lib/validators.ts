@@ -212,7 +212,7 @@ export const publicApplicationSchema = z
   .object({
     salutation: optionalSalutation,
     first_name: z.string().trim().min(1, "First name is required").max(100),
-    middle_name: optionalText,
+    middle_name: z.string().trim().min(1, "Middle name (father's/husband's name) is required").max(100),
     last_name: z.string().trim().min(1, "Last name is required").max(100),
     email: z.string().trim().toLowerCase().min(1, "Email is required").email("Enter a valid email"),
     contact_no: requiredContactNo,

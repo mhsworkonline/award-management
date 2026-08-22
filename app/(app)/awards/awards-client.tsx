@@ -27,6 +27,7 @@ import { AwardSheet } from "./award-sheet";
 import { AllocateSheet } from "./allocate-sheet";
 import { SuggestedPerformers } from "./suggested-performers";
 import { deleteAward } from "@/lib/actions/awards";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { AwardRow } from "@/lib/data/awards";
 import type { listTopPerformers } from "@/lib/data/academic-records";
 import type { Lookups } from "@/lib/types";
@@ -43,6 +44,11 @@ export function AwardsClient({
   defaultYearId: string | null;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canCreate = can("awards", "create");
+  const canUpdate = can("awards", "update");
+  const canDelete = can("awards", "delete");
+  const canManageGifts = canCreate || canUpdate || canDelete;
   const [assignOpen, setAssignOpen] = React.useState(false);
   const [allocating, setAllocating] = React.useState<AwardRow | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<AwardRow | null>(null);
@@ -55,9 +61,11 @@ export function AwardsClient({
         title="Awards"
         description="Assign merit awards, then allocate a gift against each one."
         actions={
-          <Button onClick={() => setAssignOpen(true)}>
-            <Plus /> Assign award
-          </Button>
+          canCreate && (
+            <Button onClick={() => setAssignOpen(true)}>
+              <Plus /> Assign award
+            </Button>
+          )
         }
       />
 
@@ -100,9 +108,11 @@ export function AwardsClient({
                     title="No awards assigned"
                     description="Assign award categories to students, then allocate the gift each winner receives."
                     action={
-                      <Button onClick={() => setAssignOpen(true)}>
-                        <Plus /> Assign award
-                      </Button>
+                      canCreate && (
+                        <Button onClick={() => setAssignOpen(true)}>
+                          <Plus /> Assign award
+                        </Button>
+                      )
                     }
                   />
                 </TableCell>
@@ -132,14 +142,16 @@ export function AwardsClient({
                   </TableCell>
                   <TableCell>
                     {row.allocations.length === 0 ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAllocating(row)}
-                      >
-                        <Gift /> Allocate
-                      </Button>
-                    ) : (
+                      canCreate && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAllocating(row)}
+                        >
+                          <Gift /> Allocate
+                        </Button>
+                      )
+                    ) : canManageGifts ? (
                       <button
                         type="button"
                         onClick={() => setAllocating(row)}
@@ -155,24 +167,42 @@ export function AwardsClient({
                           </Badge>
                         ))}
                       </button>
+                    ) : (
+                      <span className="flex flex-wrap gap-1">
+                        {row.allocations.map((a) => (
+                          <Badge
+                            key={a.id}
+                            variant={a.distribution_status === "distributed" ? "success" : "warning"}
+                          >
+                            {a.gift_name}
+                            {a.quantity > 1 ? ` ×${a.quantity}` : ""}
+                          </Badge>
+                        ))}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" aria-label="Row actions">
-                          <MoreHorizontal />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setAllocating(row)}>
-                          <Gift /> Manage gifts
-                        </DropdownMenuItem>
-                        <DropdownMenuItem destructive onClick={() => setPendingDelete(row)}>
-                          <Trash2 /> Remove award
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {(canManageGifts || canDelete) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm" aria-label="Row actions">
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canManageGifts && (
+                            <DropdownMenuItem onClick={() => setAllocating(row)}>
+                              <Gift /> Manage gifts
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete && (
+                            <DropdownMenuItem destructive onClick={() => setPendingDelete(row)}>
+                              <Trash2 /> Remove award
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

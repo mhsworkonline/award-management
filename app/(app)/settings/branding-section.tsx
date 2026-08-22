@@ -11,6 +11,7 @@ import { Field } from "@/components/form/field";
 import { updateAppName, updateLogo, removeLogo } from "@/lib/actions/organization";
 import { createClient } from "@/lib/supabase/client";
 import { BRANDING_BUCKET } from "@/lib/tables";
+import { usePermissions } from "@/components/providers/permissions-provider";
 import type { Organization } from "@/lib/types";
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
@@ -21,6 +22,8 @@ const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+
  *  list-style ConfigSection used for boards/mediums/courses. */
 export function BrandingSection({ organization }: { organization: Organization }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canUpdate = can("settings", "update");
   const [appName, setAppName] = React.useState(organization.app_name);
   const [logoUrl, setLogoUrl] = React.useState<string | null>(
     organization.logo_path
@@ -126,11 +129,14 @@ export function BrandingSection({ organization }: { organization: Organization }
               value={appName}
               onChange={(e) => setAppName(e.target.value)}
               maxLength={80}
+              disabled={!canUpdate}
             />
-            <Button type="button" onClick={saveName} disabled={savingName || !nameChanged}>
-              {savingName ? <Loader2 className="animate-spin" /> : <Save />}
-              Save
-            </Button>
+            {canUpdate && (
+              <Button type="button" onClick={saveName} disabled={savingName || !nameChanged}>
+                {savingName ? <Loader2 className="animate-spin" /> : <Save />}
+                Save
+              </Button>
+            )}
           </div>
         </Field>
 
@@ -144,34 +150,36 @@ export function BrandingSection({ organization }: { organization: Organization }
                 <Trophy className="h-6 w-6 text-muted-foreground" />
               )}
             </span>
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="sr-only"
-                accept={ALLOWED_LOGO_TYPES.join(",")}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void handleLogoFile(file);
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={uploading}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
-                {logoUrl ? "Replace logo" : "Upload logo"}
-              </Button>
-              {logoUrl && (
-                <Button type="button" variant="ghost" size="sm" disabled={removing} onClick={() => void handleRemoveLogo()}>
-                  {removing ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive" />}
-                  Remove
+            {canUpdate && (
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="sr-only"
+                  accept={ALLOWED_LOGO_TYPES.join(",")}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleLogoFile(file);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={uploading}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                  {logoUrl ? "Replace logo" : "Upload logo"}
                 </Button>
-              )}
-            </div>
+                {logoUrl && (
+                  <Button type="button" variant="ghost" size="sm" disabled={removing} onClick={() => void handleRemoveLogo()}>
+                    {removing ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive" />}
+                    Remove
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </Field>
 
