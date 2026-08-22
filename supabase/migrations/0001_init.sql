@@ -3,6 +3,14 @@
 -- trigger and named index carries the am_ prefix to avoid colliding with the
 -- other applications living in the public schema.
 -- Single organization now; org_id present on every table for future multi-tenancy.
+--
+-- This matches supabase_migrations.schema_migrations version 20260730113143
+-- ("am_award_management_init"), plus the seed data below which was applied
+-- alongside it. Files 0002 onward (through 0021) were reconciled from that
+-- same tracked migration history — this project's schema changes were applied
+-- directly (dashboard/MCP), not via the Supabase CLI, so this migrations
+-- folder previously stopped at this file while the live schema moved on;
+-- schema_migrations.statements was the source of truth used to fill the gap.
 
 create extension if not exists "uuid-ossp";
 create extension if not exists pg_trgm;

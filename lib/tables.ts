@@ -16,7 +16,11 @@ export const T = {
   standards: "am_standards",
   awardCategories: "am_award_categories",
   institutions: "am_institutions",
+  persons: "am_persons",
   students: "am_students",
+  roles: "am_roles",
+  permissions: "am_permissions",
+  profiles: "am_profiles",
   academicRecords: "am_academic_records",
   studentAwards: "am_student_awards",
   giftItems: "am_gift_items",
@@ -58,6 +62,7 @@ export const REL = {
   awardCategories: `award_categories:${T.awardCategories}`,
   giftAllocations: `gift_allocations:${T.giftAllocations}`,
   giftItems: `gift_items:${T.giftItems}`,
+  roles: `roles:${T.roles}`,
   distributionRecords: `distribution_records:${T.distributionRecords}`,
 } as const;
 

@@ -5,15 +5,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shell/page-header";
 import { ConfigSection } from "./config-section";
 import { BrandingSection } from "./branding-section";
+import { AccessSection } from "./access-section";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Lookups, Organization } from "@/lib/types";
+import type { Lookups, Organization, RoleWithPermissions, UserRow } from "@/lib/types";
 
 export function SettingsClient({
   lookups,
   organization,
+  isAdmin,
+  roles,
+  users,
+  currentUserId,
 }: {
   lookups: Lookups;
   organization: Organization | null;
+  isAdmin: boolean;
+  roles: RoleWithPermissions[];
+  users: UserRow[];
+  currentUserId: string;
 }) {
   return (
     <>
@@ -31,6 +40,7 @@ export function SettingsClient({
           <TabsTrigger value="standards">Standards</TabsTrigger>
           <TabsTrigger value="courses">Courses</TabsTrigger>
           <TabsTrigger value="categories">Award categories</TabsTrigger>
+          {isAdmin && <TabsTrigger value="access">Users & Roles</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="branding">
@@ -200,6 +210,12 @@ export function SettingsClient({
             ]}
           />
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="access">
+            <AccessSection roles={roles} users={users} currentUserId={currentUserId} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <div className="rounded-lg border bg-muted/30 p-5">

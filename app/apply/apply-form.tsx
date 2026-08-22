@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldGrid } from "@/components/form/field";
+import { PercentInput } from "@/components/form/percent-input";
 import { registerAttachment, submitPublicApplication } from "@/lib/actions/public-application";
 import { OTHER_OPTION_VALUE as OTHER } from "@/lib/validators";
 import { createClient } from "@/lib/supabase/client";
@@ -190,9 +191,12 @@ export function ApplyForm({
 
   async function addFiles(list: FileList | null) {
     if (!list) return;
+    // Snapshot the files before clearing the input — `list` is the input's
+    // own live FileList, so resetting `.value` first would empty it out from
+    // under us before a single file is ever read.
+    const incoming = Array.from(list);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setFileError(null);
-    const incoming = Array.from(list);
 
     if (files.length + incoming.length > MAX_FILES) {
       setFileError(`Maximum ${MAX_FILES} files`);
@@ -525,7 +529,7 @@ export function ApplyForm({
             <Field label={L.email} htmlFor="email" required error={errors.email?.message}>
               <Input id="email" type="email" inputMode="email" autoComplete="email" {...register("email", { required: "Required" })} />
             </Field>
-            <Field label={L.contactNo} htmlFor="contact_no" required hint={L.contactNoHint} error={errors.contact_no?.message}>
+            <Field label={L.contactNo} htmlFor="contact_no" required error={errors.contact_no?.message}>
               <Input
                 id="contact_no"
                 type="tel"
@@ -782,16 +786,7 @@ export function ApplyForm({
 
           <FieldGrid>
             <Field label={L.percentage} htmlFor="percentage" error={errors.percentage?.message}>
-              <Input
-                id="percentage"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={100}
-                step="0.01"
-                className="tabular"
-                {...register("percentage")}
-              />
+              <PercentInput id="percentage" {...register("percentage")} />
             </Field>
             <Field label={L.grade} htmlFor="grade">
               <Input id="grade" autoComplete="off" {...register("grade")} />

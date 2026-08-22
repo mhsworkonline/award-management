@@ -77,8 +77,32 @@ export type Institution = {
   mediums?: Pick<Medium, "id" | "name"> | null;
 };
 
+/** The shared identity anchor — the record both the Award domain (am_students)
+ *  and the future Community module will reference. Holds only pure identity
+ *  fields, nothing institution/award-specific.
+ *
+ *  For now am_students still owns these columns directly, and a database
+ *  trigger mirrors every insert/update into am_persons automatically — no
+ *  application code writes to this table today. It exists so a stable
+ *  person_id is already in place before the Community module needs one.
+ *  See supabase/migrations/0021_add_persons.sql. */
+export type Person = {
+  id: string;
+  org_id: string;
+  salutation: string | null;
+  first_name: string;
+  middle_name: string | null; // father's/husband's first name, by convention
+  last_name: string;
+  email: string | null;
+  contact_no: string | null;
+  photo_path: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 /** Persistent student identity — does not carry institution/year/standard.
- *  Those live on AcademicRecord, one per student per academic year. */
+ *  Those live on AcademicRecord, one per student per academic year.
+ *  Mirrored into a Person row (person_id) — see Person above. */
 export type Salutation = "Mr." | "Ms." | "Mrs." | "Miss" | "Dr.";
 export const SALUTATIONS: Salutation[] = ["Mr.", "Ms.", "Mrs.", "Miss", "Dr."];
 
@@ -355,6 +379,86 @@ export type PublicBranding = {
   app_name: string;
   logo_url: string | null;
 };
+
+// ---------------------------------------------------------------- roles & permissions
+/** Fixed set of CRUD-able areas — matches the am_module enum exactly. Not
+ *  admin-editable: a new module is a code change (a new page/table), same as
+ *  the sidebar's NAV list. Order here is the order the permission grid and
+ *  the sidebar render in. Reports has no dedicated table (see am_has_permission
+ *  usage in lib/supabase/server.ts) and Dashboard has no row at all — it's
+ *  visible to anyone signed in. */
+export const MODULES = [
+  { value: "students", label: "Students" },
+  { value: "academic_records", label: "Academic Records / Grades" },
+  { value: "institutions", label: "Institutions" },
+  { value: "awards", label: "Awards" },
+  { value: "gifts", label: "Gift Inventory" },
+  { value: "distribution", label: "Distribution" },
+  { value: "submissions", label: "Submissions" },
+  { value: "forms", label: "Forms" },
+  { value: "reports", label: "Reports" },
+  { value: "settings", label: "Settings" },
+] as const;
+export type ModuleName = (typeof MODULES)[number]["value"];
+
+export const CRUD_ACTIONS = [
+  { key: "can_create", action: "create", label: "Create" },
+  { key: "can_read", action: "read", label: "Read" },
+  { key: "can_update", action: "update", label: "Update" },
+  { key: "can_delete", action: "delete", label: "Delete" },
+] as const;
+export type CrudAction = (typeof CRUD_ACTIONS)[number]["action"];
+
+/** Per-module read/write flags for the signed-in user — see
+ *  getMyPermissionMap() in lib/supabase/server.ts. Lives here (not in that
+ *  server-only file) so client components like the sidebar can import the
+ *  type without pulling in next/headers. */
+export type ModulePermissions = { create: boolean; read: boolean; update: boolean; delete: boolean };
+
+export type Role = {
+  id: string;
+  org_id: string;
+  name: string;
+  is_protected: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Permission = {
+  role_id: string;
+  module: ModuleName;
+  can_create: boolean;
+  can_read: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+};
+
+/** One row per module, in MODULES order, always fully present (zeroed for
+ *  modules the role has no am_permissions row for) — the shape the grid UI
+ *  and saveRolePermissions() both work with. */
+export type PermissionGrid = Pick<Permission, "module" | "can_create" | "can_read" | "can_update" | "can_delete">[];
+
+export type RoleWithPermissions = Role & { permissions: PermissionGrid };
+
+/** Profile row for the signed-in user — role name resolved for display,
+ *  is_admin drives Users & Roles visibility (kept separate from the module
+ *  grid on purpose, see 0022_roles_and_permissions.sql). */
+export type Profile = {
+  id: string;
+  org_id: string;
+  role_id: string | null;
+  is_admin: boolean;
+  full_name: string | null;
+  email: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProfileWithRole = Profile & { roles?: Pick<Role, "id" | "name"> | null };
+
+/** Row for the Users & Roles user list — Profile plus the role name, already
+ *  joined server-side. */
+export type UserRow = ProfileWithRole;
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }

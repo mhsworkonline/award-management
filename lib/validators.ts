@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MODULES } from "@/lib/types";
 
 const uuid = z.string().uuid();
 // Accepts a real string, "", undefined or null (client forms send all four
@@ -31,6 +32,25 @@ const requiredContactNo = z
 // this holds the storage path (not the file itself). Required: a blank/empty
 // value means no photo was uploaded.
 const requiredPhotoPath = z.string().trim().min(1, "A photograph of the student is required");
+
+// Rounds to at most 2 decimal places — applied on write so it doesn't matter
+// how the extra precision got there (typed, pasted, imported).
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+// A required-when-present percentage: 0-100, rounded to 2 decimals. Used
+// where the field is nullable but, once given a value, that value is coerced
+// directly (no raw-form-string preprocessing needed).
+const percentageSchema = z.coerce.number().min(0).max(100).transform(round2);
+
+// Same range/rounding, but for raw form values where blank must mean "not
+// provided" rather than 0 — Number("") is 0, not NaN, so an empty/nullish
+// value is normalized to undefined *before* coercion.
+const optionalPercentage = z
+  .preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().min(0).max(100).transform(round2).optional(),
+  )
+  .transform((v) => v ?? null);
 
 export const academicYearSchema = z.object({
   id: uuid.optional(),
@@ -132,7 +152,7 @@ export const academicRecordSchema = z
     course_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     period_no: z.coerce.number().int().min(1).max(12).nullable().optional().transform((v) => v ?? null),
     roll_no: optionalText,
-    percentage: z.coerce.number().min(0).max(100).nullable().optional().transform((v) => v ?? null),
+    percentage: percentageSchema.nullable().optional().transform((v) => v ?? null),
     grade: optionalText,
     rank: z.coerce.number().int().min(1).nullable().optional().transform((v) => v ?? null),
     remarks: z.string().trim().max(500).nullable().optional().transform((v) => (v ? v : null)),
@@ -150,7 +170,7 @@ export const academicRecordSchema = z
  *  narrow so a fast per-row save can't touch placement fields by accident. */
 export const gradeEntrySchema = z.object({
   id: uuid,
-  percentage: z.coerce.number().min(0).max(100).nullable().optional().transform((v) => v ?? null),
+  percentage: percentageSchema.nullable().optional().transform((v) => v ?? null),
   grade: optionalText,
   rank: z.coerce.number().int().min(1).nullable().optional().transform((v) => v ?? null),
 });
@@ -210,13 +230,8 @@ export const publicApplicationSchema = z
     roll_no: optionalText,
     // Schools/colleges report results differently — some give percentage, some
     // grade, some both. Neither is individually required; superRefine below
-    // requires at least one. z.coerce.number() alone would silently turn a
-    // blank field into 0 (Number("") === 0) rather than "not provided", so an
-    // empty/nullish value is normalized to undefined *before* coercion.
-    percentage: z.preprocess(
-      (v) => (v === "" || v === null || v === undefined ? undefined : v),
-      z.coerce.number().min(0).max(100).optional(),
-    ).transform((v) => v ?? null),
+    // requires at least one.
+    percentage: optionalPercentage,
     grade: optionalText,
     notes: z.string().trim().max(1000).optional().transform((v) => (v ? v : null)),
     // Honeypot — real visitors never see or fill this field.
@@ -307,12 +322,7 @@ export const submissionEditSchema = z
     period_no: z.coerce.number().int().min(1).max(12).nullable().optional().transform((v) => v ?? null),
     roll_no: optionalText,
     // At least one of percentage/grade is required — see superRefine below.
-    // (Empty string is normalized to undefined before coercion — Number("")
-    // is 0, not NaN, so coercing a blank field directly would silently save 0%.)
-    percentage: z.preprocess(
-      (v) => (v === "" || v === null || v === undefined ? undefined : v),
-      z.coerce.number().min(0).max(100).optional(),
-    ).transform((v) => v ?? null),
+    percentage: optionalPercentage,
     grade: optionalText,
     notes: z.string().trim().max(1000).nullable().optional().transform((v) => (v ? v : null)),
   })
@@ -383,3 +393,42 @@ export type InstitutionInput = z.input<typeof institutionSchema>;
 // Back-compat alias — several call sites still import this name.
 export const studentFilterSchema = academicRecordFilterSchema;
 export type StudentFilters = AcademicRecordFilters;
+
+// ---------------------------------------------------------------- roles & permissions
+const moduleValues = MODULES.map((m) => m.value) as [string, ...string[]];
+
+export const roleNameSchema = z.object({
+  id: uuid.optional(),
+  name: z.string().trim().min(1, "Name is required").max(60),
+});
+
+/** The permission grid payload — one row per module, always all ten present
+ *  (a module simply left unchecked still sends can_create etc. as false). */
+export const permissionGridSchema = z.object({
+  role_id: uuid,
+  permissions: z
+    .array(
+      z.object({
+        module: z.enum(moduleValues),
+        can_create: z.boolean(),
+        can_read: z.boolean(),
+        can_update: z.boolean(),
+        can_delete: z.boolean(),
+      }),
+    )
+    .length(MODULES.length),
+});
+
+export const createUserSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address").max(200),
+  password: z.string().min(8, "Password must be at least 8 characters").max(72),
+  full_name: optionalText,
+  role_id: uuid.nullable(),
+  is_admin: z.boolean().default(false),
+});
+
+export const updateUserRoleSchema = z.object({
+  id: uuid,
+  role_id: uuid.nullable(),
+  is_admin: z.boolean(),
+});

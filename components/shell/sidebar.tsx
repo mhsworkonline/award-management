@@ -21,40 +21,55 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { useOffline } from "@/components/offline/offline-sync-provider";
+import type { ModuleName, ModulePermissions } from "@/lib/types";
 
+/** Every entry but Dashboard is gated on Read for its module — see
+ *  0022_roles_and_permissions.sql for the same table→module mapping this
+ *  mirrors. This is UX only (hides a link a role can't use); RLS on the
+ *  underlying tables is the real enforcement either way. */
 const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/submissions", label: "Submissions", icon: Inbox },
-  { href: "/forms", label: "Forms", icon: FileEdit },
-  { href: "/students", label: "Students", icon: Users },
-  { href: "/academic-records/grades", label: "Grade Entry", icon: GraduationCap },
-  { href: "/institutions", label: "Institutions", icon: School },
-  { href: "/awards", label: "Awards", icon: Award },
-  { href: "/gifts", label: "Gift Inventory", icon: Gift },
-  { href: "/distribution", label: "Distribution", icon: ClipboardList },
-  { href: "/reports", label: "Reports", icon: FileBarChart },
-] as const;
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: null },
+  { href: "/submissions", label: "Submissions", icon: Inbox, module: "submissions" },
+  { href: "/forms", label: "Forms", icon: FileEdit, module: "forms" },
+  { href: "/students", label: "Students", icon: Users, module: "students" },
+  { href: "/academic-records/grades", label: "Grade Entry", icon: GraduationCap, module: "academic_records" },
+  { href: "/institutions", label: "Institutions", icon: School, module: "institutions" },
+  { href: "/awards", label: "Awards", icon: Award, module: "awards" },
+  { href: "/gifts", label: "Gift Inventory", icon: Gift, module: "gifts" },
+  { href: "/distribution", label: "Distribution", icon: ClipboardList, module: "distribution" },
+  { href: "/reports", label: "Reports", icon: FileBarChart, module: "reports" },
+] as const satisfies readonly { href: string; label: string; icon: unknown; module: ModuleName | null }[];
 
+// Audit Log is admin-only (see 0022's am_audit_logs_read policy); Settings
+// shows for anyone with Settings:Read, admins additionally get the
+// Users & Roles tab inside it (gated separately, see settings-client.tsx).
 const FOOTER_NAV = [
-  { href: "/audit", label: "Audit Log", icon: ScrollText },
-  { href: "/settings", label: "Settings", icon: Settings },
-] as const;
+  { href: "/audit", label: "Audit Log", icon: ScrollText, adminOnly: true, module: null },
+  { href: "/settings", label: "Settings", icon: Settings, adminOnly: false, module: "settings" },
+] as const satisfies readonly { href: string; label: string; icon: unknown; adminOnly: boolean; module: ModuleName | null }[];
 
 export function Sidebar({
   className,
   pendingSubmissions = 0,
   appName = "Awards",
   logoUrl = null,
+  isAdmin = false,
+  modules,
 }: {
   className?: string;
   pendingSubmissions?: number;
   appName?: string;
   logoUrl?: string | null;
+  isAdmin?: boolean;
+  modules?: Record<ModuleName, ModulePermissions>;
 }) {
   const pathname = usePathname();
   const { pending } = useOffline();
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const canSee = (module: ModuleName | null) => !module || isAdmin || (modules?.[module]?.read ?? false);
+  const nav = NAV.filter((item) => canSee(item.module));
+  const footerNav = FOOTER_NAV.filter((item) => (item.adminOnly ? isAdmin : canSee(item.module)));
 
   return (
     <aside
@@ -78,7 +93,7 @@ export function Sidebar({
       </div>
 
       <nav className="scrollbar-thin flex-1 space-y-0.5 overflow-y-auto px-2.5 py-2">
-        {NAV.map(({ href, label, icon: Icon }) => (
+        {nav.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}
@@ -106,7 +121,7 @@ export function Sidebar({
       </nav>
 
       <div className="space-y-0.5 border-t px-2.5 py-2">
-        {FOOTER_NAV.map(({ href, label, icon: Icon }) => (
+        {footerNav.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}
             href={href}

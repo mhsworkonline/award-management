@@ -135,5 +135,8 @@ export function friendly(raw: string) {
   if (raw.includes("Insufficient stock")) {
     return raw.slice(raw.indexOf("Insufficient stock"));
   }
+  if (raw.includes("row-level security policy") || raw.includes("row-level security")) {
+    return "Your role doesn't have permission to do that. Ask an administrator if you need access.";
+  }
   return raw;
 }

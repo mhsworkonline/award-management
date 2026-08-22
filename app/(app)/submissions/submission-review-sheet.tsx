@@ -38,6 +38,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Field, FieldGrid } from "@/components/form/field";
+import { PercentInput } from "@/components/form/percent-input";
 import { QuickAddInstitution } from "@/components/form/quick-add-institution";
 import { QuickAddCourse } from "@/components/form/quick-add-course";
 import { QuickAddBoard } from "@/components/form/quick-add-board";
@@ -675,7 +676,7 @@ export function SubmissionReviewSheet({
                   <Input id="rr" disabled={!isPending} {...register("roll_no")} />
                 </Field>
                 <Field label="Percentage" htmlFor="rp" hint="Self-reported by applicant">
-                  <Input id="rp" type="number" min={0} max={100} step="0.01" className="tabular" disabled={!isPending} {...register("percentage")} />
+                  <PercentInput id="rp" disabled={!isPending} {...register("percentage")} />
                 </Field>
               </FieldGrid>
               <Field label="Grade" htmlFor="rg">

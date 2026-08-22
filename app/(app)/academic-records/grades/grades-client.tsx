@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { Field, FieldGrid } from "@/components/form/field";
+import { PercentInput } from "@/components/form/percent-input";
 import { fetchRosterForGrading, saveGrades, type RosterEntry } from "@/lib/actions/academic-records";
 import type { Lookups } from "@/lib/types";
 
@@ -324,12 +325,8 @@ export function GradesClient({
                         {e.first_name} {e.last_name}
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.01"
-                          className="tabular h-8 w-24"
+                        <PercentInput
+                          className="h-8 w-28"
                           value={e.percentage ?? ""}
                           onChange={(ev) => update(e.id, "percentage", ev.target.value)}
                         />

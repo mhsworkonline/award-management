@@ -17,7 +17,6 @@ export const APPLY_LABELS = {
   lastName: bl("Last name", "અટક"),
   email: bl("Email", "ઈમેલ"),
   contactNo: bl("Contact no", "સંપર્ક નંબર"),
-  contactNoHint: bl("Your own or a parent's mobile number", "તમારો અથવા વાલીનો મોબાઇલ નંબર"),
   institutionType: bl("Institution type", "સંસ્થાનો પ્રકાર"),
   board: bl("Board", "બોર્ડ"),
   medium: bl("Medium of instruction", "શિક્ષણનું માધ્યમ"),

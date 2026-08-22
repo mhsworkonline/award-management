@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, FieldGrid } from "@/components/form/field";
+import { PercentInput } from "@/components/form/percent-input";
 import { QuickAddInstitution } from "@/components/form/quick-add-institution";
 import { PageHeader } from "@/components/shell/page-header";
 import { checkDuplicateStudents, createStudentWithRecord, type DuplicateMatch } from "@/lib/actions/students";
@@ -680,14 +681,8 @@ export function NewStudentForm({
                 <Input id="roll_no" autoComplete="off" {...register("roll_no")} />
               </Field>
               <Field label="Percentage" htmlFor="percentage" error={errors.percentage?.message} hint="Optional">
-                <Input
+                <PercentInput
                   id="percentage"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min={0}
-                  max={100}
-                  className="tabular"
                   {...register("percentage", {
                     min: { value: 0, message: "0 to 100" },
                     max: { value: 100, message: "0 to 100" },

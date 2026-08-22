@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getMyPermissionMap } from "@/lib/supabase/server";
 import { getPendingSubmissionCount } from "@/lib/data/submissions";
 import { getPublicBranding } from "@/lib/actions/organization";
 import { Sidebar } from "@/components/shell/sidebar";
@@ -13,9 +13,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!user) redirect("/login");
 
-  const [pendingSubmissions, branding] = await Promise.all([
+  const [pendingSubmissions, branding, { isAdmin, modules }] = await Promise.all([
     getPendingSubmissionCount(),
     getPublicBranding(),
+    getMyPermissionMap(),
   ]);
 
   return (
@@ -25,6 +26,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         pendingSubmissions={pendingSubmissions}
         appName={branding.app_name}
         logoUrl={branding.logo_url}
+        isAdmin={isAdmin}
+        modules={modules}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar email={user.email ?? "Signed in"} />
