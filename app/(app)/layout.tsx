@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient, getMyPermissionMap } from "@/lib/supabase/server";
+import { getMyPermissionMap, requireUser } from "@/lib/supabase/server";
 import { getPendingSubmissionCount } from "@/lib/data/submissions";
 import { getPublicBranding } from "@/lib/actions/organization";
 import { Sidebar } from "@/components/shell/sidebar";
@@ -7,12 +7,14 @@ import { Topbar } from "@/components/shell/topbar";
 import { PermissionsProvider } from "@/components/providers/permissions-provider";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) redirect("/login");
+  // Routed through the cached requireUser() (rather than its own raw
+  // supabase.auth.getUser() call) so this and getMyPermissionMap() below
+  // share one real auth round trip instead of two. Middleware already
+  // redirects unauthenticated requests before this ever runs — this stays as
+  // a defensive fallback, now free.
+  const auth = await requireUser().catch(() => null);
+  if (!auth) redirect("/login");
+  const { user } = auth;
 
   const [pendingSubmissions, branding, { isAdmin, modules }] = await Promise.all([
     getPendingSubmissionCount(),

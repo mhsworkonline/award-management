@@ -32,20 +32,30 @@ export function createClient() {
   );
 }
 
-/** Throws if there is no session. Every mutation and data read goes through this. */
-export async function requireUser() {
+/** Throws if there is no session. Every mutation and data read goes through
+ *  this — and, critically, so does middleware's own check, the layout's,
+ *  every page's, getCurrentProfile()'s, requireAdmin()'s, etc. supabase.auth.
+ *  getUser() is a real network round trip to the Auth server (deliberately —
+ *  it revalidates against a possibly-tampered cookie, unlike getSession()),
+ *  so without memoizing this, a single page render was paying for that round
+ *  trip once per independent call site instead of once total. cache() makes
+ *  every call within one request's render reuse the first result. */
+export const requireUser = cache(async function requireUser() {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
   return { supabase, user, actor: user.email ?? user.id };
-}
+});
 
 /** The signed-in user's profile — role name resolved for display, is_admin
  *  for gating Users & Roles. Returns null if somehow unauthenticated; callers
- *  that need to enforce this use requireUser()/requireAdmin() instead. */
-export async function getCurrentProfile() {
+ *  that need to enforce this use requireUser()/requireAdmin() instead.
+ *  Cached for the same reason as requireUser() — Settings alone used to call
+ *  this three separate times (the page itself, plus once inside each of
+ *  listRolesWithPermissions/listUsers' requireAdmin() calls). */
+export const getCurrentProfile = cache(async function getCurrentProfile() {
   const { supabase, user } = await requireUser();
   const { data } = await supabase
     .from("am_profiles")
@@ -53,7 +63,7 @@ export async function getCurrentProfile() {
     .eq("id", user.id)
     .single();
   return data;
-}
+});
 
 /** Throws unless the signed-in user is an admin. Call at the top of every
  *  role/user-management server action — RLS enforces the same thing on the

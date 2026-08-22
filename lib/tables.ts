@@ -74,6 +74,7 @@ export const FN = {
   resolveApplicationForm: "am_resolve_application_form",
   registerAttachment: "am_register_submission_attachment",
   publicBranding: "am_public_branding",
+  getLookups: "am_get_lookups",
 } as const;
 
 /** Logical entity name → physical table, for the config CRUD surface. */
