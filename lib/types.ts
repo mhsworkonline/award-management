@@ -450,6 +450,11 @@ export type Profile = {
   is_admin: boolean;
   full_name: string | null;
   email: string | null;
+  /** True only for rows this app's admin actually created via the "New
+   *  user" flow — auth.users is shared with other apps on this Supabase
+   *  project, so most am_profiles rows aren't Award Management users at
+   *  all. listUsers() filters on this. */
+  provisioned: boolean;
   created_at: string;
   updated_at: string;
 };

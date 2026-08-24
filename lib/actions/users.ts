@@ -9,11 +9,16 @@ import { friendly, message } from "@/lib/actions/crud";
 import { createUserSchema, updateUserRoleSchema } from "@/lib/validators";
 import type { ActionResult, UserRow } from "@/lib/types";
 
+/** Only rows this app actually provisioned — auth.users (and so am_profiles,
+ *  via the auto-create trigger) is shared with every other app on this
+ *  Supabase project, so most rows here belong to accounts that have nothing
+ *  to do with Award Management. See 0027_profile_provisioned_flag.sql. */
 export async function listUsers(): Promise<UserRow[]> {
   const { supabase } = await requireAdmin();
   const { data } = await supabase
     .from(T.profiles)
     .select("*, roles:am_roles(id, name)")
+    .eq("provisioned", true)
     .order("created_at");
   return (data as UserRow[] | null) ?? [];
 }
@@ -49,6 +54,7 @@ export async function createUser(raw: unknown): Promise<ActionResult<{ id: strin
         role_id: parsed.data.role_id,
         is_admin: parsed.data.is_admin,
         full_name: parsed.data.full_name,
+        provisioned: true,
       })
       .eq("id", created.user.id)
       .select()
