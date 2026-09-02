@@ -30,7 +30,7 @@ import {
 } from "@/lib/attachments";
 import { MAX_SOURCE_IMAGE_BYTES, compressMarksheetImage, compressStudentPhoto } from "@/lib/image-compression";
 import { SALUTATIONS } from "@/lib/types";
-import { APPLY_LABELS as L } from "@/lib/apply-form-i18n";
+import { APPLY_CONFIRMATION, APPLY_LABELS as L } from "@/lib/apply-form-i18n";
 import type { PublicBranding, PublicFormOptions, ResolvedForm } from "@/lib/types";
 
 type Values = {
@@ -409,10 +409,8 @@ export function ApplyForm({
             <CheckCircle2 className="h-6 w-6" />
           </span>
           <p className="text-xl font-semibold">Application received</p>
-          <p className="max-w-sm text-[15px] text-muted-foreground">
-            Your school or college will review and confirm your details. Save this code — quote it
-            for any follow-up.
-          </p>
+          <p className="max-w-sm text-[15px] text-muted-foreground">{APPLY_CONFIRMATION.en}</p>
+          <p className="max-w-sm text-[13px] text-muted-foreground/75">{APPLY_CONFIRMATION.gu}</p>
 
           <button
             type="button"

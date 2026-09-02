@@ -36,3 +36,11 @@ export const APPLY_LABELS = {
   attachments: bl("Marksheets", "માર્કશીટ"),
   submit: bl("Submit application", "અરજી સબમિટ કરો"),
 } as const;
+
+/** Post-submit confirmation message — kept as separate en/gu strings (not
+ *  joined via bl()) since it's rendered as two stacked lines, not an inline
+ *  field caption. */
+export const APPLY_CONFIRMATION = {
+  en: "We will review and confirm your details. Save this code for any follow-up.",
+  gu: "અમે તમારી વિગતોની સમીક્ષા કરીને પુષ્ટિ કરીશું. કોઈપણ અનુવર્તી માટે આ કોડ સાચવો.",
+} as const;
