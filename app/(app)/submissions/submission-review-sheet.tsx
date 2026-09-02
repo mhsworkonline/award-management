@@ -66,6 +66,7 @@ type Values = {
   first_name: string;
   middle_name: string;
   last_name: string;
+  lanedaar_name: string;
   email: string;
   contact_no: string;
   institution_id: string;
@@ -325,6 +326,7 @@ export function SubmissionReviewSheet({
       first_name: submission.first_name,
       middle_name: submission.middle_name ?? "",
       last_name: submission.last_name,
+      lanedaar_name: submission.lanedaar_name ?? "",
       email: submission.email ?? "",
       contact_no: submission.contact_no ?? "",
       institution_id: submission.institution_id ?? "",
@@ -359,6 +361,7 @@ export function SubmissionReviewSheet({
       first_name: values.first_name,
       middle_name: values.middle_name || undefined,
       last_name: values.last_name,
+      lanedaar_name: values.lanedaar_name || undefined,
       email: values.email,
       contact_no: values.contact_no,
       institution_id: values.institution_id || null,
@@ -485,6 +488,10 @@ export function SubmissionReviewSheet({
                   <Input id="rl" disabled={!isPending} {...register("last_name", { required: "Required" })} />
                 </Field>
               </FieldGrid>
+
+              <Field label="Lanedaar name" htmlFor="rln">
+                <Input id="rln" disabled={!isPending} {...register("lanedaar_name")} />
+              </Field>
 
               <FieldGrid>
                 <Field label="Email" htmlFor="re" required error={errors.email?.message}>

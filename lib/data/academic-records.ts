@@ -6,7 +6,7 @@ import { REL, T } from "@/lib/tables";
 
 const SELECT = `
   *,
-  students:am_students!inner ( id, salutation, first_name, middle_name, last_name, email, contact_no, photo_path ),
+  students:am_students!inner ( id, salutation, first_name, middle_name, last_name, lanedaar_name, email, contact_no, photo_path ),
   institutions:am_institutions!inner ( id, name, type, board_id, medium_id ),
   academic_years:am_academic_years ( id, label ),
   standards:am_standards ( id, label ),

@@ -38,6 +38,7 @@ type Values = {
   first_name: string;
   middle_name: string;
   last_name: string;
+  lanedaar_name: string;
   email: string;
   contact_no: string;
   institution_id: string;
@@ -62,6 +63,7 @@ const EMPTY: Values = {
   first_name: "",
   middle_name: "",
   last_name: "",
+  lanedaar_name: "",
   email: "",
   contact_no: "",
   institution_id: "",
@@ -151,16 +153,16 @@ export function ApplyForm({
     : options.institutions.find((i) => i.id === institutionId);
 
   // Board is always 1:1 with an institution — safe to fill in silently.
-  // Medium isn't: an institution flagged "Both" teaches in more than one
-  // language, so which one *this* applicant is in still needs asking.
+  // Medium isn't shown that way: it's always presented as a dropdown once an
+  // institution is picked, pre-selected to whatever's on file for it (left
+  // blank when there's no single clear answer — "Both", unlisted, or
+  // "Other") so the applicant can see and correct it rather than have it
+  // silently assumed.
   const selectedMedium = options.mediums.find((m) => m.id === selectedInstitution?.medium_id);
   const mediumIsAmbiguous = selectedMedium?.name.trim().toLowerCase() === "both";
   const needsBoardInput =
     instType === "school" && (isOtherInstitution || (Boolean(institutionId) && !selectedInstitution?.board_id));
-  const needsMediumInput =
-    instType === "school" &&
-    Boolean(institutionId) &&
-    (isOtherInstitution || !selectedInstitution?.medium_id || mediumIsAmbiguous);
+  const showMediumField = instType === "school" && Boolean(institutionId);
 
   function handleInstTypeChange(v: "school" | "college") {
     setInstType(v);
@@ -174,10 +176,11 @@ export function ApplyForm({
     setValue("period_no", "");
   }
 
-  // Every listed institution already carries a board and medium on file —
-  // pick it and they fill in silently. They're only asked directly when
-  // there's no institution row to read from (Other), or the value on file
-  // isn't a single clear answer (see needsBoardInput/needsMediumInput above).
+  // Board carries over from the institution silently (asked directly only
+  // when there's no institution row to read from, or it was never set —
+  // see needsBoardInput above). Medium always shows as a dropdown (see
+  // showMediumField above) — pre-filled here when the institution has one
+  // single clear answer, left blank otherwise so the applicant must choose.
   function handleInstitutionChange(v: string) {
     setValue("institution_id", v, { shouldValidate: true });
     setValue("other_institution_name", "");
@@ -356,6 +359,7 @@ export function ApplyForm({
       first_name: values.first_name,
       middle_name: values.middle_name || undefined,
       last_name: values.last_name,
+      lanedaar_name: values.lanedaar_name,
       email: values.email,
       contact_no: values.contact_no,
       photo_path: photoPath,
@@ -537,6 +541,10 @@ export function ApplyForm({
             </Field>
           </FieldGrid>
 
+          <Field label={L.lanedaarName} htmlFor="lanedaar_name" required error={errors.lanedaar_name?.message}>
+            <Input id="lanedaar_name" autoComplete="off" {...register("lanedaar_name", { required: "Required" })} />
+          </Field>
+
           <FieldGrid cols={1} className="sm:grid-cols-2">
             <Field label={L.email} htmlFor="email" required error={errors.email?.message}>
               <Input id="email" type="email" inputMode="email" autoComplete="email" {...register("email", { required: "Required" })} />
@@ -669,9 +677,11 @@ export function ApplyForm({
             </>
           )}
 
-          {/* Same idea for medium — skipped when the institution teaches in
-              one clear language, asked when it's "Both", unlisted, or unset. */}
-          {needsMediumInput && (
+          {/* Medium — shown for every school selection, pre-filled with
+              what's on file for the institution (blank when that's not a
+              single clear answer) so it's always visible to confirm or
+              correct rather than silently assumed. */}
+          {showMediumField && (
             <FieldGrid>
               <Field label={L.medium} required error={errors.medium_id?.message}>
                 <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v, { shouldValidate: true })}>

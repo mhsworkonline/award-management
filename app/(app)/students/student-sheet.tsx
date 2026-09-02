@@ -40,6 +40,7 @@ type Values = {
   first_name: string;
   middle_name: string;
   last_name: string;
+  lanedaar_name: string;
   email: string;
   contact_no: string;
   remarks: string;
@@ -197,6 +198,7 @@ export function StudentSheet({
       first_name: record.students?.first_name ?? "",
       middle_name: record.students?.middle_name ?? "",
       last_name: record.students?.last_name ?? "",
+      lanedaar_name: record.students?.lanedaar_name ?? "",
       email: record.students?.email ?? "",
       contact_no: record.students?.contact_no ?? "",
       remarks: record.remarks ?? "",
@@ -254,6 +256,7 @@ export function StudentSheet({
       first_name: values.first_name,
       middle_name: values.middle_name || undefined,
       last_name: values.last_name,
+      lanedaar_name: values.lanedaar_name || undefined,
       email: values.email || undefined,
       contact_no: values.contact_no,
       photo_path: photoPath,
@@ -334,6 +337,10 @@ export function StudentSheet({
                 <Input id="last_name" autoComplete="off" {...register("last_name", { required: "Required" })} />
               </Field>
             </FieldGrid>
+
+            <Field label="Lanedaar name" htmlFor="lanedaar_name">
+              <Input id="lanedaar_name" autoComplete="off" {...register("lanedaar_name")} />
+            </Field>
 
             <FieldGrid>
               <Field label="Institution type" required>

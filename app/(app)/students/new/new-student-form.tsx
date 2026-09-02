@@ -36,6 +36,7 @@ type Values = {
   first_name: string;
   middle_name: string;
   last_name: string;
+  lanedaar_name: string;
   email: string;
   contact_no: string;
   remarks: string;
@@ -54,6 +55,7 @@ const EMPTY: Values = {
   first_name: "",
   middle_name: "",
   last_name: "",
+  lanedaar_name: "",
   email: "",
   contact_no: "",
   remarks: "",
@@ -310,6 +312,7 @@ export function NewStudentForm({
       first_name: values.first_name,
       middle_name: values.middle_name || null,
       last_name: values.last_name,
+      lanedaar_name: values.lanedaar_name || null,
       email: values.email || null,
       contact_no: values.contact_no,
       photo_path: photoPath,
@@ -419,6 +422,10 @@ export function NewStudentForm({
                 />
               </Field>
             </FieldGrid>
+
+            <Field label="Lanedaar name" htmlFor="lanedaar_name" hint="Family's registered head member">
+              <Input id="lanedaar_name" autoComplete="off" {...register("lanedaar_name")} />
+            </Field>
 
             <FieldGrid>
               <Field label="Email" htmlFor="email" error={errors.email?.message}>

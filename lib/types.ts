@@ -93,6 +93,7 @@ export type Person = {
   first_name: string;
   middle_name: string | null; // father's/husband's first name, by convention
   last_name: string;
+  lanedaar_name: string | null; // family's registered head member
   email: string | null;
   contact_no: string | null;
   photo_path: string | null;
@@ -113,6 +114,7 @@ export type Student = {
   first_name: string;
   middle_name: string | null; // father's first name, by convention
   last_name: string;
+  lanedaar_name: string | null; // family's registered head member
   email: string | null;
   contact_no: string | null;
   photo_path: string | null;
@@ -145,7 +147,7 @@ export type AcademicRecord = {
 export type AcademicRecordRow = AcademicRecord & {
   students?: Pick<
     Student,
-    "id" | "salutation" | "first_name" | "middle_name" | "last_name" | "email" | "contact_no" | "photo_path"
+    "id" | "salutation" | "first_name" | "middle_name" | "last_name" | "lanedaar_name" | "email" | "contact_no" | "photo_path"
   > | null;
   institutions?: Pick<Institution, "id" | "name" | "type"> | null;
   academic_years?: Pick<AcademicYear, "id" | "label"> | null;
@@ -262,6 +264,7 @@ export type PublicSubmission = {
   first_name: string;
   middle_name: string | null;
   last_name: string;
+  lanedaar_name: string | null;
   email: string | null;
   contact_no: string | null;
   institution_id: string | null;

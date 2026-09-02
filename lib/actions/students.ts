@@ -143,6 +143,7 @@ export async function createStudentWithRecord(input: {
   first_name: string;
   middle_name?: string | null;
   last_name: string;
+  lanedaar_name?: string | null;
   email?: string | null;
   contact_no?: string | null;
   photo_path: string;
@@ -162,6 +163,7 @@ export async function createStudentWithRecord(input: {
     first_name: input.first_name,
     middle_name: input.middle_name,
     last_name: input.last_name,
+    lanedaar_name: input.lanedaar_name,
     email: input.email,
     contact_no: input.contact_no,
     photo_path: input.photo_path,

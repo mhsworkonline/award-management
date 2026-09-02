@@ -101,7 +101,7 @@ export async function approveSubmission(id: string): Promise<ActionResult<{ stud
 
     const existing = await supabase
       .from(T.students)
-      .select("id, salutation, first_name, middle_name, last_name, email, photo_path")
+      .select("id, salutation, first_name, middle_name, last_name, lanedaar_name, email, photo_path")
       .eq("org_id", ORG_ID)
       .limit(50000);
 
@@ -118,6 +118,7 @@ export async function approveSubmission(id: string): Promise<ActionResult<{ stud
       if (!match?.email && sub.email) backfill.email = sub.email;
       if (!match?.salutation && sub.salutation) backfill.salutation = sub.salutation;
       if (!match?.photo_path && sub.photo_path) backfill.photo_path = sub.photo_path;
+      if (!match?.lanedaar_name && sub.lanedaar_name) backfill.lanedaar_name = sub.lanedaar_name;
       if (Object.keys(backfill).length > 0) {
         await supabase.from(T.students).update(backfill).eq("id", studentId);
       }
@@ -132,6 +133,7 @@ export async function approveSubmission(id: string): Promise<ActionResult<{ stud
           first_name: sub.first_name,
           middle_name: sub.middle_name,
           last_name: sub.last_name,
+          lanedaar_name: sub.lanedaar_name,
           email: sub.email,
           contact_no: sub.contact_no,
           photo_path: sub.photo_path,

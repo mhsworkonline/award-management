@@ -82,6 +82,7 @@ export async function submitPublicApplication(
       p_first_name: parsed.data.first_name,
       p_middle_name: parsed.data.middle_name,
       p_last_name: parsed.data.last_name,
+      p_lanedaar_name: parsed.data.lanedaar_name,
       p_email: parsed.data.email,
       p_contact_no: parsed.data.contact_no,
       p_institution_id: parsed.data.institution_id,
