@@ -159,7 +159,7 @@ export function InstitutionSheet({
                   <SelectValue placeholder="School or college" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="school">School (Std 1–12)</SelectItem>
+                  <SelectItem value="school">School (LKG–12)</SelectItem>
                   <SelectItem value="college">College (degree / diploma)</SelectItem>
                 </SelectContent>
               </Select>
