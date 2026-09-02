@@ -34,7 +34,7 @@ const sheetVariants = cva(
         right:
           "inset-y-0 right-0 flex h-full w-full flex-col border-l sm:max-w-xl data-[state=closed]:translate-x-full data-[state=open]:translate-x-0",
         center:
-          "inset-0 m-auto flex h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-xl flex-col overflow-hidden rounded-lg border",
+          "inset-0 m-auto flex max-h-[90vh] w-[calc(100%-2rem)] max-w-2xl flex-col overflow-hidden rounded-lg border",
       },
     },
     defaultVariants: { side: "right" },
@@ -68,7 +68,11 @@ const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 SheetHeader.displayName = "SheetHeader";
 
 const SheetBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("scrollbar-thin flex-1 overflow-y-auto px-6 py-5", className)} {...props} />
+  // min-h-0 overrides the flex item's default min-height:auto — without it,
+  // a flex-col parent sized by content (the "center" variant's max-height
+  // cap, rather than an explicit h-full) lets this item's own content push
+  // the parent taller instead of shrinking to fit and scrolling internally.
+  <div className={cn("scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 py-5", className)} {...props} />
 );
 SheetBody.displayName = "SheetBody";
 

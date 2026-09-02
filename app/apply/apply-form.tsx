@@ -408,18 +408,19 @@ export function ApplyForm({
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-success/12 text-success">
             <CheckCircle2 className="h-6 w-6" />
           </span>
-          <p className="text-xl font-semibold">Application received</p>
-          <p className="max-w-sm text-[15px] text-muted-foreground">{APPLY_CONFIRMATION.en}</p>
-          <p className="max-w-sm text-[13px] text-muted-foreground/75">{APPLY_CONFIRMATION.gu}</p>
 
           <button
             type="button"
             onClick={copyCode}
-            className="mt-2 flex items-center gap-2 rounded-lg border bg-muted/40 px-5 py-3 font-mono text-lg font-semibold tracking-wide transition-colors hover:bg-muted/70"
+            className="flex items-center gap-2.5 rounded-xl border-2 border-primary/30 bg-primary/[0.06] px-6 py-4 font-mono text-2xl font-bold tracking-wide text-primary transition-colors hover:bg-primary/10 sm:text-3xl"
           >
             {referenceCode}
-            <Copy className="h-4 w-4 text-muted-foreground" />
+            <Copy className="h-5 w-5 text-primary/70" />
           </button>
+
+          <p className="text-xl font-semibold">Application received</p>
+          <p className="max-w-sm text-[15px] text-muted-foreground">{APPLY_CONFIRMATION.en}</p>
+          <p className="max-w-sm text-[13px] text-muted-foreground/75">{APPLY_CONFIRMATION.gu}</p>
 
           <Button
             variant="outline"
