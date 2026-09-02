@@ -152,16 +152,14 @@ export function ApplyForm({
     ? undefined
     : options.institutions.find((i) => i.id === institutionId);
 
-  // Board is always 1:1 with an institution — safe to fill in silently.
-  // Medium isn't shown that way: it's always presented as a dropdown once an
-  // institution is picked, pre-selected to whatever's on file for it (left
-  // blank when there's no single clear answer — "Both", unlisted, or
-  // "Other") so the applicant can see and correct it rather than have it
+  // Board and medium are both always presented as a dropdown once a school
+  // is picked, pre-selected to whatever's on file for it (left blank when
+  // there's no single clear answer — unlisted, "Other", or for medium,
+  // "Both") so the applicant can see and correct it rather than have it
   // silently assumed.
   const selectedMedium = options.mediums.find((m) => m.id === selectedInstitution?.medium_id);
   const mediumIsAmbiguous = selectedMedium?.name.trim().toLowerCase() === "both";
-  const needsBoardInput =
-    instType === "school" && (isOtherInstitution || (Boolean(institutionId) && !selectedInstitution?.board_id));
+  const showBoardField = instType === "school" && Boolean(institutionId);
   const showMediumField = instType === "school" && Boolean(institutionId);
 
   function handleInstTypeChange(v: "school" | "college") {
@@ -176,9 +174,7 @@ export function ApplyForm({
     setValue("period_no", "");
   }
 
-  // Board carries over from the institution silently (asked directly only
-  // when there's no institution row to read from, or it was never set —
-  // see needsBoardInput above). Medium always shows as a dropdown (see
+  // Board and medium both always show as a dropdown (see showBoardField /
   // showMediumField above) — pre-filled here when the institution has one
   // single clear answer, left blank otherwise so the applicant must choose.
   function handleInstitutionChange(v: string) {
@@ -648,11 +644,11 @@ export function ApplyForm({
             </Field>
           )}
 
-          {/* Every listed institution already carries a board, filled in
-              silently on selection above — only asked directly when there's
-              no institution row to read it from (Other), or that row simply
-              never had one set. */}
-          {needsBoardInput && (
+          {/* Board — shown for every school selection, pre-filled with
+              what's on file for the institution (blank when unlisted or the
+              institution has none set) so it's always visible to confirm or
+              correct rather than silently assumed. */}
+          {showBoardField && (
             <>
               <Field label={L.board} required error={errors.board_id?.message}>
                 <Select value={watch("board_id")} onValueChange={(v) => setValue("board_id", v, { shouldValidate: true })}>
