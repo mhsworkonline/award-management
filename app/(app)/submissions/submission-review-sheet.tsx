@@ -424,8 +424,17 @@ export function SubmissionReviewSheet({
       <SheetContent side="center">
         {submission && (
           <form className="flex h-full flex-col">
-            <SheetHeader>
-              <SheetTitle className="flex flex-wrap items-center gap-2">
+            <SheetHeader className="relative">
+              <button
+                type="button"
+                onClick={copyCode}
+                className="absolute left-1/2 top-4 flex -translate-x-1/2 items-center gap-1.5 rounded-md border bg-muted/40 px-2.5 py-1 font-mono text-[12px] font-medium hover:bg-muted/70"
+                title="Copy reference code"
+              >
+                {submission.reference_code}
+                <Copy className="h-3 w-3 text-muted-foreground" />
+              </button>
+              <SheetTitle className="flex flex-wrap items-center gap-2 pr-8">
                 Review application
                 <Badge
                   variant={
@@ -438,15 +447,6 @@ export function SubmissionReviewSheet({
                 >
                   {submission.status}
                 </Badge>
-                <button
-                  type="button"
-                  onClick={copyCode}
-                  className="ml-auto flex items-center gap-1.5 rounded-md border bg-muted/40 px-2 py-1 font-mono text-[12px] font-medium hover:bg-muted/70"
-                  title="Copy reference code"
-                >
-                  {submission.reference_code}
-                  <Copy className="h-3 w-3 text-muted-foreground" />
-                </button>
               </SheetTitle>
               <SheetDescription>Submitted {formatDateTime(submission.created_at)}</SheetDescription>
             </SheetHeader>
