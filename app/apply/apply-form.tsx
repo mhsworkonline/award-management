@@ -511,6 +511,10 @@ export function ApplyForm({
             <input id="website" type="text" tabIndex={-1} autoComplete="off" {...register("website")} />
           </div>
 
+          <Field label={L.lanedaarName} htmlFor="lanedaar_name" required error={errors.lanedaar_name?.message}>
+            <Input id="lanedaar_name" autoComplete="off" {...register("lanedaar_name", { required: "Required" })} />
+          </Field>
+
           <FieldGrid cols={1} className={nameGridClass}>
             {fieldConfig.show_salutation && (
               <Field label={L.salutation} htmlFor="salutation">
@@ -540,10 +544,6 @@ export function ApplyForm({
               <Input id="last_name" autoComplete="family-name" {...register("last_name", { required: "Required" })} />
             </Field>
           </FieldGrid>
-
-          <Field label={L.lanedaarName} htmlFor="lanedaar_name" required error={errors.lanedaar_name?.message}>
-            <Input id="lanedaar_name" autoComplete="off" {...register("lanedaar_name", { required: "Required" })} />
-          </Field>
 
           <FieldGrid cols={1} className="sm:grid-cols-2">
             <Field label={L.email} htmlFor="email" required error={errors.email?.message}>
