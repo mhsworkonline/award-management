@@ -33,6 +33,8 @@ const sheetVariants = cva(
         left: "inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
         right:
           "inset-y-0 right-0 flex h-full w-full flex-col border-l sm:max-w-xl data-[state=closed]:translate-x-full data-[state=open]:translate-x-0",
+        center:
+          "inset-0 m-auto flex h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-xl flex-col overflow-hidden rounded-lg border",
       },
     },
     defaultVariants: { side: "right" },

@@ -421,7 +421,7 @@ export function SubmissionReviewSheet({
 
   return (
     <Sheet open={Boolean(submission)} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-xl">
+      <SheetContent side="center">
         {submission && (
           <form className="flex h-full flex-col">
             <SheetHeader>
