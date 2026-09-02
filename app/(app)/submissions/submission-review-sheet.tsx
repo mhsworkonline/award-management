@@ -503,18 +503,32 @@ export function SubmissionReviewSheet({
               </FieldGrid>
 
               <Field label="Photograph">
-                <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/30">
-                  {submission.photo_path ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
+                {submission.photo_path ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.open(
+                        createClient().storage.from(STUDENT_PHOTOS_BUCKET).getPublicUrl(submission.photo_path!).data
+                          .publicUrl,
+                        "_blank",
+                        "noopener,noreferrer",
+                      )
+                    }
+                    className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/30 transition-opacity hover:opacity-80"
+                    title="Open full size"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL */}
                     <img
                       src={createClient().storage.from(STUDENT_PHOTOS_BUCKET).getPublicUrl(submission.photo_path).data.publicUrl}
                       alt="Applicant's photograph"
                       className="h-full w-full object-cover"
                     />
-                  ) : (
+                  </button>
+                ) : (
+                  <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted/30">
                     <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                  )}
-                </span>
+                  </span>
+                )}
               </Field>
 
               {needsInstitutionResolve && (
@@ -730,15 +744,23 @@ export function SubmissionReviewSheet({
                           key={a.id}
                           className="flex items-center gap-2.5 rounded-md border bg-muted/30 px-3 py-2"
                         >
-                          {a.mime_type.startsWith("image/") ? (
-                            <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          ) : (
-                            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          )}
-                          <span className="min-w-0 flex-1 truncate text-[13px]">{a.file_name}</span>
-                          <span className="shrink-0 text-[11px] text-muted-foreground">
-                            {(a.size_bytes / 1024 / 1024).toFixed(1)}MB
-                          </span>
+                          <button
+                            type="button"
+                            disabled={attachmentLoading === a.id}
+                            onClick={() => void downloadAttachment(a.id)}
+                            className="flex min-w-0 flex-1 items-center gap-2.5 text-left hover:opacity-80"
+                            title={`Open ${a.file_name}`}
+                          >
+                            {a.mime_type.startsWith("image/") ? (
+                              <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            ) : (
+                              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            )}
+                            <span className="min-w-0 flex-1 truncate text-[13px] hover:underline">{a.file_name}</span>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                              {(a.size_bytes / 1024 / 1024).toFixed(1)}MB
+                            </span>
+                          </button>
                           <Button
                             type="button"
                             variant="ghost"
