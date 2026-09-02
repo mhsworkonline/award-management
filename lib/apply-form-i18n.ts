@@ -15,7 +15,7 @@ export const APPLY_LABELS = {
   firstName: bl("First name", "પ્રથમ નામ"),
   middleName: bl("Middle (father's)", "પિતાનું નામ"),
   lastName: bl("Last name", "અટક"),
-  lanedaarName: bl("Lanedaar Name", "લેણેદારનું નામ"),
+  lanedaarName: bl("Lanedaar Name", "લાણેદારનું નામ"),
   email: bl("Email", "ઈમેલ"),
   contactNo: bl("Contact no", "સંપર્ક નંબર"),
   institutionType: bl("Institution type", "સંસ્થાનો પ્રકાર"),
