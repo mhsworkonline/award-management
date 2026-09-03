@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, ExternalLink, FileEdit, MoreHorizontal, Plus, QrCode, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, FileEdit, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
-import { QrCodeDialog } from "@/components/form/qr-code-dialog";
 import { FormSheet } from "./form-sheet";
 import { deleteApplicationForm, toggleApplicationForm } from "@/lib/actions/application-forms";
 import { formatDateTime } from "@/lib/utils";
@@ -40,7 +39,6 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ApplicationFormRow | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<ApplicationFormRow | null>(null);
-  const [qrOpen, setQrOpen] = React.useState(false);
   const [origin, setOrigin] = React.useState("");
 
   React.useEffect(() => setOrigin(window.location.origin), []);
@@ -68,21 +66,16 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
         title="Forms"
         description="Public application links students can submit through — each one is independently trackable and can be turned off."
         actions={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setQrOpen(true)}>
-              <QrCode /> QR code
+          canCreate && (
+            <Button
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus /> New form
             </Button>
-            {canCreate && (
-              <Button
-                onClick={() => {
-                  setEditing(null);
-                  setOpen(true);
-                }}
-              >
-                <Plus /> New form
-              </Button>
-            )}
-          </div>
+          )
         }
       />
 
@@ -204,14 +197,6 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
         }}
         form={editing}
         lookups={lookups}
-      />
-
-      <QrCodeDialog
-        open={qrOpen}
-        onOpenChange={setQrOpen}
-        url={`${origin}/apply`}
-        title="Student application form"
-        description="Scan to open the public application form — resolves to whichever form is currently enabled, so this stays valid across academic years."
       />
 
       <ConfirmDialog
