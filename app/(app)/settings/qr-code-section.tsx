@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Copy, Download, Loader2, QrCode as QrCodeIcon } from "lucide-react";
+import { Copy, Download, Loader2, MessageCircle, QrCode as QrCodeIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,16 @@ export function QrCodeSection() {
     a.click();
   }
 
+  // WhatsApp's click-to-chat endpoint — prefills a message containing the
+  // plain link (not the QR image) so it lands as real, tappable text.
+  // Sending the QR image itself doesn't work for this: WhatsApp never scans
+  // images automatically, tapping one just opens the photo viewer. A QR
+  // code only does anything in front of a camera — this is the equivalent
+  // for a chat.
+  function shareViaWhatsApp() {
+    window.open(`https://wa.me/?text=${encodeURIComponent(generatedFor)}`, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -113,9 +123,20 @@ export function QrCodeSection() {
               <span className="max-w-xs truncate">{generatedFor}</span>
               <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             </button>
-            <Button type="button" variant="outline" size="sm" onClick={downloadPng}>
-              <Download /> Download PNG
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={downloadPng}>
+                <Download /> Download PNG
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={shareViaWhatsApp}>
+                <MessageCircle /> Share via WhatsApp
+              </Button>
+            </div>
+            <p className="max-w-sm text-center text-[12px] text-muted-foreground">
+              For chat apps, use <span className="font-medium text-foreground">Share via WhatsApp</span> (or Copy
+              link above) instead of the image — WhatsApp doesn&apos;t scan QR images on tap, so sharing the PNG
+              directly won&apos;t open anything for the recipient. The QR code itself is for printing and scanning
+              with a camera.
+            </p>
           </div>
         )}
       </CardContent>
