@@ -4,11 +4,8 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowDown,
-  ArrowUp,
   ChevronLeft,
   ChevronRight,
-  ChevronsUpDown,
   FileSpreadsheet,
   GraduationCap,
   MoreHorizontal,
@@ -46,6 +43,7 @@ import {
   TableWrap,
 } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
+import { LocalSortHeader } from "@/components/data-table/local-sort-header";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { InstitutionSheet } from "./institution-sheet";
 import { InstitutionBulkEditSheet } from "./institution-bulk-edit-sheet";
@@ -283,25 +281,25 @@ export function InstitutionsClient({
                   />
                 </TableHead>
               )}
-              <SortableHead sortKey="name" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[26%]">
+              <LocalSortHeader sortKey="name" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[26%]">
                 Institution
-              </SortableHead>
-              <SortableHead sortKey="type" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[10%]">
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="type" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[10%]">
                 Type
-              </SortableHead>
-              <SortableHead sortKey="board" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[13%]">
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="board" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[13%]">
                 Board
-              </SortableHead>
-              <SortableHead sortKey="medium" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[11%]">
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="medium" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[11%]">
                 Medium
-              </SortableHead>
-              <SortableHead sortKey="city" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[13%]">
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="city" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[13%]">
                 City
-              </SortableHead>
-              <SortableHead sortKey="contact" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[15%]">
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="contact" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[15%]">
                 Contact
-              </SortableHead>
-              <SortableHead
+              </LocalSortHeader>
+              <LocalSortHeader
                 sortKey="students"
                 current={sortKey}
                 dir={sortDir}
@@ -310,7 +308,7 @@ export function InstitutionsClient({
                 align="right"
               >
                 Students
-              </SortableHead>
+              </LocalSortHeader>
               <TableHead className="w-[4%] text-right">
                 <span className="sr-only">Actions</span>
               </TableHead>
@@ -529,48 +527,5 @@ export function InstitutionsClient({
         }}
       />
     </>
-  );
-}
-
-function SortableHead({
-  sortKey,
-  current,
-  dir,
-  onSort,
-  children,
-  className,
-  align,
-}: {
-  sortKey: SortKey;
-  current: SortKey;
-  dir: SortDir;
-  onSort: (key: SortKey) => void;
-  children: React.ReactNode;
-  className?: string;
-  align?: "right";
-}) {
-  const active = current === sortKey;
-  return (
-    <TableHead className={className}>
-      <button
-        type="button"
-        onClick={() => onSort(sortKey)}
-        className={cn(
-          "-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          active && "text-foreground",
-          align === "right" && "flex-row-reverse",
-        )}
-        aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
-      >
-        {children}
-        {!active ? (
-          <ChevronsUpDown className="h-3 w-3 opacity-40" />
-        ) : dir === "asc" ? (
-          <ArrowUp className="h-3 w-3" />
-        ) : (
-          <ArrowDown className="h-3 w-3" />
-        )}
-      </button>
-    </TableHead>
   );
 }

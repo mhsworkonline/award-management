@@ -9,12 +9,12 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
   TableWrap,
 } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
+import { LocalSortHeader } from "@/components/data-table/local-sort-header";
 import { SubmissionReviewSheet } from "./submission-review-sheet";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { placementLabel } from "@/lib/placement";
@@ -34,6 +34,20 @@ function placementLabelFor(s: PublicSubmissionRow) {
   return "—";
 }
 
+type SortKey = "code" | "applicant" | "institution" | "placement" | "rollNo" | "percentage" | "submitted" | "status";
+type SortDir = "asc" | "desc";
+
+const SORT_VALUE: Record<SortKey, (s: PublicSubmissionRow) => string | number> = {
+  code: (s) => s.reference_code.toLowerCase(),
+  applicant: (s) => studentName(s).toLowerCase(),
+  institution: (s) => institutionLabel(s).toLowerCase(),
+  placement: (s) => placementLabelFor(s).toLowerCase(),
+  rollNo: (s) => (s.roll_no ?? "").toLowerCase(),
+  percentage: (s) => s.percentage ?? -1,
+  submitted: (s) => new Date(s.created_at).getTime(),
+  status: (s) => s.status,
+};
+
 export function SubmissionsClient({
   submissions,
   lookups,
@@ -46,6 +60,8 @@ export function SubmissionsClient({
   const { setParams } = useQueryParams();
   const [active, setActive] = React.useState<PublicSubmissionRow | null>(null);
   const [term, setTerm] = React.useState("");
+  const [sortKey, setSortKey] = React.useState<SortKey>("submitted");
+  const [sortDir, setSortDir] = React.useState<SortDir>("desc");
 
   const filtered = React.useMemo(() => {
     const q = term.trim().toLowerCase();
@@ -56,6 +72,23 @@ export function SubmissionsClient({
         .some((v) => v!.toLowerCase().includes(q)),
     );
   }, [submissions, term]);
+
+  const sorted = React.useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const av = SORT_VALUE[sortKey](a);
+      const bv = SORT_VALUE[sortKey](b);
+      const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filtered, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
 
   return (
     <>
@@ -90,18 +123,46 @@ export function SubmissionsClient({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[10%]">Code</TableHead>
-              <TableHead className="w-[18%]">Applicant</TableHead>
-              <TableHead className="w-[20%]">Institution</TableHead>
-              <TableHead className="w-[13%]">Std / Course</TableHead>
-              <TableHead className="w-[9%]">Roll no</TableHead>
-              <TableHead className="w-[8%]">%</TableHead>
-              <TableHead className="w-[13%]">Submitted</TableHead>
-              <TableHead className="w-[9%]">Status</TableHead>
+              <LocalSortHeader sortKey="code" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[10%]">
+                Code
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="applicant" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[18%]">
+                Applicant
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="institution" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[20%]">
+                Institution
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="placement" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[13%]">
+                Std / Course
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="rollNo" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[9%]">
+                Roll no
+              </LocalSortHeader>
+              <LocalSortHeader
+                sortKey="percentage"
+                current={sortKey}
+                dir={sortDir}
+                onSort={toggleSort}
+                className="w-[8%]"
+              >
+                %
+              </LocalSortHeader>
+              <LocalSortHeader
+                sortKey="submitted"
+                current={sortKey}
+                dir={sortDir}
+                onSort={toggleSort}
+                className="w-[13%]"
+              >
+                Submitted
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[9%]">
+                Status
+              </LocalSortHeader>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {sorted.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={8} className="border-b-0">
                   <EmptyState
@@ -112,7 +173,7 @@ export function SubmissionsClient({
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((s) => (
+              sorted.map((s) => (
                 <TableRow key={s.id} className="cursor-pointer" onClick={() => setActive(s)}>
                   <TableCell className="font-mono text-[12px] text-muted-foreground">{s.reference_code}</TableCell>
                   <TableCell>
