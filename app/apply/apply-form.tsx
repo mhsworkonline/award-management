@@ -29,7 +29,7 @@ import {
   MAX_PHOTO_BYTES,
 } from "@/lib/attachments";
 import { MAX_SOURCE_IMAGE_BYTES, compressMarksheetImage, compressStudentPhoto } from "@/lib/image-compression";
-import { uppercaseRegister } from "@/lib/utils";
+import { cn, uppercaseRegister } from "@/lib/utils";
 import { SALUTATIONS } from "@/lib/types";
 import { APPLY_CONFIRMATION, APPLY_LABELS as L } from "@/lib/apply-form-i18n";
 import type { PublicBranding, PublicFormOptions, ResolvedForm } from "@/lib/types";
@@ -555,7 +555,12 @@ export function ApplyForm({
           </div>
 
           <Field label={L.lanedaarName} htmlFor="lanedaar_name" required error={errors.lanedaar_name?.message}>
-            <Input id="lanedaar_name" autoComplete="off" {...uppercaseRegister(register("lanedaar_name", { required: "Required" }))} />
+            <Input
+              id="lanedaar_name"
+              autoComplete="off"
+              aria-invalid={Boolean(errors.lanedaar_name)}
+              {...uppercaseRegister(register("lanedaar_name", { required: "Required" }))}
+            />
           </Field>
 
           <FieldGrid cols={1} className={nameGridClass}>
@@ -576,7 +581,12 @@ export function ApplyForm({
               </Field>
             )}
             <Field label={L.firstName} htmlFor="first_name" required error={errors.first_name?.message}>
-              <Input id="first_name" autoComplete="given-name" {...uppercaseRegister(register("first_name", { required: "Required" }))} />
+              <Input
+                id="first_name"
+                autoComplete="given-name"
+                aria-invalid={Boolean(errors.first_name)}
+                {...uppercaseRegister(register("first_name", { required: "Required" }))}
+              />
             </Field>
             {fieldConfig.show_middle_name && (
               <Field
@@ -584,19 +594,35 @@ export function ApplyForm({
                 htmlFor="middle_name"
                 required
                 error={errors.middle_name?.message}
-                hint="Father's/husband's first name"
               >
-                <Input id="middle_name" autoComplete="off" {...uppercaseRegister(register("middle_name", { required: "Required" }))} />
+                <Input
+                  id="middle_name"
+                  autoComplete="off"
+                  aria-invalid={Boolean(errors.middle_name)}
+                  {...uppercaseRegister(register("middle_name", { required: "Required" }))}
+                />
               </Field>
             )}
             <Field label={L.lastName} htmlFor="last_name" required error={errors.last_name?.message}>
-              <Input id="last_name" autoComplete="family-name" {...uppercaseRegister(register("last_name", { required: "Required" }))} />
+              <Input
+                id="last_name"
+                autoComplete="family-name"
+                aria-invalid={Boolean(errors.last_name)}
+                {...uppercaseRegister(register("last_name", { required: "Required" }))}
+              />
             </Field>
           </FieldGrid>
 
           <FieldGrid cols={1} className="sm:grid-cols-2">
             <Field label={L.email} htmlFor="email" required error={errors.email?.message}>
-              <Input id="email" type="email" inputMode="email" autoComplete="email" {...register("email", { required: "Required" })} />
+              <Input
+                id="email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                aria-invalid={Boolean(errors.email)}
+                {...register("email", { required: "Required" })}
+              />
             </Field>
             <Field label={L.contactNo} htmlFor="contact_no" required error={errors.contact_no?.message}>
               <Input
@@ -604,12 +630,18 @@ export function ApplyForm({
                 type="tel"
                 inputMode="tel"
                 autoComplete="tel"
+                aria-invalid={Boolean(errors.contact_no)}
                 {...register("contact_no", { required: "Required" })}
               />
             </Field>
           </FieldGrid>
 
-          <div className="rounded-xl border-2 border-primary/30 bg-primary/[0.05] p-4">
+          <div
+            className={cn(
+              "rounded-xl border-2 bg-primary/[0.05] p-4",
+              photoError ? "border-destructive/60 bg-destructive/[0.04]" : "border-primary/30",
+            )}
+          >
             <Field
               label={L.photograph}
               required
@@ -675,7 +707,7 @@ export function ApplyForm({
               error={errors.institution_id?.message}
             >
               <Select value={institutionId} onValueChange={handleInstitutionChange}>
-                <SelectTrigger>
+                <SelectTrigger aria-invalid={Boolean(errors.institution_id)}>
                   <SelectValue placeholder={`Select your ${isCollege ? "college" : "school"}`} />
                 </SelectTrigger>
                 <SelectContent>
@@ -692,7 +724,12 @@ export function ApplyForm({
 
           {isOtherInstitution && (
             <Field label={otherInstitutionNameLabel} htmlFor="other_institution_name" required error={errors.other_institution_name?.message}>
-              <Input id="other_institution_name" autoComplete="off" {...uppercaseRegister(register("other_institution_name"))} />
+              <Input
+                id="other_institution_name"
+                autoComplete="off"
+                aria-invalid={Boolean(errors.other_institution_name)}
+                {...uppercaseRegister(register("other_institution_name"))}
+              />
             </Field>
           )}
 
@@ -704,7 +741,7 @@ export function ApplyForm({
             <>
               <Field label={L.board} required error={errors.board_id?.message}>
                 <Select value={watch("board_id")} onValueChange={(v) => setValue("board_id", v, { shouldValidate: true })}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-invalid={Boolean(errors.board_id)}>
                     <SelectValue placeholder="Select board" />
                   </SelectTrigger>
                   <SelectContent>
@@ -719,7 +756,12 @@ export function ApplyForm({
               </Field>
               {watch("board_id") === OTHER && (
                 <Field label={L.otherBoardName} htmlFor="other_board_name" required error={errors.other_board_name?.message}>
-                  <Input id="other_board_name" autoComplete="off" {...uppercaseRegister(register("other_board_name"))} />
+                  <Input
+                    id="other_board_name"
+                    autoComplete="off"
+                    aria-invalid={Boolean(errors.other_board_name)}
+                    {...uppercaseRegister(register("other_board_name"))}
+                  />
                 </Field>
               )}
             </>
@@ -733,7 +775,7 @@ export function ApplyForm({
             <FieldGrid>
               <Field label={L.medium} required error={errors.medium_id?.message}>
                 <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v, { shouldValidate: true })}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-invalid={Boolean(errors.medium_id)}>
                     <SelectValue placeholder="Select medium" />
                   </SelectTrigger>
                   <SelectContent>
@@ -753,7 +795,7 @@ export function ApplyForm({
               <FieldGrid>
                 <Field label={L.course} required error={errors.standard_id?.message}>
                   <Select value={courseId} onValueChange={(v) => setValue("course_id", v)}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-invalid={Boolean(errors.standard_id)}>
                       <SelectValue placeholder="Select course" />
                     </SelectTrigger>
                     <SelectContent>
@@ -774,7 +816,7 @@ export function ApplyForm({
                     hint={course ? `1 to ${course.total_periods}` : "Select a course first"}
                   >
                     <Select value={watch("period_no")} onValueChange={(v) => setValue("period_no", v)} disabled={!course}>
-                      <SelectTrigger>
+                      <SelectTrigger aria-invalid={Boolean(errors.period_no)}>
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
@@ -792,7 +834,12 @@ export function ApplyForm({
               {isOtherCourse && (
                 <>
                   <Field label="Your course name" htmlFor="other_course_name" required error={errors.other_course_name?.message}>
-                    <Input id="other_course_name" autoComplete="off" {...uppercaseRegister(register("other_course_name"))} />
+                    <Input
+                      id="other_course_name"
+                      autoComplete="off"
+                      aria-invalid={Boolean(errors.other_course_name)}
+                      {...uppercaseRegister(register("other_course_name"))}
+                    />
                   </Field>
                   <FieldGrid>
                     <Field label="Is it year-based or semester-based?" required error={errors.other_course_structure?.message}>
@@ -800,7 +847,7 @@ export function ApplyForm({
                         value={watch("other_course_structure")}
                         onValueChange={(v) => setValue("other_course_structure", v as "year" | "semester")}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger aria-invalid={Boolean(errors.other_course_structure)}>
                           <SelectValue placeholder="Select" />
                         </SelectTrigger>
                         <SelectContent>
@@ -822,6 +869,7 @@ export function ApplyForm({
                         min={1}
                         max={12}
                         className="tabular"
+                        aria-invalid={Boolean(errors.period_no)}
                         {...register("period_no", {
                           required: "Enter a value from 1 to 12",
                           min: { value: 1, message: "Enter a value from 1 to 12" },
@@ -837,7 +885,7 @@ export function ApplyForm({
             instType === "school" && (
               <Field label={L.standard} required error={errors.standard_id?.message} hint={!institutionId ? "Select your institution first" : undefined}>
                 <Select value={watch("standard_id")} onValueChange={(v) => setValue("standard_id", v)} disabled={!institutionId}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-invalid={Boolean(errors.standard_id)}>
                     <SelectValue placeholder="Select standard" />
                   </SelectTrigger>
                   <SelectContent>
@@ -862,6 +910,7 @@ export function ApplyForm({
             <Field label={L.percentage} htmlFor="percentage" error={errors.percentage?.message}>
               <PercentInput
                 id="percentage"
+                aria-invalid={Boolean(errors.percentage)}
                 {...register("percentage", {
                   min: { value: 0, message: "Enter a value from 0 to 100" },
                   max: { value: 100, message: "Enter a value from 0 to 100" },
@@ -880,7 +929,12 @@ export function ApplyForm({
           )}
 
           {fieldConfig.show_attachments && (
-            <div className="rounded-xl border-2 border-primary/30 bg-primary/[0.05] p-4">
+            <div
+              className={cn(
+                "rounded-xl border-2 bg-primary/[0.05] p-4",
+                fileError ? "border-destructive/60 bg-destructive/[0.04]" : "border-primary/30",
+              )}
+            >
               <Field
                 label={L.attachments}
                 required

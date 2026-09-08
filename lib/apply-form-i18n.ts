@@ -17,8 +17,7 @@ export const APPLY_LABELS = {
   // ran long enough to wrap to two lines in the 4-column desktop row while
   // its neighbors stayed on one, throwing the whole row out of alignment
   // (only visible on wider viewports — mobile stacks to one column, so it
-  // never showed up there). The "father's/husband's" clarification moved to
-  // the field's hint instead of living in the label itself.
+  // never showed up there).
   middleName: bl("Middle name", "મધ્યમ નામ"),
   lastName: bl("Last name", "અટક"),
   lanedaarName: bl("Lanedaar Name", "લાણેદારનું નામ"),
