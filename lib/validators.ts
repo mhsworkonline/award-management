@@ -156,7 +156,14 @@ export const academicRecordSchema = z
     institution_id: uuid,
     standard_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     course_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
-    period_no: z.coerce.number().int().min(1).max(12).nullable().optional().transform((v) => v ?? null),
+    period_no: z.coerce
+      .number()
+      .int()
+      .min(1, "Enter a value from 1 to 12")
+      .max(12, "Enter a value from 1 to 12")
+      .nullable()
+      .optional()
+      .transform((v) => v ?? null),
     roll_no: optionalText,
     percentage: percentageSchema.nullable().optional().transform((v) => v ?? null),
     grade: optionalText,
@@ -233,7 +240,14 @@ export const publicApplicationSchema = z
     course_id: z.string().nullable().optional().transform((v) => v || null),
     other_course_name: optionalText,
     other_course_structure: z.union([courseStructure, z.literal("")]).nullable().optional().transform((v) => (v ? v : null)),
-    period_no: z.coerce.number().int().min(1).max(12).nullable().optional().transform((v) => v ?? null),
+    period_no: z.coerce
+      .number()
+      .int()
+      .min(1, "Enter a value from 1 to 12")
+      .max(12, "Enter a value from 1 to 12")
+      .nullable()
+      .optional()
+      .transform((v) => v ?? null),
     roll_no: optionalText,
     // Schools/colleges report results differently — some give percentage, some
     // grade, some both. Neither is individually required; superRefine below
@@ -327,7 +341,14 @@ export const submissionEditSchema = z
     course_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     other_course_name: optionalText,
     other_course_structure: z.union([courseStructure, z.literal("")]).nullable().optional().transform((v) => (v ? v : null)),
-    period_no: z.coerce.number().int().min(1).max(12).nullable().optional().transform((v) => v ?? null),
+    period_no: z.coerce
+      .number()
+      .int()
+      .min(1, "Enter a value from 1 to 12")
+      .max(12, "Enter a value from 1 to 12")
+      .nullable()
+      .optional()
+      .transform((v) => v ?? null),
     roll_no: optionalText,
     // At least one of percentage/grade is required — see superRefine below.
     percentage: optionalPercentage,

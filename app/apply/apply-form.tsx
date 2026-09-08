@@ -88,6 +88,35 @@ const MAX_FILE_BYTES = MAX_ATTACHMENT_BYTES;
 const MAX_FILES = MAX_ATTACHMENTS;
 const ALLOWED_TYPES = ALLOWED_ATTACHMENT_TYPES;
 
+/** Human labels for server-side validation errors — keyed by the same field
+ *  names publicApplicationSchema uses, so a failure there can be reported
+ *  as "<this exact field>: <message>" instead of a generic dump of every
+ *  message with no indication of which field it belongs to. */
+const FIELD_LABELS: Partial<Record<keyof Values | "photo_path", string>> = {
+  salutation: "Salutation",
+  first_name: "First name",
+  middle_name: "Middle name",
+  last_name: "Last name",
+  lanedaar_name: "Lanedaar Name",
+  email: "Email",
+  contact_no: "Contact no",
+  photo_path: "Photograph",
+  institution_id: "School/College",
+  other_institution_name: "Institution name",
+  board_id: "Board",
+  other_board_name: "Board name",
+  medium_id: "Medium of instruction",
+  standard_id: "Standard",
+  course_id: "Course",
+  other_course_name: "Course name",
+  other_course_structure: "Year or semester",
+  period_no: "Year/Semester",
+  roll_no: "Roll / GR no",
+  percentage: "Percentage",
+  grade: "Grade",
+  notes: "Notes",
+};
+
 /** Single-column, mobile-first by construction — every field stacks full-width
  *  regardless of viewport; the two-up rows only appear from `sm:` up. */
 export function ApplyForm({
@@ -136,6 +165,7 @@ export function ApplyForm({
     handleSubmit,
     watch,
     setValue,
+    setError,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ defaultValues: EMPTY });
@@ -382,9 +412,22 @@ export function ApplyForm({
     });
 
     if (!result.ok) {
-      setServerError(
-        result.fieldErrors ? Object.values(result.fieldErrors).flat().join(" · ") : result.error,
-      );
+      if (result.fieldErrors) {
+        // Attach each error to its actual field — the Field it belongs to
+        // already renders `error={errors.<name>?.message}`, so this shows
+        // up right next to the field itself, not just in the banner below.
+        const named = Object.entries(result.fieldErrors).map(([field, messages]) => {
+          const label = FIELD_LABELS[field as keyof typeof FIELD_LABELS] ?? field;
+          const msg = messages[0];
+          if (field in EMPTY) {
+            setError(field as keyof Values, { type: "server", message: msg });
+          }
+          return `${label}: ${msg}`;
+        });
+        setServerError(named.join(" · "));
+      } else {
+        setServerError(result.error);
+      }
       return;
     }
 
@@ -779,7 +822,11 @@ export function ApplyForm({
                         min={1}
                         max={12}
                         className="tabular"
-                        {...register("period_no")}
+                        {...register("period_no", {
+                          required: "Enter a value from 1 to 12",
+                          min: { value: 1, message: "Enter a value from 1 to 12" },
+                          max: { value: 12, message: "Enter a value from 1 to 12" },
+                        })}
                       />
                     </Field>
                   </FieldGrid>
