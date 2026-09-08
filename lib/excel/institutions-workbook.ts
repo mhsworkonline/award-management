@@ -1,14 +1,19 @@
-import ExcelJS from "exceljs";
-import { autoWidth, styleHeader } from "./workbook";
-
 export type InstitutionImportType = "school" | "college";
 
-/** Schools carry Board/Medium columns; colleges don't (neither concept
- *  applies to them — see institutionSchema's college transform). Name is
- *  the only required column for either; everything else is optional. */
+/** Column order matters: Name, Medium and Board are the mandatory columns
+ *  for a school and must come first — everything after them is optional.
+ *  Colleges have neither Medium nor Board (see institutionSchema's college
+ *  transform), so Name is their only mandatory column. */
 const COLUMNS: Record<InstitutionImportType, readonly string[]> = {
-  school: ["School Name", "Board", "Medium", "City", "Contact Person", "Contact No"],
+  school: ["School Name", "Medium", "Board", "City", "Contact Person", "Contact No"],
   college: ["College Name", "City", "Contact Person", "Contact No"],
+};
+
+/** Which columns are mandatory, matched against the canonical field names
+ *  HEADER_ALIASES resolves to below. */
+export const REQUIRED_FIELDS: Record<InstitutionImportType, readonly string[]> = {
+  school: ["name", "medium", "board"],
+  college: ["name"],
 };
 
 /** Column header → canonical field, tolerant of the header spellings
@@ -51,41 +56,33 @@ export function canonicalInstitutionHeader(raw: unknown) {
   return HEADER_ALIASES[key] ?? null;
 }
 
-/** Blank sheet with the exact headers the parser understands — one per
- *  institution type, since the columns genuinely differ (no Board/Medium
- *  for colleges). */
-export async function buildInstitutionImportTemplate(type: InstitutionImportType) {
-  const wb = new ExcelJS.Workbook();
-  wb.creator = "Award Management";
-  const sheetName = type === "school" ? "Schools" : "Colleges";
-  const sheet = wb.addWorksheet(sheetName);
+const SAMPLE_ROWS: Record<InstitutionImportType, readonly (readonly string[])[]> = {
+  school: [
+    ["Shree Vidyalaya High School", "Gujarati", "State Board", "Bhuj", "Rakesh Shah", "9876543210"],
+    ["St. Xavier's School", "English", "CBSE", "Bhuj", "", ""],
+  ],
+  college: [
+    ["Government Engineering College", "Bhuj", "Priya Mehta", "9812345678"],
+    ["KSKV Kutch University", "Bhuj", "", ""],
+  ],
+};
 
-  sheet.addRow([...COLUMNS[type]]);
-  if (type === "school") {
-    sheet.addRow(["Shree Vidyalaya High School", "State Board", "Gujarati", "Bhuj", "Rakesh Shah", "9876543210"]);
-    sheet.addRow(["St. Xavier's School", "CBSE", "English", "Bhuj", "", ""]);
-  } else {
-    sheet.addRow(["Government Engineering College", "Bhuj", "Priya Mehta", "9812345678"]);
-    sheet.addRow(["KSKV Kutch University", "Bhuj", "", ""]);
-  }
+/** A field containing a comma, quote or newline needs wrapping in quotes
+ *  (with internal quotes doubled) to stay valid CSV — plain values pass
+ *  through untouched. */
+function csvField(value: string) {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
+  return value;
+}
 
-  styleHeader(sheet);
-  autoWidth(sheet);
+function toCsv(rows: readonly (readonly string[])[]) {
+  return rows.map((row) => row.map(csvField).join(",")).join("\r\n") + "\r\n";
+}
 
-  const notes = wb.addWorksheet("Instructions");
-  notes.addRow(["How to use this template"]);
-  notes.addRow([]);
-  notes.addRow(["1.", `Fill one row per ${type} on the ${sheetName} sheet.`]);
-  notes.addRow(["2.", `${type === "school" ? "School" : "College"} Name is the only required column.`]);
-  if (type === "school") {
-    notes.addRow(["3.", "Board and Medium must match those configured under Settings, if provided."]);
-    notes.addRow(["4.", "Everything else — City, Contact Person, Contact No — is optional."]);
-  } else {
-    notes.addRow(["3.", "City, Contact Person and Contact No are all optional."]);
-  }
-  notes.getRow(1).font = { bold: true, size: 12 };
-  notes.getColumn(1).width = 5;
-  notes.getColumn(2).width = 90;
-
-  return wb;
+/** Sample CSV — header row plus a couple of filled-in examples — for the
+ *  operator to download, fill in, and re-upload. Deliberately just data, no
+ *  separate instructions sheet (CSV doesn't have multiple sheets); the
+ *  wizard's own hint text next to the upload field carries the guidance. */
+export function buildInstitutionImportCsv(type: InstitutionImportType) {
+  return toCsv([COLUMNS[type], ...SAMPLE_ROWS[type]]);
 }

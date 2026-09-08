@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
+import { Readable } from "node:stream";
 import { requireUser } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
-import { canonicalInstitutionHeader, type InstitutionImportType } from "@/lib/excel/institutions-workbook";
+import { canonicalInstitutionHeader, REQUIRED_FIELDS, type InstitutionImportType } from "@/lib/excel/institutions-workbook";
 import { cellText } from "@/lib/excel/workbook";
 import { normalizeName } from "@/lib/utils";
 import { T } from "@/lib/tables";
@@ -23,9 +24,17 @@ export type ParsedInstitutionRow = {
   duplicate: { source: "database" | "file"; detail: string } | null;
 };
 
+const FIELD_LABEL: Record<string, string> = {
+  name: "Name",
+  medium: "Medium",
+  board: "Board",
+};
+
 /** Parse + validate only, same shape as /api/students/import — nothing is
  *  written here, the operator reviews and confirms, which calls
- *  commitInstitutionImport(). */
+ *  commitInstitutionImport(). Accepts the CSV the template downloads as
+ *  (preferred), and .xlsx too — someone re-saving the CSV in Excel is a
+ *  common enough thing to do that rejecting it outright isn't worth it. */
 export async function POST(request: Request) {
   try {
     const { supabase } = await requireUser();
@@ -45,7 +54,12 @@ export async function POST(request: Request) {
     }
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await file.arrayBuffer());
+    const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
+    if (isCsv) {
+      await workbook.csv.read(Readable.from(Buffer.from(await file.arrayBuffer())));
+    } else {
+      await workbook.xlsx.load(await file.arrayBuffer());
+    }
 
     const wantedSheet = type === "school" ? "schools" : "colleges";
     const sheet =
@@ -59,10 +73,12 @@ export async function POST(request: Request) {
       if (field) columns.set(col, field);
     });
 
-    if (!new Set(columns.values()).has("name")) {
+    const found = new Set(columns.values());
+    const missingRequired = REQUIRED_FIELDS[type].filter((f) => !found.has(f));
+    if (missingRequired.length > 0) {
       return NextResponse.json(
         {
-          error: `Could not find a ${type === "school" ? "School" : "College"} Name column. Use the downloadable template, or rename your column to match.`,
+          error: `Could not find the required ${missingRequired.map((f) => FIELD_LABEL[f]).join(", ")} column${missingRequired.length === 1 ? "" : "s"}. Use the downloadable template, or rename your column${missingRequired.length === 1 ? "" : "s"} to match.`,
         },
         { status: 400 },
       );
@@ -108,7 +124,9 @@ export async function POST(request: Request) {
 
       if (type === "school") {
         const boardRaw = values.board;
-        if (boardRaw) {
+        if (!boardRaw) {
+          errors.push("Board is required");
+        } else {
           const match = boardByName.get(normalizeName(boardRaw));
           if (match) {
             board_id = match.id;
@@ -119,7 +137,9 @@ export async function POST(request: Request) {
         }
 
         const mediumRaw = values.medium;
-        if (mediumRaw) {
+        if (!mediumRaw) {
+          errors.push("Medium is required");
+        } else {
           const match = mediumByName.get(normalizeName(mediumRaw));
           if (match) {
             medium_id = match.id;

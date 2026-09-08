@@ -214,14 +214,18 @@ export function InstitutionImportWizard({ type }: { type: InstitutionImportType 
           </CardHeader>
           <CardContent className="space-y-5">
             <Field
-              label="Excel file"
+              label="Import file"
               required
-              hint={`Accepts .xlsx up to 8 MB, max 5,000 rows. Only ${Label} Name is required — everything else is optional. Column names are matched loosely.`}
+              hint={
+                type === "school"
+                  ? `Accepts .csv or .xlsx, up to 8 MB, max 5,000 rows. ${Label} Name, Medium and Board are required — everything else is optional. Column names are matched loosely.`
+                  : `Accepts .csv or .xlsx, up to 8 MB, max 5,000 rows. Only ${Label} Name is required — everything else is optional. Column names are matched loosely.`
+              }
             >
               <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed border-input px-6 py-9 text-center transition-colors hover:border-primary/50 hover:bg-accent/40">
                 <FileSpreadsheet className="h-6 w-6 text-muted-foreground" />
                 <span className="text-[13.5px] font-medium">
-                  {file ? file.name : "Click to choose an .xlsx file"}
+                  {file ? file.name : "Click to choose a .csv or .xlsx file"}
                 </span>
                 {file && (
                   <span className="text-[12px] text-muted-foreground">
@@ -230,7 +234,7 @@ export function InstitutionImportWizard({ type }: { type: InstitutionImportType 
                 )}
                 <input
                   type="file"
-                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   className="sr-only"
                   onChange={(e) => {
                     setFile(e.target.files?.[0] ?? null);
@@ -300,8 +304,8 @@ export function InstitutionImportWizard({ type }: { type: InstitutionImportType 
                   </TableHead>
                   <TableHead className="w-14">Row</TableHead>
                   <TableHead>{Label} name</TableHead>
-                  {type === "school" && <TableHead>Board</TableHead>}
                   {type === "school" && <TableHead>Medium</TableHead>}
+                  {type === "school" && <TableHead>Board</TableHead>}
                   <TableHead>City</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Status</TableHead>
@@ -326,10 +330,10 @@ export function InstitutionImportWizard({ type }: { type: InstitutionImportType 
                       <TableCell className="tabular text-muted-foreground">{row.rowNumber}</TableCell>
                       <TableCell className="font-medium">{row.name || "—"}</TableCell>
                       {type === "school" && (
-                        <TableCell className="text-muted-foreground">{row.board_label || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{row.medium_label || "—"}</TableCell>
                       )}
                       {type === "school" && (
-                        <TableCell className="text-muted-foreground">{row.medium_label || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{row.board_label || "—"}</TableCell>
                       )}
                       <TableCell className="text-muted-foreground">{row.city || "—"}</TableCell>
                       <TableCell className="text-muted-foreground">

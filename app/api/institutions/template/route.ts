@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/supabase/server";
-import { buildInstitutionImportTemplate, type InstitutionImportType } from "@/lib/excel/institutions-workbook";
+import { buildInstitutionImportCsv, type InstitutionImportType } from "@/lib/excel/institutions-workbook";
 
 export async function GET(request: Request) {
   try {
@@ -9,13 +9,12 @@ export async function GET(request: Request) {
       return new Response("type must be 'school' or 'college'", { status: 400 });
     }
 
-    const wb = await buildInstitutionImportTemplate(type as InstitutionImportType);
-    const buffer = await wb.xlsx.writeBuffer();
+    const csv = buildInstitutionImportCsv(type as InstitutionImportType);
 
-    return new Response(buffer, {
+    return new Response(csv, {
       headers: {
-        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": `attachment; filename="${type}-import-template.xlsx"`,
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${type}-import-template.csv"`,
         "Cache-Control": "no-store",
       },
     });
