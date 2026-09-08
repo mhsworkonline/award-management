@@ -45,8 +45,13 @@ export const APPLY_LABELS = {
   // "Current year" read as if it wanted a calendar year (e.g. 2026) rather
   // than "which year of the course" — renamed to make the actual question
   // unambiguous.
-  yearOfStudy: bl("Year of study", "અભ્યાસનું વર્ષ"),
-  semesterOfStudy: bl("Semester of study", "અભ્યાસનું સેમેસ્ટર"),
+  // "Year of study" still got typed as a calendar year (2026) in practice.
+  // Kept the label itself short (a longer one wraps and misaligns in this
+  // FieldGrid, same issue Middle Name had) — the disambiguation now lives
+  // in the field's hint + placeholder instead, right where the number
+  // actually gets typed.
+  yearOfStudy: bl("Which year?", "કયું વર્ષ?"),
+  semesterOfStudy: bl("Which semester?", "કયું સેમેસ્ટર?"),
   rollNo: bl("Roll / GR no", "રોલ / જીઆર નંબર"),
   percentage: bl("Percentage", "ટકાવારી"),
   grade: bl("Grade", "ગ્રેડ"),

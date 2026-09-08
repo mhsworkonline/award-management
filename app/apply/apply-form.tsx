@@ -861,6 +861,11 @@ export function ApplyForm({
                       htmlFor="other_period_no"
                       required
                       error={errors.period_no?.message}
+                      hint={
+                        watch("other_course_structure") === "semester"
+                          ? "1 for 1st semester, 2 for 2nd… — not the calendar year"
+                          : "1 for 1st year, 2 for 2nd… — not the calendar year"
+                      }
                     >
                       <Input
                         id="other_period_no"
@@ -868,6 +873,7 @@ export function ApplyForm({
                         inputMode="numeric"
                         min={1}
                         max={12}
+                        placeholder="e.g. 1, 2, 3…"
                         className="tabular"
                         aria-invalid={Boolean(errors.period_no)}
                         {...register("period_no", {
