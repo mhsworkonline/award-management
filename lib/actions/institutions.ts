@@ -75,3 +75,70 @@ export async function commitInstitutionImport(input: {
     return { ok: false, error: message(e) };
   }
 }
+
+/** Fields a bulk edit can set across every selected institution in one
+ *  update — a key's absence means "leave this field alone" on every row,
+ *  never "clear it". Name is deliberately not here: bulk-editing it would
+ *  mean giving several different institutions the same name, which is
+ *  never what's wanted (and am_institutions enforces unique names anyway). */
+export type InstitutionBulkPatch = {
+  type?: "school" | "college";
+  board_id?: string | null;
+  medium_id?: string | null;
+  city?: string | null;
+  contact_person?: string | null;
+  contact_no?: string | null;
+};
+
+/** Applies the same patch to every institution in `ids` in one statement —
+ *  "change a value on one row, apply it to every selected row" from the
+ *  Institutions list. Board/medium only make sense for schools; the caller
+ *  (institutions-client.tsx) already splits a mixed selection into a
+ *  school-ids call (patch includes board/medium) and a non-school-ids call
+ *  (patch without them) whenever type itself isn't also being bulk-set —
+ *  this action stays a plain, generic "update these rows" primitive and
+ *  isn't responsible for that split. If `type` is being set to "college",
+ *  board_id/medium_id are forced to null regardless of what's in the
+ *  patch — same invariant the single-institution edit form already
+ *  enforces (colleges never carry a board or medium). */
+export async function bulkUpdateInstitutions(
+  ids: string[],
+  patch: InstitutionBulkPatch,
+): Promise<ActionResult<{ updated: number }>> {
+  if (ids.length === 0) return { ok: false, error: "No institutions selected" };
+  if (Object.keys(patch).length === 0) return { ok: false, error: "Fill in at least one field to apply" };
+
+  try {
+    const { supabase, actor } = await requireUser();
+
+    const values: Record<string, unknown> = { ...patch };
+    if (values.type === "college") {
+      values.board_id = null;
+      values.medium_id = null;
+    }
+
+    const { data, error } = await supabase
+      .from(T.institutions)
+      .update(values)
+      .eq("org_id", ORG_ID)
+      .in("id", ids)
+      .select("id");
+
+    if (error) return { ok: false, error: friendly(error.message) };
+
+    await writeAudit(supabase, {
+      entity: "institutions",
+      entityId: null,
+      action: "update",
+      actor,
+      diff: { bulk_edit: { ids, patch: values } },
+    });
+
+    revalidatePath("/institutions");
+    revalidatePath("/students");
+    revalidatePath("/dashboard");
+    return { ok: true, data: { updated: data?.length ?? ids.length } };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
