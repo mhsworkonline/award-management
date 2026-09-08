@@ -29,6 +29,7 @@ import {
   MAX_PHOTO_BYTES,
 } from "@/lib/attachments";
 import { MAX_SOURCE_IMAGE_BYTES, compressMarksheetImage, compressStudentPhoto } from "@/lib/image-compression";
+import { uppercaseRegister } from "@/lib/utils";
 import { SALUTATIONS } from "@/lib/types";
 import { APPLY_CONFIRMATION, APPLY_LABELS as L } from "@/lib/apply-form-i18n";
 import type { PublicBranding, PublicFormOptions, ResolvedForm } from "@/lib/types";
@@ -146,6 +147,10 @@ export function ApplyForm({
   const isOtherInstitution = institutionId === OTHER;
   const isOtherCourse = courseId === OTHER;
   const course = options.courses.find((c) => c.id === courseId);
+  // "Institution" reads generic — say School or College specifically, once
+  // the applicant has picked which one they mean.
+  const institutionLabel = isCollege ? L.college : L.school;
+  const otherInstitutionNameLabel = isCollege ? L.otherCollegeName : L.otherSchoolName;
 
   const availableInstitutions = options.institutions.filter((i) => Boolean(instType) && i.type === instType);
   const selectedInstitution = isOtherInstitution
@@ -507,7 +512,7 @@ export function ApplyForm({
           </div>
 
           <Field label={L.lanedaarName} htmlFor="lanedaar_name" required error={errors.lanedaar_name?.message}>
-            <Input id="lanedaar_name" autoComplete="off" {...register("lanedaar_name", { required: "Required" })} />
+            <Input id="lanedaar_name" autoComplete="off" {...uppercaseRegister(register("lanedaar_name", { required: "Required" }))} />
           </Field>
 
           <FieldGrid cols={1} className={nameGridClass}>
@@ -528,15 +533,21 @@ export function ApplyForm({
               </Field>
             )}
             <Field label={L.firstName} htmlFor="first_name" required error={errors.first_name?.message}>
-              <Input id="first_name" autoComplete="given-name" {...register("first_name", { required: "Required" })} />
+              <Input id="first_name" autoComplete="given-name" {...uppercaseRegister(register("first_name", { required: "Required" }))} />
             </Field>
             {fieldConfig.show_middle_name && (
-              <Field label={L.middleName} htmlFor="middle_name" required error={errors.middle_name?.message}>
-                <Input id="middle_name" autoComplete="off" {...register("middle_name", { required: "Required" })} />
+              <Field
+                label={L.middleName}
+                htmlFor="middle_name"
+                required
+                error={errors.middle_name?.message}
+                hint="Father's/husband's first name"
+              >
+                <Input id="middle_name" autoComplete="off" {...uppercaseRegister(register("middle_name", { required: "Required" }))} />
               </Field>
             )}
             <Field label={L.lastName} htmlFor="last_name" required error={errors.last_name?.message}>
-              <Input id="last_name" autoComplete="family-name" {...register("last_name", { required: "Required" })} />
+              <Input id="last_name" autoComplete="family-name" {...uppercaseRegister(register("last_name", { required: "Required" }))} />
             </Field>
           </FieldGrid>
 
@@ -609,7 +620,7 @@ export function ApplyForm({
                 <SelectValue placeholder="Select" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="school">School (LKG–12)</SelectItem>
+                <SelectItem value="school">School (Play Group–12)</SelectItem>
                 <SelectItem value="college">College (degree / diploma)</SelectItem>
               </SelectContent>
             </Select>
@@ -617,13 +628,13 @@ export function ApplyForm({
 
           {instType && (
             <Field
-              label={L.institution}
+              label={institutionLabel}
               required
               error={errors.institution_id?.message}
             >
               <Select value={institutionId} onValueChange={handleInstitutionChange}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select your institution" />
+                  <SelectValue placeholder={`Select your ${isCollege ? "college" : "school"}`} />
                 </SelectTrigger>
                 <SelectContent>
                   {availableInstitutions.map((i) => (
@@ -638,8 +649,8 @@ export function ApplyForm({
           )}
 
           {isOtherInstitution && (
-            <Field label={L.otherInstitutionName} htmlFor="other_institution_name" required error={errors.other_institution_name?.message}>
-              <Input id="other_institution_name" autoComplete="off" {...register("other_institution_name")} />
+            <Field label={otherInstitutionNameLabel} htmlFor="other_institution_name" required error={errors.other_institution_name?.message}>
+              <Input id="other_institution_name" autoComplete="off" {...uppercaseRegister(register("other_institution_name"))} />
             </Field>
           )}
 
@@ -666,7 +677,7 @@ export function ApplyForm({
               </Field>
               {watch("board_id") === OTHER && (
                 <Field label={L.otherBoardName} htmlFor="other_board_name" required error={errors.other_board_name?.message}>
-                  <Input id="other_board_name" autoComplete="off" {...register("other_board_name")} />
+                  <Input id="other_board_name" autoComplete="off" {...uppercaseRegister(register("other_board_name"))} />
                 </Field>
               )}
             </>
@@ -739,7 +750,7 @@ export function ApplyForm({
               {isOtherCourse && (
                 <>
                   <Field label="Your course name" htmlFor="other_course_name" required error={errors.other_course_name?.message}>
-                    <Input id="other_course_name" autoComplete="off" {...register("other_course_name")} />
+                    <Input id="other_course_name" autoComplete="off" {...uppercaseRegister(register("other_course_name"))} />
                   </Field>
                   <FieldGrid>
                     <Field label="Is it year-based or semester-based?" required error={errors.other_course_structure?.message}>
@@ -797,7 +808,7 @@ export function ApplyForm({
 
           {fieldConfig.show_roll_no && (
             <Field label={L.rollNo} htmlFor="roll_no">
-              <Input id="roll_no" autoComplete="off" {...register("roll_no")} />
+              <Input id="roll_no" autoComplete="off" {...uppercaseRegister(register("roll_no"))} />
             </Field>
           )}
 
@@ -806,7 +817,7 @@ export function ApplyForm({
               <PercentInput id="percentage" {...register("percentage")} />
             </Field>
             <Field label={L.grade} htmlFor="grade">
-              <Input id="grade" autoComplete="off" {...register("grade")} />
+              <Input id="grade" autoComplete="off" {...uppercaseRegister(register("grade"))} />
             </Field>
           </FieldGrid>
 

@@ -529,7 +529,7 @@ export function NewStudentForm({
                     <SelectValue placeholder="School or college" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="school">School (LKG–12)</SelectItem>
+                    <SelectItem value="school">School (Play Group–12)</SelectItem>
                     <SelectItem value="college">College (degree / diploma)</SelectItem>
                   </SelectContent>
                 </Select>
@@ -662,7 +662,7 @@ export function NewStudentForm({
               <Field
                 label="Standard"
                 required
-                hint={!institutionId ? "Select an institution first" : "Includes LKG and UKG"}
+                hint={!institutionId ? "Select an institution first" : "Includes Play Group through UKG"}
               >
                 <Select
                   value={watch("standard_id")}

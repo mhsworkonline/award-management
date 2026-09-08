@@ -13,7 +13,13 @@ function bl(en: string, gu: string) {
 export const APPLY_LABELS = {
   salutation: bl("Salutation", "સંબોધન"),
   firstName: bl("First name", "પ્રથમ નામ"),
-  middleName: bl("Middle (father's)", "પિતાનું નામ"),
+  // Kept short deliberately — the bilingual "Middle (father's) / પિતાનું નામ"
+  // ran long enough to wrap to two lines in the 4-column desktop row while
+  // its neighbors stayed on one, throwing the whole row out of alignment
+  // (only visible on wider viewports — mobile stacks to one column, so it
+  // never showed up there). The "father's/husband's" clarification moved to
+  // the field's hint instead of living in the label itself.
+  middleName: bl("Middle name", "મધ્યમ નામ"),
   lastName: bl("Last name", "અટક"),
   lanedaarName: bl("Lanedaar Name", "લાણેદારનું નામ"),
   email: bl("Email", "ઈમેલ"),
@@ -21,8 +27,13 @@ export const APPLY_LABELS = {
   institutionType: bl("Institution type", "સંસ્થાનો પ્રકાર"),
   board: bl("Board", "બોર્ડ"),
   medium: bl("Medium of instruction", "શિક્ષણનું માધ્યમ"),
-  institution: bl("Institution", "સંસ્થા"),
-  otherInstitutionName: bl("Your institution's name", "તમારી સંસ્થાનું નામ"),
+  // School/college replace the old generic "Institution" label — the
+  // component picks whichever matches instType, so these two are always
+  // used as a pair, never institution/otherInstitutionName directly.
+  school: bl("School", "શાળા"),
+  college: bl("College", "કૉલેજ"),
+  otherSchoolName: bl("Your school's name", "તમારી શાળાનું નામ"),
+  otherCollegeName: bl("Your college's name", "તમારી કૉલેજનું નામ"),
   otherBoardName: bl("Your board's name", "તમારા બોર્ડનું નામ"),
   course: bl("Course", "અભ્યાસક્રમ"),
   standard: bl("Standard", "ધોરણ"),

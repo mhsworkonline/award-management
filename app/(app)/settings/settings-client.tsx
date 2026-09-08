@@ -112,7 +112,7 @@ export function SettingsClient({
           <ConfigSection
             table="standards"
             title="Standards"
-            description="School classes from LKG and UKG through Std 12. The level drives sorting; the label is what appears on screen."
+            description="School classes from Play Group through Std 12. The level drives sorting; the label is what appears on screen — add more pre-primary or higher grades here any time."
             addLabel="Add standard"
             rows={lookups.standards as unknown as Record<string, unknown>[]}
             columns={[
@@ -125,11 +125,11 @@ export function SettingsClient({
                 label: "Level",
                 type: "number",
                 required: true,
-                min: -2,
+                min: -10,
                 max: 12,
-                hint: "Use -2 for LKG, -1 for UKG, 1-12 for Std 1-12",
+                hint: "1-12 for Std 1-12. Before Std 1, use negative numbers — lower is earlier — e.g. -4 Play Group, -3 Nursery, -2 LKG, -1 UKG.",
               },
-              { name: "label", label: "Label", type: "text", required: true, hint: "e.g. LKG, UKG, Std 10" },
+              { name: "label", label: "Label", type: "text", required: true, hint: "e.g. Play Group, Nursery, LKG, UKG, Std 10" },
             ]}
           />
         </TabsContent>

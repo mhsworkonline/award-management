@@ -81,10 +81,15 @@ export const courseSchema = z.object({
   total_periods: z.coerce.number().int().min(1).max(12),
 });
 
-/** level: -2 = LKG, -1 = UKG, 1..12 = Std 1..12 (0 skipped, reads oddly sorted). */
+/** level: negative = before Std 1 (lower = earlier — today: -4 Play Group,
+ *  -3 Nursery, -2 LKG, -1 UKG), 1..12 = Std 1..12 (0 skipped, reads oddly
+ *  sorted). Range left wide (matches the am_standards_level_check DB
+ *  constraint — see 0029_am_preprimary_standards.sql) so more pre-primary
+ *  tiers can be added later purely through this same Standards screen, no
+ *  code change needed. */
 export const standardSchema = z.object({
   id: uuid.optional(),
-  level: z.coerce.number().int().min(-2).max(12).refine((v) => v !== 0, "0 is not a valid level"),
+  level: z.coerce.number().int().min(-10).max(12).refine((v) => v !== 0, "0 is not a valid level"),
   label: z.string().trim().min(1, "Label is required").max(50),
 });
 

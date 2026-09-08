@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { UseFormRegisterReturn } from "react-hook-form";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -41,6 +42,21 @@ export function titleCase(value: string) {
  *  it (or pass a row without the column) get the old unprefixed behavior. */
 export function studentName(s: { salutation?: string | null; first_name: string; last_name: string }) {
   return [s.salutation, s.first_name, s.last_name].filter(Boolean).join(" ").trim();
+}
+
+/** Wraps a react-hook-form `register(...)` result so the field's actual
+ *  value — not just how it's displayed — is forced to uppercase as the user
+ *  types or pastes. Mutates the input's DOM value before react-hook-form's
+ *  own onChange reads it, so what ends up in form state (and eventually the
+ *  database) is genuinely uppercase, not just styled that way. */
+export function uppercaseRegister(reg: UseFormRegisterReturn): UseFormRegisterReturn {
+  return {
+    ...reg,
+    onChange: (e: Parameters<UseFormRegisterReturn["onChange"]>[0]) => {
+      (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase();
+      return reg.onChange(e);
+    },
+  };
 }
 
 /** Full legal name including the father's name, for certificates/official use. */
