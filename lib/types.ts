@@ -468,6 +468,19 @@ export type ProfileWithRole = Profile & { roles?: Pick<Role, "id" | "name"> | nu
  *  joined server-side. */
 export type UserRow = ProfileWithRole;
 
+/** A self-hosted short link — see am_resolve_short_link / app/s/[code].
+ *  Generic on purpose: created_by records who made it, nothing about what
+ *  it's for. */
+export type ShortLink = {
+  id: string;
+  org_id: string;
+  code: string;
+  target_url: string;
+  click_count: number;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> };

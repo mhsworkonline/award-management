@@ -6,10 +6,10 @@ import { PageHeader } from "@/components/shell/page-header";
 import { ConfigSection } from "./config-section";
 import { BrandingSection } from "./branding-section";
 import { QrCodeSection } from "./qr-code-section";
-import { TinyUrlSection } from "./tinyurl-section";
+import { ShortLinkSection } from "./short-link-section";
 import { AccessSection } from "./access-section";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Lookups, Organization, RoleWithPermissions, UserRow } from "@/lib/types";
+import type { Lookups, Organization, RoleWithPermissions, ShortLink, UserRow } from "@/lib/types";
 
 export function SettingsClient({
   lookups,
@@ -18,6 +18,7 @@ export function SettingsClient({
   roles,
   users,
   currentUserId,
+  shortLinks,
 }: {
   lookups: Lookups;
   organization: Organization | null;
@@ -25,6 +26,7 @@ export function SettingsClient({
   roles: RoleWithPermissions[];
   users: UserRow[];
   currentUserId: string;
+  shortLinks: ShortLink[];
 }) {
   return (
     <>
@@ -215,8 +217,8 @@ export function SettingsClient({
         </TabsContent>
 
         <TabsContent value="qr">
-          <div className="grid gap-5 lg:grid-cols-2">
-            <TinyUrlSection />
+          <div className="grid items-start gap-5 lg:grid-cols-2">
+            <ShortLinkSection links={shortLinks} />
             <QrCodeSection />
           </div>
         </TabsContent>

@@ -31,6 +31,7 @@ export const T = {
   publicSubmissions: "am_public_submissions",
   applicationForms: "am_application_forms",
   submissionAttachments: "am_submission_attachments",
+  shortLinks: "am_short_links",
 } as const;
 
 /** Storage bucket for public-application attachments — private, anon can only
@@ -75,6 +76,7 @@ export const FN = {
   registerAttachment: "am_register_submission_attachment",
   publicBranding: "am_public_branding",
   getLookups: "am_get_lookups",
+  resolveShortLink: "am_resolve_short_link",
 } as const;
 
 /** Logical entity name → physical table, for the config CRUD surface. */
