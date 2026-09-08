@@ -646,7 +646,6 @@ export function ApplyForm({
                 inputMode="numeric"
                 autoComplete="tel"
                 maxLength={10}
-                placeholder={M.contactNoPlaceholder}
                 aria-invalid={Boolean(errors.contact_no)}
                 {...digitsOnlyRegister(
                   register("contact_no", {
