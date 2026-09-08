@@ -98,8 +98,12 @@ export const APPLY_MESSAGES = {
     "Percentage or Grade — at least one is required",
     "ટકાવારી અથવા ગ્રેડ — ઓછામાં ઓછું એક જરૂરી",
   ),
+  // File type is already stated right in the upload button below
+  // ("Add a marksheet (image, PDF or DOCX)") — repeating it here was
+  // redundant, so this only covers what that button doesn't: how many and
+  // how big.
   attachmentsHint: (maxFiles: number) =>
-    bl(`Up to ${maxFiles} files. PDF/DOCX up to 5MB each.`, `વધુમાં વધુ ${maxFiles} ફાઇલો. PDF/DOCX દરેક ૫MB સુધી.`),
+    bl(`Up to ${maxFiles} files, 5MB each.`, `વધુમાં વધુ ${maxFiles} ફાઇલો, દરેક ૫MB સુધી.`),
   maxFiles: (n: number) => bl(`Maximum ${n} files`, `વધુમાં વધુ ${n} ફાઇલો`),
   fileTypeNotAllowed: (name: string) =>
     bl(`${name}: only images, PDF or DOCX are allowed`, `${name}: ફક્ત ઈમેજ, PDF અથવા DOCX માન્ય છે`),
