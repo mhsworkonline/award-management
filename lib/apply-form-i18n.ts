@@ -38,6 +38,15 @@ export const APPLY_LABELS = {
   standard: bl("Standard", "ધોરણ"),
   year: bl("Year", "વર્ષ"),
   semester: bl("Semester", "સેમેસ્ટર"),
+  // Only shown for a custom ("Other — not listed") course, so these are a
+  // separate trio from course/year/semester above, not reuses of them.
+  yourCourseName: bl("Your course name", "તમારા અભ્યાસક્રમનું નામ"),
+  yearOrSemesterQuestion: bl("Is it year-based or semester-based?", "શું તે વર્ષ-આધારિત છે કે સેમેસ્ટર-આધારિત?"),
+  // "Current year" read as if it wanted a calendar year (e.g. 2026) rather
+  // than "which year of the course" — renamed to make the actual question
+  // unambiguous.
+  yearOfStudy: bl("Year of study", "અભ્યાસનું વર્ષ"),
+  semesterOfStudy: bl("Semester of study", "અભ્યાસનું સેમેસ્ટર"),
   rollNo: bl("Roll / GR no", "રોલ / જીઆર નંબર"),
   percentage: bl("Percentage", "ટકાવારી"),
   grade: bl("Grade", "ગ્રેડ"),

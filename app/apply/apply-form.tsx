@@ -833,7 +833,7 @@ export function ApplyForm({
 
               {isOtherCourse && (
                 <>
-                  <Field label="Your course name" htmlFor="other_course_name" required error={errors.other_course_name?.message}>
+                  <Field label={L.yourCourseName} htmlFor="other_course_name" required error={errors.other_course_name?.message}>
                     <Input
                       id="other_course_name"
                       autoComplete="off"
@@ -842,7 +842,7 @@ export function ApplyForm({
                     />
                   </Field>
                   <FieldGrid>
-                    <Field label="Is it year-based or semester-based?" required error={errors.other_course_structure?.message}>
+                    <Field label={L.yearOrSemesterQuestion} required error={errors.other_course_structure?.message}>
                       <Select
                         value={watch("other_course_structure")}
                         onValueChange={(v) => setValue("other_course_structure", v as "year" | "semester")}
@@ -857,7 +857,7 @@ export function ApplyForm({
                       </Select>
                     </Field>
                     <Field
-                      label={watch("other_course_structure") === "semester" ? "Current semester" : "Current year"}
+                      label={watch("other_course_structure") === "semester" ? L.semesterOfStudy : L.yearOfStudy}
                       htmlFor="other_period_no"
                       required
                       error={errors.period_no?.message}
