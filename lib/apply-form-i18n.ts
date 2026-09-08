@@ -41,7 +41,7 @@ export const APPLY_LABELS = {
   // Only shown for a custom ("Other — not listed") course, so these are a
   // separate trio from course/year/semester above, not reuses of them.
   yourCourseName: bl("Your course name", "તમારા અભ્યાસક્રમનું નામ"),
-  yearOrSemesterQuestion: bl("Is it year-based or semester-based?", "શું તે વર્ષ-આધારિત છે કે સેમેસ્ટર-આધારિત?"),
+  yearOrSemesterQuestion: bl("Year or semester?", "વર્ષ કે સેમેસ્ટર?"),
   // "Current year" read as if it wanted a calendar year (e.g. 2026) rather
   // than "which year of the course" — renamed to make the actual question
   // unambiguous.
