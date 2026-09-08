@@ -76,6 +76,11 @@ export const APPLY_CONFIRMATION = {
  *  mistake hinges on understanding, just interaction labels. */
 export const APPLY_MESSAGES = {
   required: bl("Required", "જરૂરી"),
+  fieldsToCorrect: (n: number) =>
+    bl(
+      `Please correct the ${n} highlighted field${n === 1 ? "" : "s"} below.`,
+      `કૃપા કરીને નીચે હાઇલાઇટ કરેલા ${n} ફિલ્ડ${n === 1 ? "" : "ો"} સુધારો.`,
+    ),
   optional: bl("Optional", "વૈકલ્પિક"),
   contactNoPlaceholder: bl("10-digit mobile number", "૧૦-અંકનો મોબાઇલ નંબર"),
   contactNoInvalid: bl("Enter a valid 10-digit mobile number", "માન્ય ૧૦-અંકનો મોબાઇલ નંબર દાખલ કરો"),
@@ -126,4 +131,22 @@ export const APPLY_MESSAGES = {
     "હજુ અપલોડ થઈ રહ્યું છે — થોડી રાહ જુઓ અને ફરી પ્રયાસ કરો",
   ),
   photoRequired: bl("Upload a photograph of the student", "વિદ્યાર્થીનો ફોટોગ્રાફ અપલોડ કરો"),
+  copied: bl("Copied", "કૉપિ થયું"),
+  photoPreviewAlt: bl("Student photograph preview", "વિદ્યાર્થીના ફોટોગ્રાફનું પૂર્વાવલોકન"),
+  processing: bl("Processing…", "પ્રક્રિયા થઈ રહી છે…"),
+  replacePhoto: bl("Replace photo", "ફોટો બદલો"),
+  choosePhoto: bl("Choose photo", "ફોટો પસંદ કરો"),
+  select: bl("Select", "પસંદ કરો"),
+  selectBoard: bl("Select board", "બોર્ડ પસંદ કરો"),
+  selectMedium: bl("Select medium", "માધ્યમ પસંદ કરો"),
+  selectCourse: bl("Select course", "અભ્યાસક્રમ પસંદ કરો"),
+  selectStandard: bl("Select standard", "ધોરણ પસંદ કરો"),
+  selectCourseFirst: bl("Select a course first", "પહેલા અભ્યાસક્રમ પસંદ કરો"),
+  periodRangeHint: (n: number) => bl(`1 to ${n}`, `૧ થી ${n}`),
+  selectInstitutionFirst: bl("Select your institution first", "પહેલા તમારી સંસ્થા પસંદ કરો"),
+  addMarksheet: bl("Add a marksheet (image, PDF or DOCX)", "માર્કશીટ ઉમેરો (ઈમેજ, PDF અથવા DOCX)"),
+  uploadingAttachments: bl("Uploading attachments…", "જોડાણો અપલોડ થઈ રહ્યા છે…"),
+  submitting: bl("Submitting…", "સબમિટ થઈ રહ્યું છે…"),
+  applicationReceived: bl("Application received", "અરજી પ્રાપ્ત થઈ"),
+  submitAnother: bl("Submit another application", "બીજી અરજી સબમિટ કરો"),
 } as const;

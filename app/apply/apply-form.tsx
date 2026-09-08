@@ -88,35 +88,6 @@ const MAX_FILE_BYTES = MAX_ATTACHMENT_BYTES;
 const MAX_FILES = MAX_ATTACHMENTS;
 const ALLOWED_TYPES = ALLOWED_ATTACHMENT_TYPES;
 
-/** Human labels for server-side validation errors — keyed by the same field
- *  names publicApplicationSchema uses, so a failure there can be reported
- *  as "<this exact field>: <message>" instead of a generic dump of every
- *  message with no indication of which field it belongs to. */
-const FIELD_LABELS: Partial<Record<keyof Values | "photo_path", string>> = {
-  salutation: "Salutation",
-  first_name: "First name",
-  middle_name: "Middle name",
-  last_name: "Last name",
-  lanedaar_name: "Lanedaar Name",
-  email: "Email",
-  contact_no: "Contact no",
-  photo_path: "Photograph",
-  institution_id: "School/College",
-  other_institution_name: "Institution name",
-  board_id: "Board",
-  other_board_name: "Board name",
-  medium_id: "Medium of instruction",
-  standard_id: "Standard",
-  course_id: "Course",
-  other_course_name: "Course name",
-  other_course_structure: "Year or semester",
-  period_no: "Year/Semester",
-  roll_no: "Roll / GR no",
-  percentage: "Percentage",
-  grade: "Grade",
-  notes: "Notes",
-};
-
 /** Single-column, mobile-first by construction — every field stacks full-width
  *  regardless of viewport; the two-up rows only appear from `sm:` up. */
 export function ApplyForm({
@@ -468,11 +439,7 @@ export function ApplyForm({
         for (const field of fields) {
           setError(field, { type: "server", message: result.fieldErrors[field][0] });
         }
-        setServerError(
-          fields.length > 0
-            ? `Please correct the ${fields.length} highlighted field${fields.length === 1 ? "" : "s"} below.`
-            : result.error,
-        );
+        setServerError(fields.length > 0 ? M.fieldsToCorrect(fields.length) : result.error);
       } else {
         setServerError(result.error);
       }
@@ -491,7 +458,7 @@ export function ApplyForm({
   function copyCode() {
     if (!referenceCode) return;
     navigator.clipboard?.writeText(referenceCode).then(
-      () => toast.success("Copied"),
+      () => toast.success(M.copied),
       () => {},
     );
   }
@@ -514,7 +481,7 @@ export function ApplyForm({
             <Copy className="h-5 w-5 text-primary/70" />
           </button>
 
-          <p className="text-xl font-semibold">Application received</p>
+          <p className="text-xl font-semibold">{M.applicationReceived}</p>
           <p className="max-w-sm text-[15px] text-muted-foreground">{APPLY_CONFIRMATION.en}</p>
           <p className="max-w-sm text-[13px] text-muted-foreground/75">{APPLY_CONFIRMATION.gu}</p>
 
@@ -529,7 +496,7 @@ export function ApplyForm({
               reset(EMPTY);
             }}
           >
-            Submit another application
+            {M.submitAnother}
           </Button>
         </CardContent>
       </Card>
@@ -706,7 +673,7 @@ export function ApplyForm({
                 <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-card">
                   {photoPreview ? (
                     // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
-                    <img src={photoPreview} alt="Student photograph preview" className="h-full w-full object-cover" />
+                    <img src={photoPreview} alt={M.photoPreviewAlt} className="h-full w-full object-cover" />
                   ) : (
                     <ImageIcon className="h-6 w-6 text-muted-foreground" />
                   )}
@@ -727,7 +694,7 @@ export function ApplyForm({
                     onClick={() => photoInputRef.current?.click()}
                   >
                     {photoUploading ? <Loader2 className="animate-spin" /> : <Upload />}
-                    {photoUploading ? "Processing…" : photoFile ? "Replace photo" : "Choose photo"}
+                    {photoUploading ? M.processing : photoFile ? M.replacePhoto : M.choosePhoto}
                   </Button>
                   {photoFile && !photoUploading && (
                     <button
@@ -746,7 +713,7 @@ export function ApplyForm({
           <Field label={L.institutionType} required>
             <Select value={instType} onValueChange={(v) => handleInstTypeChange(v as "school" | "college")}>
               <SelectTrigger>
-                <SelectValue placeholder="Select" />
+                <SelectValue placeholder={M.select} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="school">School (Play Group–12)</SelectItem>
@@ -803,7 +770,7 @@ export function ApplyForm({
                   }}
                 >
                   <SelectTrigger aria-invalid={Boolean(errors.board_id)}>
-                    <SelectValue placeholder="Select board" />
+                    <SelectValue placeholder={M.selectBoard} />
                   </SelectTrigger>
                   <SelectContent>
                     {options.boards.map((b) => (
@@ -843,7 +810,7 @@ export function ApplyForm({
                   }}
                 >
                   <SelectTrigger aria-invalid={Boolean(errors.medium_id)}>
-                    <SelectValue placeholder="Select medium" />
+                    <SelectValue placeholder={M.selectMedium} />
                   </SelectTrigger>
                   <SelectContent>
                     {options.mediums.map((m) => (
@@ -874,7 +841,7 @@ export function ApplyForm({
                     }}
                   >
                     <SelectTrigger aria-invalid={Boolean(errors.standard_id)}>
-                      <SelectValue placeholder="Select course" />
+                      <SelectValue placeholder={M.selectCourse} />
                     </SelectTrigger>
                     <SelectContent>
                       {options.courses.map((c) => (
@@ -891,7 +858,7 @@ export function ApplyForm({
                     label={course?.structure_type === "semester" ? L.semester : L.year}
                     required
                     error={errors.period_no?.message}
-                    hint={course ? `1 to ${course.total_periods}` : "Select a course first"}
+                    hint={course ? M.periodRangeHint(course.total_periods) : M.selectCourseFirst}
                   >
                     <Select
                       value={watch("period_no")}
@@ -902,7 +869,7 @@ export function ApplyForm({
                       disabled={!course}
                     >
                       <SelectTrigger aria-invalid={Boolean(errors.period_no)}>
-                        <SelectValue placeholder="Select" />
+                        <SelectValue placeholder={M.select} />
                       </SelectTrigger>
                       <SelectContent>
                         {Array.from({ length: course?.total_periods ?? 0 }, (_, i) => i + 1).map((n) => (
@@ -936,7 +903,7 @@ export function ApplyForm({
                         }}
                       >
                         <SelectTrigger aria-invalid={Boolean(errors.other_course_structure)}>
-                          <SelectValue placeholder="Select" />
+                          <SelectValue placeholder={M.select} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="year">Year</SelectItem>
@@ -979,7 +946,7 @@ export function ApplyForm({
             </>
           ) : (
             instType === "school" && (
-              <Field label={L.standard} required error={errors.standard_id?.message} hint={!institutionId ? "Select your institution first" : undefined}>
+              <Field label={L.standard} required error={errors.standard_id?.message} hint={!institutionId ? M.selectInstitutionFirst : undefined}>
                 <Select
                   value={watch("standard_id")}
                   onValueChange={(v) => {
@@ -989,7 +956,7 @@ export function ApplyForm({
                   disabled={!institutionId}
                 >
                   <SelectTrigger aria-invalid={Boolean(errors.standard_id)}>
-                    <SelectValue placeholder="Select standard" />
+                    <SelectValue placeholder={M.selectStandard} />
                   </SelectTrigger>
                   <SelectContent>
                     {options.standards.map((s) => (
@@ -1085,7 +1052,7 @@ export function ApplyForm({
                       className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/40 bg-card px-4 py-5 text-center text-[13px] font-medium text-primary transition-colors hover:border-primary hover:bg-primary/10 ${processingFile ? "pointer-events-none opacity-60" : ""}`}
                     >
                       {processingFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
-                      {processingFile ? "Processing…" : "Add a marksheet (image, PDF or DOCX)"}
+                      {processingFile ? M.processing : M.addMarksheet}
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -1111,7 +1078,7 @@ export function ApplyForm({
 
           <Button type="submit" className="h-12 w-full text-base" disabled={busy}>
             {busy ? <Loader2 className="animate-spin" /> : <Send />}
-            {uploading ? "Uploading attachments…" : isSubmitting ? "Submitting…" : L.submit}
+            {uploading ? M.uploadingAttachments : isSubmitting ? M.submitting : L.submit}
           </Button>
         </form>
       </CardContent>
