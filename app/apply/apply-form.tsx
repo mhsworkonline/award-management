@@ -166,9 +166,32 @@ export function ApplyForm({
     watch,
     setValue,
     setError,
+    clearErrors,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<Values>({ defaultValues: EMPTY });
+
+  // Fields with real register() validation rules (name fields, email,
+  // percentage, period_no...) already clear a stale error on their own —
+  // react-hook-form re-validates against those rules on every change once
+  // a field has errored once. Select-driven fields (institution, board,
+  // medium, standard, course) and a few free-text fields with no rules
+  // attached (other_institution_name and friends) have nothing to
+  // re-validate against, so a server-set error on them would otherwise
+  // just sit there until the next submit — this wraps a register() result
+  // to also clear its own error the moment its value changes.
+  function clearOnChange(
+    reg: ReturnType<typeof uppercaseRegister>,
+    field: keyof Values,
+  ): ReturnType<typeof uppercaseRegister> {
+    return {
+      ...reg,
+      onChange: (e: Parameters<typeof reg.onChange>[0]) => {
+        clearErrors(field);
+        return reg.onChange(e);
+      },
+    };
+  }
 
   const institutionId = watch("institution_id");
   const courseId = watch("course_id");
@@ -218,6 +241,16 @@ export function ApplyForm({
     setValue("standard_id", "");
     setValue("course_id", "");
     setValue("period_no", "");
+    clearErrors([
+      "board_id",
+      "other_board_name",
+      "medium_id",
+      "institution_id",
+      "other_institution_name",
+      "standard_id",
+      "course_id",
+      "period_no",
+    ]);
   }
 
   // Board and medium both always show as a dropdown (see showBoardField /
@@ -232,6 +265,7 @@ export function ApplyForm({
     const matchedMedium = options.mediums.find((m) => m.id === matched?.medium_id);
     const ambiguous = matchedMedium?.name.trim().toLowerCase() === "both";
     setValue("medium_id", ambiguous ? "" : (matched?.medium_id ?? ""), { shouldValidate: true });
+    clearErrors(["institution_id", "other_institution_name", "other_board_name", "board_id", "medium_id"]);
   }
 
   async function addFiles(list: FileList | null) {
@@ -425,17 +459,22 @@ export function ApplyForm({
     if (!result.ok) {
       if (result.fieldErrors) {
         // Attach each error to its actual field — the Field it belongs to
-        // already renders `error={errors.<name>?.message}`, so this shows
-        // up right next to the field itself, not just in the banner below.
-        const named = Object.entries(result.fieldErrors).map(([field, messages]) => {
-          const label = FIELD_LABELS[field as keyof typeof FIELD_LABELS] ?? field;
-          const msg = messages[0];
-          if (field in EMPTY) {
-            setError(field as keyof Values, { type: "server", message: msg });
-          }
-          return `${label}: ${msg}`;
-        });
-        setServerError(named.join(" · "));
+        // already renders `error={errors.<name>?.message}` and turns its
+        // border red (see the aria-invalid styling on Input/Select), so the
+        // real detail shows up right where the problem is. Cramming every
+        // "Field: message" pair into one run-on banner line on top of that
+        // was just duplicating what's already visible below, and reading
+        // as a wall of text — the banner's job now is just to say
+        // something needs fixing, not repeat each message a second time.
+        const fields = Object.keys(result.fieldErrors).filter((f): f is keyof Values => f in EMPTY);
+        for (const field of fields) {
+          setError(field, { type: "server", message: result.fieldErrors[field][0] });
+        }
+        setServerError(
+          fields.length > 0
+            ? `Please correct the ${fields.length} highlighted field${fields.length === 1 ? "" : "s"} below.`
+            : result.error,
+        );
       } else {
         setServerError(result.error);
       }
@@ -739,7 +778,7 @@ export function ApplyForm({
                 id="other_institution_name"
                 autoComplete="off"
                 aria-invalid={Boolean(errors.other_institution_name)}
-                {...uppercaseRegister(register("other_institution_name"))}
+                {...clearOnChange(uppercaseRegister(register("other_institution_name")), "other_institution_name")}
               />
             </Field>
           )}
@@ -751,7 +790,13 @@ export function ApplyForm({
           {showBoardField && (
             <>
               <Field label={L.board} required error={errors.board_id?.message}>
-                <Select value={watch("board_id")} onValueChange={(v) => setValue("board_id", v, { shouldValidate: true })}>
+                <Select
+                  value={watch("board_id")}
+                  onValueChange={(v) => {
+                    setValue("board_id", v, { shouldValidate: true });
+                    clearErrors("board_id");
+                  }}
+                >
                   <SelectTrigger aria-invalid={Boolean(errors.board_id)}>
                     <SelectValue placeholder="Select board" />
                   </SelectTrigger>
@@ -771,7 +816,7 @@ export function ApplyForm({
                     id="other_board_name"
                     autoComplete="off"
                     aria-invalid={Boolean(errors.other_board_name)}
-                    {...uppercaseRegister(register("other_board_name"))}
+                    {...clearOnChange(uppercaseRegister(register("other_board_name")), "other_board_name")}
                   />
                 </Field>
               )}
@@ -785,7 +830,13 @@ export function ApplyForm({
           {showMediumField && (
             <FieldGrid>
               <Field label={L.medium} required error={errors.medium_id?.message}>
-                <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v, { shouldValidate: true })}>
+                <Select
+                  value={watch("medium_id")}
+                  onValueChange={(v) => {
+                    setValue("medium_id", v, { shouldValidate: true });
+                    clearErrors("medium_id");
+                  }}
+                >
                   <SelectTrigger aria-invalid={Boolean(errors.medium_id)}>
                     <SelectValue placeholder="Select medium" />
                   </SelectTrigger>
@@ -805,7 +856,18 @@ export function ApplyForm({
             <>
               <FieldGrid>
                 <Field label={L.course} required error={errors.standard_id?.message}>
-                  <Select value={courseId} onValueChange={(v) => setValue("course_id", v)}>
+                  <Select
+                    value={courseId}
+                    onValueChange={(v) => {
+                      setValue("course_id", v);
+                      // The "select a standard or a course" server check is
+                      // attached to standard_id's path even here (it's the
+                      // same either/or rule the school branch's Standard
+                      // field shows) — clear that, not a non-existent
+                      // course_id error.
+                      clearErrors("standard_id");
+                    }}
+                  >
                     <SelectTrigger aria-invalid={Boolean(errors.standard_id)}>
                       <SelectValue placeholder="Select course" />
                     </SelectTrigger>
@@ -826,7 +888,14 @@ export function ApplyForm({
                     error={errors.period_no?.message}
                     hint={course ? `1 to ${course.total_periods}` : "Select a course first"}
                   >
-                    <Select value={watch("period_no")} onValueChange={(v) => setValue("period_no", v)} disabled={!course}>
+                    <Select
+                      value={watch("period_no")}
+                      onValueChange={(v) => {
+                        setValue("period_no", v);
+                        clearErrors("period_no");
+                      }}
+                      disabled={!course}
+                    >
                       <SelectTrigger aria-invalid={Boolean(errors.period_no)}>
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
@@ -849,14 +918,17 @@ export function ApplyForm({
                       id="other_course_name"
                       autoComplete="off"
                       aria-invalid={Boolean(errors.other_course_name)}
-                      {...uppercaseRegister(register("other_course_name"))}
+                      {...clearOnChange(uppercaseRegister(register("other_course_name")), "other_course_name")}
                     />
                   </Field>
                   <FieldGrid>
                     <Field label={L.yearOrSemesterQuestion} required error={errors.other_course_structure?.message}>
                       <Select
                         value={watch("other_course_structure")}
-                        onValueChange={(v) => setValue("other_course_structure", v as "year" | "semester")}
+                        onValueChange={(v) => {
+                          setValue("other_course_structure", v as "year" | "semester");
+                          clearErrors("other_course_structure");
+                        }}
                       >
                         <SelectTrigger aria-invalid={Boolean(errors.other_course_structure)}>
                           <SelectValue placeholder="Select" />
@@ -903,7 +975,14 @@ export function ApplyForm({
           ) : (
             instType === "school" && (
               <Field label={L.standard} required error={errors.standard_id?.message} hint={!institutionId ? "Select your institution first" : undefined}>
-                <Select value={watch("standard_id")} onValueChange={(v) => setValue("standard_id", v)} disabled={!institutionId}>
+                <Select
+                  value={watch("standard_id")}
+                  onValueChange={(v) => {
+                    setValue("standard_id", v);
+                    clearErrors("standard_id");
+                  }}
+                  disabled={!institutionId}
+                >
                   <SelectTrigger aria-invalid={Boolean(errors.standard_id)}>
                     <SelectValue placeholder="Select standard" />
                   </SelectTrigger>
