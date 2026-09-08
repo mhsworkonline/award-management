@@ -172,6 +172,12 @@ export function ApplyForm({
 
   const institutionId = watch("institution_id");
   const courseId = watch("course_id");
+  const otherPeriodNo = watch("period_no");
+  // Live, not tied to RHF's submit-triggered validation timing — the hint
+  // exists specifically to stop the wrong kind of number (2026) before
+  // submit, so it needs to disappear the moment a genuinely valid one
+  // (1-12) is typed, not just after an error has already fired once.
+  const otherPeriodNoValid = /^\d+$/.test(otherPeriodNo) && Number(otherPeriodNo) >= 1 && Number(otherPeriodNo) <= 12;
 
   const isCollege = instType === "college";
   const isOtherInstitution = institutionId === OTHER;
@@ -862,9 +868,11 @@ export function ApplyForm({
                       required
                       error={errors.period_no?.message}
                       hint={
-                        watch("other_course_structure") === "semester"
-                          ? "1 for 1st semester, 2 for 2nd… — not the calendar year"
-                          : "1 for 1st year, 2 for 2nd… — not the calendar year"
+                        otherPeriodNoValid
+                          ? undefined
+                          : watch("other_course_structure") === "semester"
+                            ? "1 for 1st semester, 2 for 2nd… — not the calendar year"
+                            : "1 for 1st year, 2 for 2nd… — not the calendar year"
                       }
                     >
                       <Input
