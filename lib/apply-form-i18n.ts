@@ -24,14 +24,14 @@ export const APPLY_LABELS = {
   lanedaarName: bl("Lanedaar Name", "લાણેદારનું નામ"),
   email: bl("Email", "ઈમેલ"),
   contactNo: bl("Contact no", "સંપર્ક નંબર"),
-  institutionType: bl("Institution type", "સંસ્થાનો પ્રકાર"),
+  institutionType: bl("School/College", "શાળા/કૉલેજ"),
   board: bl("Board", "બોર્ડ"),
   medium: bl("Medium of instruction", "શિક્ષણનું માધ્યમ"),
   // School/college replace the old generic "Institution" label — the
   // component picks whichever matches instType, so these two are always
   // used as a pair, never institution/otherInstitutionName directly.
-  school: bl("School", "શાળા"),
-  college: bl("College", "કૉલેજ"),
+  school: bl("School Name", "શાળાનું નામ"),
+  college: bl("College name", "કૉલેજનું નામ"),
   otherSchoolName: bl("Your school's name", "તમારી શાળાનું નામ"),
   otherCollegeName: bl("Your college's name", "તમારી કૉલેજનું નામ"),
   otherBoardName: bl("Your board's name", "તમારા બોર્ડનું નામ"),

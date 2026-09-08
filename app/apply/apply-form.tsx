@@ -571,7 +571,6 @@ export function ApplyForm({
               label={L.photograph}
               required
               error={photoError ?? undefined}
-              hint="Any recent photo — JPEG, PNG or WebP. Resized automatically, no need to shrink it yourself."
             >
               <div className="flex items-center gap-4">
                 <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-card">
@@ -832,7 +831,7 @@ export function ApplyForm({
               <Field
                 label={L.attachments}
                 required
-                hint={`Required — this is your proof of the result above. Up to ${MAX_FILES} files. Photos are resized automatically; PDF/DOCX up to 5MB each.`}
+                hint={`Up to ${MAX_FILES} files. PDF/DOCX up to 5MB each.`}
               >
                 <div className="space-y-2">
                   {files.map((f, i) => (
