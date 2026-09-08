@@ -178,6 +178,11 @@ export function ApplyForm({
   // submit, so it needs to disappear the moment a genuinely valid one
   // (1-12) is typed, not just after an error has already fired once.
   const otherPeriodNoValid = /^\d+$/.test(otherPeriodNo) && Number(otherPeriodNo) >= 1 && Number(otherPeriodNo) <= 12;
+  // Neither field is individually required — the actual rule (superRefine
+  // below) is "at least one of the two" — so this drives a shared hint on
+  // both rather than a bare "*" on each, which would wrongly imply both
+  // are mandatory. Disappears the moment either one has something in it.
+  const percentageOrGradeGiven = Boolean(watch("percentage")) || Boolean(watch("grade"));
 
   const isCollege = instType === "college";
   const isOtherInstitution = institutionId === OTHER;
@@ -921,7 +926,13 @@ export function ApplyForm({
           )}
 
           <FieldGrid>
-            <Field label={L.percentage} htmlFor="percentage" error={errors.percentage?.message}>
+            <Field
+              label={L.percentage}
+              htmlFor="percentage"
+              required
+              error={errors.percentage?.message}
+              hint={percentageOrGradeGiven ? undefined : "Percentage or Grade — at least one is required"}
+            >
               <PercentInput
                 id="percentage"
                 aria-invalid={Boolean(errors.percentage)}
@@ -931,7 +942,12 @@ export function ApplyForm({
                 })}
               />
             </Field>
-            <Field label={L.grade} htmlFor="grade">
+            <Field
+              label={L.grade}
+              htmlFor="grade"
+              required
+              hint={percentageOrGradeGiven ? undefined : "Percentage or Grade — at least one is required"}
+            >
               <Input id="grade" autoComplete="off" {...uppercaseRegister(register("grade"))} />
             </Field>
           </FieldGrid>
