@@ -28,6 +28,15 @@ const requiredContactNo = z
   .min(1, "Contact number is required")
   .max(20, "Contact number is too long");
 
+// The public form only ever collects a mobile number, so unlike
+// requiredContactNo above (used where staff may need to enter other
+// formats — a landline, a number with an extension) this is strict:
+// exactly 10 digits, no spaces/dashes/letters.
+const indianMobileNo = z
+  .string()
+  .trim()
+  .regex(/^\d{10}$/, "Enter a valid 10-digit mobile number");
+
 // The student's photograph, staged in Storage before the record is created —
 // this holds the storage path (not the file itself). Required: a blank/empty
 // value means no photo was uploaded.
@@ -222,6 +231,17 @@ export const distributionSyncSchema = z.object({
 const OTHER = "__other__";
 const courseStructure = z.enum(["year", "semester"]);
 
+// Mirrors apply-form-i18n.ts' bl() — kept as a separate copy rather than
+// imported, since this file has no business depending on a page-level i18n
+// module. Only used below: these are the messages that actually reach an
+// applicant for fields with no client-side rule of their own to validate
+// against (institution/board/medium/standard/course pickers, year-or-
+// semester) — the Zod message here *is* what gets shown, via
+// submitPublicApplication's fieldErrors -> setError() on the client.
+function blMsg(en: string, gu: string) {
+  return `${en} / ${gu}`;
+}
+
 /** The public /apply form. Institution and course each accept either a real
  *  id or a free-text "Other" name (never both) — resolved to a real row only
  *  when staff approves. No id/student_id/academic_year_id here; those are
@@ -234,7 +254,7 @@ export const publicApplicationSchema = z
     last_name: z.string().trim().min(1, "Last name is required").max(100),
     lanedaar_name: z.string().trim().min(1, "Lanedaar name is required").max(200),
     email: z.string().trim().toLowerCase().min(1, "Email is required").email("Enter a valid email"),
-    contact_no: requiredContactNo,
+    contact_no: indianMobileNo,
     photo_path: requiredPhotoPath,
     institution_id: z.string(),
     other_institution_name: optionalText,
@@ -248,8 +268,8 @@ export const publicApplicationSchema = z
     period_no: z.coerce
       .number()
       .int()
-      .min(1, "Enter a value from 1 to 12")
-      .max(12, "Enter a value from 1 to 12")
+      .min(1, blMsg("Enter a value from 1 to 12", "૧ થી ૧૨ ની વચ્ચે કિંમત દાખલ કરો"))
+      .max(12, blMsg("Enter a value from 1 to 12", "૧ થી ૧૨ ની વચ્ચે કિંમત દાખલ કરો"))
       .nullable()
       .optional()
       .transform((v) => v ?? null),
@@ -267,17 +287,28 @@ export const publicApplicationSchema = z
     if (v.percentage === null && !v.grade) {
       ctx.addIssue({
         code: "custom",
-        message: "Enter your percentage or grade (at least one is required)",
+        message: blMsg(
+          "Enter your percentage or grade (at least one is required)",
+          "તમારી ટકાવારી અથવા ગ્રેડ દાખલ કરો (ઓછામાં ઓછું એક જરૂરી)",
+        ),
         path: ["percentage"],
       });
     }
 
     if (v.institution_id === OTHER) {
       if (!v.other_institution_name) {
-        ctx.addIssue({ code: "custom", message: "Enter your institution's name", path: ["other_institution_name"] });
+        ctx.addIssue({
+          code: "custom",
+          message: blMsg("Enter your institution's name", "તમારી સંસ્થાનું નામ દાખલ કરો"),
+          path: ["other_institution_name"],
+        });
       }
     } else if (!v.institution_id) {
-      ctx.addIssue({ code: "custom", message: "Select your institution", path: ["institution_id"] });
+      ctx.addIssue({
+        code: "custom",
+        message: blMsg("Select your institution", "તમારી સંસ્થા પસંદ કરો"),
+        path: ["institution_id"],
+      });
     }
 
     const usingOtherCourse = v.course_id === OTHER;
@@ -286,31 +317,63 @@ export const publicApplicationSchema = z
     if (v.standard_id) {
       if (v.board_id === OTHER) {
         if (!v.other_board_name) {
-          ctx.addIssue({ code: "custom", message: "Enter your board's name", path: ["other_board_name"] });
+          ctx.addIssue({
+            code: "custom",
+            message: blMsg("Enter your board's name", "તમારા બોર્ડનું નામ દાખલ કરો"),
+            path: ["other_board_name"],
+          });
         }
       } else if (!v.board_id) {
-        ctx.addIssue({ code: "custom", message: "Select your board", path: ["board_id"] });
+        ctx.addIssue({
+          code: "custom",
+          message: blMsg("Select your board", "તમારું બોર્ડ પસંદ કરો"),
+          path: ["board_id"],
+        });
       }
       if (!v.medium_id) {
-        ctx.addIssue({ code: "custom", message: "Select your medium of instruction", path: ["medium_id"] });
+        ctx.addIssue({
+          code: "custom",
+          message: blMsg("Select your medium of instruction", "તમારું શિક્ષણનું માધ્યમ પસંદ કરો"),
+          path: ["medium_id"],
+        });
       }
     }
 
     if (!hasRealPlacement && !usingOtherCourse) {
-      ctx.addIssue({ code: "custom", message: "Select a standard or a course", path: ["standard_id"] });
+      ctx.addIssue({
+        code: "custom",
+        message: blMsg("Select a standard or a course", "ધોરણ અથવા અભ્યાસક્રમ પસંદ કરો"),
+        path: ["standard_id"],
+      });
     }
     if (usingOtherCourse) {
       if (!v.other_course_name) {
-        ctx.addIssue({ code: "custom", message: "Enter your course name", path: ["other_course_name"] });
+        ctx.addIssue({
+          code: "custom",
+          message: blMsg("Enter your course name", "તમારા અભ્યાસક્રમનું નામ દાખલ કરો"),
+          path: ["other_course_name"],
+        });
       }
       if (!v.other_course_structure) {
-        ctx.addIssue({ code: "custom", message: "Select year or semester", path: ["other_course_structure"] });
+        ctx.addIssue({
+          code: "custom",
+          message: blMsg("Select year or semester", "વર્ષ અથવા સેમેસ્ટર પસંદ કરો"),
+          path: ["other_course_structure"],
+        });
       }
       if (!v.period_no) {
-        ctx.addIssue({ code: "custom", message: "Enter your current year/semester", path: ["period_no"] });
+        ctx.addIssue({
+          code: "custom",
+          message: blMsg("Enter your current year/semester", "તમારું વર્તમાન વર્ષ/સેમેસ્ટર દાખલ કરો"),
+          path: ["period_no"],
+        });
       }
     } else if (v.course_id && v.course_id !== OTHER && !v.period_no) {
-      ctx.addIssue({ code: "custom", message: "Year/semester is required for a course", path: ["period_no"] });
+      ctx.addIssue({
+        code: "custom",
+        message: blMsg("Year/semester is required for a course", "અભ્યાસક્રમ માટે વર્ષ/સેમેસ્ટર જરૂરી છે"),
+        path: ["period_no"],
+      });
     }
   })
   .transform((v) => ({

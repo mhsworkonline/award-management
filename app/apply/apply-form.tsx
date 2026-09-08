@@ -29,9 +29,9 @@ import {
   MAX_PHOTO_BYTES,
 } from "@/lib/attachments";
 import { MAX_SOURCE_IMAGE_BYTES, compressMarksheetImage, compressStudentPhoto } from "@/lib/image-compression";
-import { cn, uppercaseRegister } from "@/lib/utils";
+import { cn, digitsOnlyRegister, uppercaseRegister } from "@/lib/utils";
 import { SALUTATIONS } from "@/lib/types";
-import { APPLY_CONFIRMATION, APPLY_LABELS as L } from "@/lib/apply-form-i18n";
+import { APPLY_CONFIRMATION, APPLY_LABELS as L, APPLY_MESSAGES as M } from "@/lib/apply-form-i18n";
 import type { PublicBranding, PublicFormOptions, ResolvedForm } from "@/lib/types";
 
 type Values = {
@@ -278,20 +278,20 @@ export function ApplyForm({
     setFileError(null);
 
     if (files.length + incoming.length > MAX_FILES) {
-      setFileError(`Maximum ${MAX_FILES} files`);
+      setFileError(M.maxFiles(MAX_FILES));
       return;
     }
 
     const processed: File[] = [];
     for (const f of incoming) {
       if (!ALLOWED_TYPES.includes(f.type)) {
-        setFileError(`${f.name}: only images, PDF or DOCX are allowed`);
+        setFileError(M.fileTypeNotAllowed(f.name));
         return;
       }
       const isImage = f.type.startsWith("image/");
       const sourceCap = isImage ? MAX_SOURCE_IMAGE_BYTES : MAX_FILE_BYTES;
       if (f.size > sourceCap) {
-        setFileError(`${f.name}: must be ${Math.round(sourceCap / (1024 * 1024))}MB or smaller`);
+        setFileError(M.fileTooLarge(f.name, Math.round(sourceCap / (1024 * 1024))));
         return;
       }
       if (!isImage) {
@@ -303,7 +303,7 @@ export function ApplyForm({
         processed.push(await compressMarksheetImage(f));
       } catch {
         setProcessingFile(false);
-        setFileError(`${f.name}: could not process this image — try a different file`);
+        setFileError(M.fileProcessFailed(f.name));
         return;
       }
     }
@@ -323,11 +323,11 @@ export function ApplyForm({
     setPhotoError(null);
 
     if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
-      setPhotoError("Only JPEG, PNG or WebP images are allowed");
+      setPhotoError(M.photoTypeNotAllowed);
       return;
     }
     if (file.size > MAX_SOURCE_IMAGE_BYTES) {
-      setPhotoError(`Must be ${MAX_SOURCE_IMAGE_BYTES / (1024 * 1024)}MB or smaller`);
+      setPhotoError(M.photoTooLarge(MAX_SOURCE_IMAGE_BYTES / (1024 * 1024)));
       return;
     }
 
@@ -337,14 +337,14 @@ export function ApplyForm({
       compressed = await compressStudentPhoto(file);
     } catch {
       setPhotoUploading(false);
-      setPhotoError("Could not process this image — try a different file");
+      setPhotoError(M.photoProcessFailed);
       return;
     }
     if (compressed.size > MAX_PHOTO_BYTES) {
       // Defensive only — the compression target is well under the bucket's
       // hard limit, so this should never actually trip.
       setPhotoUploading(false);
-      setPhotoError("This image is too large even after compression — try a different file");
+      setPhotoError(M.photoTooLargeAfterCompression);
       return;
     }
 
@@ -369,7 +369,7 @@ export function ApplyForm({
     });
     setPhotoUploading(false);
     if (upload.error) {
-      setPhotoError("Upload failed — please try again");
+      setPhotoError(M.photoUploadFailed);
       return;
     }
     setPhotoPath(path);
@@ -419,14 +419,12 @@ export function ApplyForm({
     // above — required whenever this form even shows the field (staff can
     // still turn attachments off per-form via field_config).
     if (fieldConfig.show_attachments && files.length === 0) {
-      setFileError("Upload your marksheet — required to verify your application");
+      setFileError(M.marksheetRequired);
       return;
     }
 
     if (!photoPath) {
-      setPhotoError(
-        photoUploading ? "Still uploading — wait a moment and try again" : "Upload a photograph of the student",
-      );
+      setPhotoError(photoUploading ? M.photoStillUploading : M.photoRequired);
       return;
     }
 
@@ -609,7 +607,7 @@ export function ApplyForm({
               id="lanedaar_name"
               autoComplete="off"
               aria-invalid={Boolean(errors.lanedaar_name)}
-              {...uppercaseRegister(register("lanedaar_name", { required: "Required" }))}
+              {...uppercaseRegister(register("lanedaar_name", { required: M.required }))}
             />
           </Field>
 
@@ -635,7 +633,7 @@ export function ApplyForm({
                 id="first_name"
                 autoComplete="given-name"
                 aria-invalid={Boolean(errors.first_name)}
-                {...uppercaseRegister(register("first_name", { required: "Required" }))}
+                {...uppercaseRegister(register("first_name", { required: M.required }))}
               />
             </Field>
             {fieldConfig.show_middle_name && (
@@ -649,7 +647,7 @@ export function ApplyForm({
                   id="middle_name"
                   autoComplete="off"
                   aria-invalid={Boolean(errors.middle_name)}
-                  {...uppercaseRegister(register("middle_name", { required: "Required" }))}
+                  {...uppercaseRegister(register("middle_name", { required: M.required }))}
                 />
               </Field>
             )}
@@ -658,7 +656,7 @@ export function ApplyForm({
                 id="last_name"
                 autoComplete="family-name"
                 aria-invalid={Boolean(errors.last_name)}
-                {...uppercaseRegister(register("last_name", { required: "Required" }))}
+                {...uppercaseRegister(register("last_name", { required: M.required }))}
               />
             </Field>
           </FieldGrid>
@@ -671,17 +669,24 @@ export function ApplyForm({
                 inputMode="email"
                 autoComplete="email"
                 aria-invalid={Boolean(errors.email)}
-                {...register("email", { required: "Required" })}
+                {...register("email", { required: M.required })}
               />
             </Field>
             <Field label={L.contactNo} htmlFor="contact_no" required error={errors.contact_no?.message}>
               <Input
                 id="contact_no"
                 type="tel"
-                inputMode="tel"
+                inputMode="numeric"
                 autoComplete="tel"
+                maxLength={10}
+                placeholder={M.contactNoPlaceholder}
                 aria-invalid={Boolean(errors.contact_no)}
-                {...register("contact_no", { required: "Required" })}
+                {...digitsOnlyRegister(
+                  register("contact_no", {
+                    required: M.required,
+                    pattern: { value: /^\d{10}$/, message: M.contactNoInvalid },
+                  }),
+                )}
               />
             </Field>
           </FieldGrid>
@@ -948,8 +953,8 @@ export function ApplyForm({
                         otherPeriodNoValid
                           ? undefined
                           : watch("other_course_structure") === "semester"
-                            ? "1 for 1st semester, 2 for 2nd… — not the calendar year"
-                            : "1 for 1st year, 2 for 2nd… — not the calendar year"
+                            ? M.semesterHint
+                            : M.yearHint
                       }
                     >
                       <Input
@@ -958,13 +963,13 @@ export function ApplyForm({
                         inputMode="numeric"
                         min={1}
                         max={12}
-                        placeholder="e.g. 1, 2, 3…"
+                        placeholder={M.periodPlaceholder}
                         className="tabular"
                         aria-invalid={Boolean(errors.period_no)}
                         {...register("period_no", {
-                          required: "Enter a value from 1 to 12",
-                          min: { value: 1, message: "Enter a value from 1 to 12" },
-                          max: { value: 12, message: "Enter a value from 1 to 12" },
+                          required: M.periodRange,
+                          min: { value: 1, message: M.periodRange },
+                          max: { value: 12, message: M.periodRange },
                         })}
                       />
                     </Field>
@@ -1010,14 +1015,14 @@ export function ApplyForm({
               htmlFor="percentage"
               required
               error={errors.percentage?.message}
-              hint={percentageOrGradeGiven ? undefined : "Percentage or Grade — at least one is required"}
+              hint={percentageOrGradeGiven ? undefined : M.percentageOrGradeHint}
             >
               <PercentInput
                 id="percentage"
                 aria-invalid={Boolean(errors.percentage)}
                 {...register("percentage", {
-                  min: { value: 0, message: "Enter a value from 0 to 100" },
-                  max: { value: 100, message: "Enter a value from 0 to 100" },
+                  min: { value: 0, message: M.percentageRange },
+                  max: { value: 100, message: M.percentageRange },
                 })}
               />
             </Field>
@@ -1025,14 +1030,14 @@ export function ApplyForm({
               label={L.grade}
               htmlFor="grade"
               required
-              hint={percentageOrGradeGiven ? undefined : "Percentage or Grade — at least one is required"}
+              hint={percentageOrGradeGiven ? undefined : M.percentageOrGradeHint}
             >
               <Input id="grade" autoComplete="off" {...uppercaseRegister(register("grade"))} />
             </Field>
           </FieldGrid>
 
           {fieldConfig.show_notes && (
-            <Field label={L.notes} htmlFor="notes" hint="Optional">
+            <Field label={L.notes} htmlFor="notes" hint={M.optional}>
               <Textarea id="notes" rows={3} {...register("notes")} />
             </Field>
           )}
@@ -1047,7 +1052,7 @@ export function ApplyForm({
               <Field
                 label={L.attachments}
                 required
-                hint={`Up to ${MAX_FILES} files. PDF/DOCX up to 5MB each.`}
+                hint={M.attachmentsHint(MAX_FILES)}
               >
                 <div className="space-y-2">
                   {files.map((f, i) => (

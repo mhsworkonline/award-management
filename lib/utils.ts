@@ -59,6 +59,19 @@ export function uppercaseRegister(reg: UseFormRegisterReturn): UseFormRegisterRe
   };
 }
 
+/** Same idea as uppercaseRegister, but strips anything that isn't a digit —
+ *  for a mobile number field where letters/symbols should never even be
+ *  typeable, not just rejected after the fact on submit. */
+export function digitsOnlyRegister(reg: UseFormRegisterReturn): UseFormRegisterReturn {
+  return {
+    ...reg,
+    onChange: (e: Parameters<UseFormRegisterReturn["onChange"]>[0]) => {
+      (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.replace(/\D/g, "");
+      return reg.onChange(e);
+    },
+  };
+}
+
 /** Full legal name including the father's name, for certificates/official use. */
 export function studentFullName(s: {
   salutation?: string | null;
