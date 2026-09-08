@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { ConfigSection } from "./config-section";
 import { BrandingSection } from "./branding-section";
 import { QrCodeSection } from "./qr-code-section";
+import { TinyUrlSection } from "./tinyurl-section";
 import { AccessSection } from "./access-section";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Lookups, Organization, RoleWithPermissions, UserRow } from "@/lib/types";
@@ -41,7 +42,7 @@ export function SettingsClient({
           <TabsTrigger value="standards">Standards</TabsTrigger>
           <TabsTrigger value="courses">Courses</TabsTrigger>
           <TabsTrigger value="categories">Award categories</TabsTrigger>
-          <TabsTrigger value="qr">QR code</TabsTrigger>
+          <TabsTrigger value="qr">Links & QR</TabsTrigger>
           {isAdmin && <TabsTrigger value="access">Users & Roles</TabsTrigger>}
         </TabsList>
 
@@ -214,7 +215,10 @@ export function SettingsClient({
         </TabsContent>
 
         <TabsContent value="qr">
-          <QrCodeSection />
+          <div className="grid gap-5 lg:grid-cols-2">
+            <TinyUrlSection />
+            <QrCodeSection />
+          </div>
         </TabsContent>
 
         {isAdmin && (
