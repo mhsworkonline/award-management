@@ -860,7 +860,13 @@ export function ApplyForm({
 
           <FieldGrid>
             <Field label={L.percentage} htmlFor="percentage" error={errors.percentage?.message}>
-              <PercentInput id="percentage" {...register("percentage")} />
+              <PercentInput
+                id="percentage"
+                {...register("percentage", {
+                  min: { value: 0, message: "Enter a value from 0 to 100" },
+                  max: { value: 100, message: "Enter a value from 0 to 100" },
+                })}
+              />
             </Field>
             <Field label={L.grade} htmlFor="grade">
               <Input id="grade" autoComplete="off" {...uppercaseRegister(register("grade"))} />

@@ -40,7 +40,12 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 // A required-when-present percentage: 0-100, rounded to 2 decimals. Used
 // where the field is nullable but, once given a value, that value is coerced
 // directly (no raw-form-string preprocessing needed).
-const percentageSchema = z.coerce.number().min(0).max(100).transform(round2);
+const PERCENT_RANGE_MESSAGE = "Enter a value from 0 to 100";
+const percentageSchema = z.coerce
+  .number()
+  .min(0, PERCENT_RANGE_MESSAGE)
+  .max(100, PERCENT_RANGE_MESSAGE)
+  .transform(round2);
 
 // Same range/rounding, but for raw form values where blank must mean "not
 // provided" rather than 0 — Number("") is 0, not NaN, so an empty/nullish
@@ -48,7 +53,7 @@ const percentageSchema = z.coerce.number().min(0).max(100).transform(round2);
 const optionalPercentage = z
   .preprocess(
     (v) => (v === "" || v === null || v === undefined ? undefined : v),
-    z.coerce.number().min(0).max(100).transform(round2).optional(),
+    z.coerce.number().min(0, PERCENT_RANGE_MESSAGE).max(100, PERCENT_RANGE_MESSAGE).transform(round2).optional(),
   )
   .transform((v) => v ?? null);
 
