@@ -668,7 +668,7 @@ export function ApplyForm({
               required
               error={photoError ?? undefined}
             >
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
                 <span className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-card">
                   {photoPreview ? (
                     // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
@@ -691,6 +691,7 @@ export function ApplyForm({
                     size="sm"
                     disabled={photoUploading}
                     onClick={() => photoInputRef.current?.click()}
+                    className="h-auto min-h-8 whitespace-normal py-1.5 text-center leading-snug"
                   >
                     {photoUploading ? <Loader2 className="animate-spin" /> : <Upload />}
                     {photoUploading ? M.processing : photoFile ? M.replacePhoto : M.choosePhoto}
