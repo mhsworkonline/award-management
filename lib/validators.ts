@@ -88,6 +88,15 @@ export const mediumSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
 });
 
+/** Arts / Commerce / Science — only meaningful for Std 11/12 academic
+ *  records and submissions (see 0032_am_streams.sql); every other Standard
+ *  leaves stream_id null. A lookup table like Boards/Mediums, not a
+ *  hardcoded enum, so a rename or an added stream is a Settings edit. */
+export const streamSchema = z.object({
+  id: uuid.optional(),
+  name: z.string().trim().min(1, "Name is required").max(60),
+});
+
 export const courseSchema = z.object({
   id: uuid.optional(),
   name: z.string().trim().min(1, "Name is required").max(120),
@@ -169,6 +178,7 @@ export const academicRecordSchema = z
     academic_year_id: uuid,
     institution_id: uuid,
     standard_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
+    stream_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     course_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     period_no: z.coerce
       .number()
@@ -246,7 +256,7 @@ function blMsg(en: string, gu: string) {
  *  id or a free-text "Other" name (never both) — resolved to a real row only
  *  when staff approves. No id/student_id/academic_year_id here; those are
  *  resolved server-side. */
-export const publicApplicationSchema = z
+const publicApplicationObjectSchema = z
   .object({
     salutation: optionalSalutation,
     first_name: z.string().trim().min(1, "First name is required").max(100),
@@ -262,6 +272,7 @@ export const publicApplicationSchema = z
     other_board_name: optionalText,
     medium_id: z.string().nullable().optional().transform((v) => v || null),
     standard_id: z.string().nullable().optional().transform((v) => v || null),
+    stream_id: z.string().nullable().optional().transform((v) => v || null),
     course_id: z.string().nullable().optional().transform((v) => v || null),
     other_course_name: optionalText,
     other_course_structure: z.union([courseStructure, z.literal("")]).nullable().optional().transform((v) => (v ? v : null)),
@@ -282,8 +293,18 @@ export const publicApplicationSchema = z
     notes: z.string().trim().max(1000).optional().transform((v) => (v ? v : null)),
     // Honeypot — real visitors never see or fill this field.
     website: z.string().max(200).optional(),
-  })
-  .superRefine((v, ctx) => {
+  });
+
+/** Wrapped in a function rather than a plain exported schema because the
+ *  "Stream is required" rule needs to know which Standards are Std 11/12 —
+ *  data the schema itself has no access to. submitPublicApplication looks
+ *  that set up once (a tiny table) and builds the schema with it, so a
+ *  missing Stream shows as an inline field error the same way every other
+ *  required field here does, rather than only surfacing as the RPC's raw
+ *  exception text in the banner. */
+export function buildPublicApplicationSchema(streamRequiredStandardIds: ReadonlySet<string> = new Set()) {
+  return publicApplicationObjectSchema
+    .superRefine((v, ctx) => {
     if (v.percentage === null && !v.grade) {
       ctx.addIssue({
         code: "custom",
@@ -337,6 +358,13 @@ export const publicApplicationSchema = z
           path: ["medium_id"],
         });
       }
+      if (streamRequiredStandardIds.has(v.standard_id) && !v.stream_id) {
+        ctx.addIssue({
+          code: "custom",
+          message: blMsg("Select your stream", "તમારો પ્રવાહ પસંદ કરો"),
+          path: ["stream_id"],
+        });
+      }
     }
 
     if (!hasRealPlacement && !usingOtherCourse) {
@@ -375,14 +403,20 @@ export const publicApplicationSchema = z
         path: ["period_no"],
       });
     }
-  })
-  .transform((v) => ({
-    ...v,
-    institution_id: v.institution_id === OTHER ? null : v.institution_id || null,
-    course_id: v.course_id === OTHER ? null : v.course_id || null,
-    board_id: v.board_id === OTHER ? null : v.board_id || null,
-  }));
+    })
+    .transform((v) => ({
+      ...v,
+      institution_id: v.institution_id === OTHER ? null : v.institution_id || null,
+      course_id: v.course_id === OTHER ? null : v.course_id || null,
+      board_id: v.board_id === OTHER ? null : v.board_id || null,
+    }));
+}
 
+/** The no-stream-requirement default — every existing call site that
+ *  doesn't need that check (there's currently only submitPublicApplication,
+ *  which builds its own via buildPublicApplicationSchema above) can still
+ *  import a plain schema and its inferred input type. */
+export const publicApplicationSchema = buildPublicApplicationSchema();
 export type PublicApplicationInput = z.input<typeof publicApplicationSchema>;
 export const OTHER_OPTION_VALUE = OTHER;
 
@@ -406,6 +440,7 @@ export const submissionEditSchema = z
     other_board_name: optionalText,
     medium_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     standard_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
+    stream_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     course_id: z.string().uuid().nullable().optional().transform((v) => v ?? null),
     other_course_name: optionalText,
     other_course_structure: z.union([courseStructure, z.literal("")]).nullable().optional().transform((v) => (v ? v : null)),
@@ -474,6 +509,7 @@ export const academicRecordFilterSchema = z.object({
   board_id: z.string().uuid().optional(),
   medium_id: z.string().uuid().optional(),
   standard_id: z.string().uuid().optional(),
+  stream_id: z.string().uuid().optional(),
   course_id: z.string().uuid().optional(),
   award_category_id: z.string().uuid().optional(),
   sort: z.string().optional(),

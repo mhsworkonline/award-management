@@ -43,6 +43,7 @@ type Values = {
   institution_id: string;
   academic_year_id: string;
   standard_id: string;
+  stream_id: string;
   course_id: string;
   period_no: string;
   roll_no: string;
@@ -62,6 +63,7 @@ const EMPTY: Values = {
   institution_id: "",
   academic_year_id: "",
   standard_id: "",
+  stream_id: "",
   course_id: "",
   period_no: "",
   roll_no: "",
@@ -206,6 +208,10 @@ export function NewStudentForm({
   const isCollege = instType === "college";
   const course = lookups.courses.find((c) => c.id === courseId);
   const selectedBoard = lookups.boards.find((b) => b.id === boardId);
+  const standardId = watch("standard_id");
+  const selectedStandard = lookups.standards.find((s) => s.id === standardId);
+  // Only Std 11/12 split into streams — every other Standard has none.
+  const needsStream = Boolean(selectedStandard) && (selectedStandard!.level === 11 || selectedStandard!.level === 12);
 
   const availableInstitutions = institutions.filter((i) => {
     if (!instType || i.type !== instType) return false;
@@ -272,12 +278,20 @@ export function NewStudentForm({
 
   React.useEffect(() => {
     if (!institutionId) return;
-    if (isCollege) setValue("standard_id", "");
-    else {
+    if (isCollege) {
+      setValue("standard_id", "");
+      setValue("stream_id", "");
+    } else {
       setValue("course_id", "");
       setValue("period_no", "");
     }
   }, [institutionId, isCollege, setValue]);
+
+  // A new standard may not need a stream at all (or need a different one) —
+  // clear rather than carry over a choice that no longer applies.
+  React.useEffect(() => {
+    setValue("stream_id", "");
+  }, [standardId, setValue]);
 
   React.useEffect(() => {
     if (!firstName?.trim() || !lastName?.trim()) {
@@ -320,6 +334,7 @@ export function NewStudentForm({
       institution_id: values.institution_id,
       academic_year_id: values.academic_year_id,
       standard_id: values.standard_id || null,
+      stream_id: values.stream_id || null,
       course_id: values.course_id || null,
       period_no: values.period_no ? Number(values.period_no) : null,
       roll_no: values.roll_no || null,
@@ -348,6 +363,7 @@ export function NewStudentForm({
       institution_id: values.institution_id,
       academic_year_id: values.academic_year_id,
       standard_id: values.standard_id,
+      stream_id: values.stream_id,
       course_id: values.course_id,
       period_no: values.period_no,
     });
@@ -659,28 +675,46 @@ export function NewStudentForm({
                 </Field>
               </FieldGrid>
             ) : (
-              <Field
-                label="Standard"
-                required
-                hint={!institutionId ? "Select an institution first" : "Includes Play Group through UKG"}
-              >
-                <Select
-                  value={watch("standard_id")}
-                  onValueChange={(v) => setValue("standard_id", v)}
-                  disabled={!institutionId}
+              <FieldGrid>
+                <Field
+                  label="Standard"
+                  required
+                  hint={!institutionId ? "Select an institution first" : "Includes Play Group through UKG"}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select standard" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {lookups.standards.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+                  <Select
+                    value={watch("standard_id")}
+                    onValueChange={(v) => setValue("standard_id", v)}
+                    disabled={!institutionId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select standard" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lookups.standards.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {needsStream && (
+                  <Field label="Stream" required>
+                    <Select value={watch("stream_id")} onValueChange={(v) => setValue("stream_id", v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select stream" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lookups.streams.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </FieldGrid>
             )}
 
             <FieldGrid cols={1} className="sm:grid-cols-3">

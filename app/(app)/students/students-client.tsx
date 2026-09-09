@@ -113,6 +113,7 @@ export function StudentsClient({
           "board_id",
           "medium_id",
           "standard_id",
+          "stream_id",
           "course_id",
           "award_category_id",
         ]}

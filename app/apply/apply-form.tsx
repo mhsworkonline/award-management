@@ -48,6 +48,7 @@ type Values = {
   other_board_name: string;
   medium_id: string;
   standard_id: string;
+  stream_id: string;
   course_id: string;
   other_course_name: string;
   other_course_structure: "" | "year" | "semester";
@@ -73,6 +74,7 @@ const EMPTY: Values = {
   other_board_name: "",
   medium_id: "",
   standard_id: "",
+  stream_id: "",
   course_id: "",
   other_course_name: "",
   other_course_structure: "",
@@ -201,6 +203,11 @@ export function ApplyForm({
   const mediumIsAmbiguous = selectedMedium?.name.trim().toLowerCase() === "both";
   const showBoardField = instType === "school" && Boolean(institutionId);
   const showMediumField = instType === "school" && Boolean(institutionId);
+  const standardId = watch("standard_id");
+  const selectedStandard = options.standards.find((s) => s.id === standardId);
+  // Only Std 11/12 split into streams — every other Standard has none.
+  const showStreamField =
+    instType === "school" && Boolean(selectedStandard) && (selectedStandard!.level === 11 || selectedStandard!.level === 12);
 
   function handleInstTypeChange(v: "school" | "college") {
     setInstType(v);
@@ -210,6 +217,7 @@ export function ApplyForm({
     setValue("institution_id", "");
     setValue("other_institution_name", "");
     setValue("standard_id", "");
+    setValue("stream_id", "");
     setValue("course_id", "");
     setValue("period_no", "");
     clearErrors([
@@ -219,6 +227,7 @@ export function ApplyForm({
       "institution_id",
       "other_institution_name",
       "standard_id",
+      "stream_id",
       "course_id",
       "period_no",
     ]);
@@ -414,6 +423,7 @@ export function ApplyForm({
       other_board_name: values.other_board_name || undefined,
       medium_id: values.medium_id || null,
       standard_id: values.standard_id || null,
+      stream_id: values.stream_id || null,
       course_id: values.course_id || null,
       other_course_name: values.other_course_name || undefined,
       other_course_structure: values.other_course_structure || null,
@@ -946,27 +956,56 @@ export function ApplyForm({
             </>
           ) : (
             instType === "school" && (
-              <Field label={L.standard} required error={errors.standard_id?.message} hint={!institutionId ? M.selectInstitutionFirst : undefined}>
-                <Select
-                  value={watch("standard_id")}
-                  onValueChange={(v) => {
-                    setValue("standard_id", v);
-                    clearErrors("standard_id");
-                  }}
-                  disabled={!institutionId}
-                >
-                  <SelectTrigger aria-invalid={Boolean(errors.standard_id)}>
-                    <SelectValue placeholder={M.selectStandard} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {options.standards.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+              <>
+                <Field label={L.standard} required error={errors.standard_id?.message} hint={!institutionId ? M.selectInstitutionFirst : undefined}>
+                  <Select
+                    value={watch("standard_id")}
+                    onValueChange={(v) => {
+                      setValue("standard_id", v);
+                      // A new standard may not need a stream at all (or need
+                      // a different one) — clear rather than carry over a
+                      // choice that no longer applies.
+                      setValue("stream_id", "");
+                      clearErrors(["standard_id", "stream_id"]);
+                    }}
+                    disabled={!institutionId}
+                  >
+                    <SelectTrigger aria-invalid={Boolean(errors.standard_id)}>
+                      <SelectValue placeholder={M.selectStandard} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {options.standards.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+
+                {showStreamField && (
+                  <Field label={L.stream} required error={errors.stream_id?.message}>
+                    <Select
+                      value={watch("stream_id")}
+                      onValueChange={(v) => {
+                        setValue("stream_id", v, { shouldValidate: true });
+                        clearErrors("stream_id");
+                      }}
+                    >
+                      <SelectTrigger aria-invalid={Boolean(errors.stream_id)}>
+                        <SelectValue placeholder={M.selectStream} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.streams.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </>
             )
           )}
 

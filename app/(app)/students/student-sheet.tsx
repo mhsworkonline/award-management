@@ -47,6 +47,7 @@ type Values = {
   institution_id: string;
   academic_year_id: string;
   standard_id: string;
+  stream_id: string;
   course_id: string;
   period_no: string;
   roll_no: string;
@@ -156,6 +157,10 @@ export function StudentSheet({
 
   const isCollege = instType === "college";
   const course = lookups.courses.find((c) => c.id === courseId);
+  const standardId = watch("standard_id");
+  const selectedStandard = lookups.standards.find((s) => s.id === standardId);
+  // Only Std 11/12 split into streams — every other Standard has none.
+  const needsStream = Boolean(selectedStandard) && (selectedStandard!.level === 11 || selectedStandard!.level === 12);
 
   const availableInstitutions = lookups.institutions.filter((i) => {
     if (!instType || i.type !== instType) return false;
@@ -205,6 +210,7 @@ export function StudentSheet({
       institution_id: record.institution_id,
       academic_year_id: record.academic_year_id,
       standard_id: record.standard_id ?? "",
+      stream_id: record.stream_id ?? "",
       course_id: record.course_id ?? "",
       period_no: record.period_no ? String(record.period_no) : "",
       roll_no: record.roll_no ?? "",
@@ -213,8 +219,10 @@ export function StudentSheet({
 
   React.useEffect(() => {
     if (!institutionId) return;
-    if (isCollege) setValue("standard_id", "");
-    else {
+    if (isCollege) {
+      setValue("standard_id", "");
+      setValue("stream_id", "");
+    } else {
       setValue("course_id", "");
       setValue("period_no", "");
     }
@@ -276,6 +284,7 @@ export function StudentSheet({
       institution_id: values.institution_id,
       academic_year_id: values.academic_year_id,
       standard_id: values.standard_id || null,
+      stream_id: values.stream_id || null,
       course_id: values.course_id || null,
       period_no: values.period_no ? Number(values.period_no) : null,
       roll_no: values.roll_no || undefined,
@@ -471,24 +480,48 @@ export function StudentSheet({
                 </Field>
               </FieldGrid>
             ) : (
-              <Field label="Standard" required>
-                <Select
-                  value={watch("standard_id")}
-                  onValueChange={(v) => setValue("standard_id", v)}
-                  disabled={!institutionId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select standard" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {lookups.standards.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+              <FieldGrid>
+                <Field label="Standard" required>
+                  <Select
+                    value={watch("standard_id")}
+                    onValueChange={(v) => {
+                      setValue("standard_id", v);
+                      // A new standard may not need a stream at all (or need
+                      // a different one) — clear rather than carry over a
+                      // choice that no longer applies.
+                      setValue("stream_id", "");
+                    }}
+                    disabled={!institutionId}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select standard" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lookups.standards.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {needsStream && (
+                  <Field label="Stream" required>
+                    <Select value={watch("stream_id")} onValueChange={(v) => setValue("stream_id", v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select stream" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lookups.streams.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </FieldGrid>
             )}
 
             <FieldGrid>

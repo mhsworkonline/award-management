@@ -22,6 +22,7 @@ type Raw = {
         academic_years: { id: string; label: string } | null;
         institutions: { name: string; type: InstitutionType } | null;
         standards: { label: string } | null;
+        streams: { name: string } | null;
         courses: { name: string; structure_type: "year" | "semester" } | null;
         students: { id: string; first_name: string; middle_name: string | null; last_name: string } | null;
       } | null;
@@ -42,6 +43,7 @@ const SELECT = `
         academic_years:am_academic_years ( id, label ),
         institutions:am_institutions!inner ( name, type ),
         standards:am_standards ( label ),
+        streams:am_streams ( name ),
         courses:am_courses ( name, structure_type ),
         students:am_students!inner ( id, salutation, first_name, middle_name, last_name )
       )

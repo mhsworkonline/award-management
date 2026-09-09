@@ -24,6 +24,7 @@ export type FilterKey =
   | "board_id"
   | "medium_id"
   | "standard_id"
+  | "stream_id"
   | "course_id"
   | "award_category_id"
   | "status";
@@ -35,6 +36,7 @@ const LABELS: Record<FilterKey, string> = {
   board_id: "Board",
   medium_id: "Medium",
   standard_id: "Standard",
+  stream_id: "Stream",
   course_id: "Course",
   award_category_id: "Award category",
   status: "Distribution status",
@@ -218,6 +220,7 @@ function optionsFor(
     board_id: lookups.boards.map((b) => ({ value: b.id, label: b.name })),
     medium_id: lookups.mediums.map((m) => ({ value: m.id, label: m.name })),
     standard_id: lookups.standards.map((s) => ({ value: s.id, label: s.label })),
+    stream_id: lookups.streams.map((s) => ({ value: s.id, label: s.name })),
     course_id: lookups.courses.map((c) => ({ value: c.id, label: c.name })),
     award_category_id: lookups.awardCategories.map((a) => ({ value: a.id, label: a.name })),
     status: [

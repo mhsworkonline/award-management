@@ -35,6 +35,7 @@ type Raw = {
     period_no: number | null;
     academic_years: { label: string } | null;
     standards: { label: string } | null;
+    streams: { name: string } | null;
     courses: { name: string; structure_type: "year" | "semester" } | null;
     institutions: { name: string; type: InstitutionType } | null;
     students: { id: string; first_name: string; middle_name: string | null; last_name: string } | null;
@@ -51,6 +52,8 @@ export async function listAwards(filters: {
   academic_year_id?: string;
   institution_id?: string;
   board_id?: string;
+  standard_id?: string;
+  stream_id?: string;
   award_category_id?: string;
   q?: string;
 }) {
@@ -66,6 +69,7 @@ export async function listAwards(filters: {
         id, period_no, academic_year_id,
         academic_years:am_academic_years ( label ),
         standards:am_standards ( label ),
+        streams:am_streams ( name ),
         courses:am_courses ( name, structure_type ),
         institutions:am_institutions!inner ( name, type ),
         students:am_students!inner ( id, salutation, first_name, middle_name, last_name )
@@ -86,6 +90,8 @@ export async function listAwards(filters: {
   if (filters.award_category_id) query = query.eq("award_category_id", filters.award_category_id);
   if (filters.institution_id) query = query.eq("academic_records.institution_id", filters.institution_id);
   if (filters.board_id) query = query.eq("academic_records.institutions.board_id", filters.board_id);
+  if (filters.standard_id) query = query.eq("academic_records.standard_id", filters.standard_id);
+  if (filters.stream_id) query = query.eq("academic_records.stream_id", filters.stream_id);
   if (filters.q) {
     const term = filters.q.replace(/[%,]/g, " ").trim();
     if (term) {

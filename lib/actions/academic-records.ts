@@ -19,6 +19,7 @@ export async function fetchRosterForGrading(input: {
   institution_id: string;
   academic_year_id: string;
   standard_id?: string;
+  stream_id?: string;
   course_id?: string;
   period_no?: number;
 }): Promise<ActionResult<RosterEntry[]>> {

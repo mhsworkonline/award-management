@@ -49,6 +49,7 @@ export async function getReportRows(filters: AcademicRecordFilters, limit = 1000
       institutions:am_institutions!inner ( name, type, boards:am_boards ( name ), mediums:am_mediums ( name ) ),
       academic_years:am_academic_years ( label ),
       standards:am_standards ( label ),
+      streams:am_streams ( name ),
       courses:am_courses ( name, structure_type ),
       student_awards:am_student_awards (
         subject_or_criteria,
@@ -67,6 +68,7 @@ export async function getReportRows(filters: AcademicRecordFilters, limit = 1000
   if (filters.academic_year_id) query = query.eq("academic_year_id", filters.academic_year_id);
   if (filters.institution_id) query = query.eq("institution_id", filters.institution_id);
   if (filters.standard_id) query = query.eq("standard_id", filters.standard_id);
+  if (filters.stream_id) query = query.eq("stream_id", filters.stream_id);
   if (filters.course_id) query = query.eq("course_id", filters.course_id);
   if (filters.institution_type) query = query.eq("institutions.type", filters.institution_type);
   if (filters.board_id) query = query.eq("institutions.board_id", filters.board_id);
@@ -110,6 +112,7 @@ export async function getReportRows(filters: AcademicRecordFilters, limit = 1000
     } | null;
     academic_years: { label: string } | null;
     standards: { label: string } | null;
+    streams: { name: string } | null;
     courses: { name: string; structure_type: "year" | "semester" } | null;
     student_awards: {
       subject_or_criteria: string | null;
@@ -207,6 +210,10 @@ export async function describeFilters(filters: AcademicRecordFilters) {
   if (filters.standard_id) {
     const label = await lookup(T.standards, filters.standard_id, "label");
     if (label) parts.push(`Standard: ${label}`);
+  }
+  if (filters.stream_id) {
+    const name = await lookup(T.streams, filters.stream_id);
+    if (name) parts.push(`Stream: ${name}`);
   }
   if (filters.course_id) {
     const name = await lookup(T.courses, filters.course_id);

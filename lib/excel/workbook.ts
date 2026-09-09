@@ -5,6 +5,7 @@ export const IMPORT_COLUMNS = [
   "Middle Name (Father's Name)",
   "Last Name",
   "Standard",
+  "Stream",
   "Course",
   "Year/Sem",
   "Roll No",
@@ -37,6 +38,10 @@ const HEADER_ALIASES: Record<string, string> = {
   std: "standard_label",
   class: "standard_label",
   standard_label: "standard_label",
+
+  // Only meaningful for Std 11/12 — blank for every other standard.
+  stream: "stream_name",
+  stream_name: "stream_name",
 
   course: "course_name",
   degree: "course_name",
@@ -129,8 +134,9 @@ export async function buildImportTemplate() {
   const sheet = wb.addWorksheet("Students");
 
   sheet.addRow([...IMPORT_COLUMNS]);
-  sheet.addRow(["Riya", "Mahesh", "Patel", "Std 10", "", "", "A-14", "9876543210"]);
-  sheet.addRow(["Aman", "Kiran", "Shah", "", "BTech", "4", "BT-221", "9812345678"]);
+  sheet.addRow(["Riya", "Mahesh", "Patel", "Std 10", "", "", "", "A-14", "9876543210"]);
+  sheet.addRow(["Nikita", "Suresh", "Mehta", "Std 12", "Science", "", "", "A-31", "9876500000"]);
+  sheet.addRow(["Aman", "Kiran", "Shah", "", "", "BTech", "4", "BT-221", "9812345678"]);
 
   styleHeader(sheet);
   autoWidth(sheet);
@@ -142,7 +148,8 @@ export async function buildImportTemplate() {
   notes.addRow(["2.", "School students: fill Standard (e.g. Std 10). Leave Course and Year/Sem blank."]);
   notes.addRow(["3.", "College students: fill Course (e.g. BTech) and Year/Sem (e.g. 4). Leave Standard blank."]);
   notes.addRow(["4.", "Standard and Course names must match those configured under Settings."]);
-  notes.addRow(["5.", "Institution and academic year are chosen during upload — no columns needed."]);
+  notes.addRow(["5.", "Std 11 and Std 12 students: also fill Stream (Arts, Commerce or Science). Every other standard leaves it blank."]);
+  notes.addRow(["6.", "Institution and academic year are chosen during upload — no columns needed."]);
   notes.getRow(1).font = { bold: true, size: 12 };
   notes.getColumn(1).width = 5;
   notes.getColumn(2).width = 90;

@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
-import { publicApplicationSchema } from "@/lib/validators";
-import { FN } from "@/lib/tables";
+import { buildPublicApplicationSchema } from "@/lib/validators";
+import { FN, T } from "@/lib/tables";
 import { message } from "@/lib/actions/crud";
 import type { ActionResult, PublicFormOptions, ResolvedForm } from "@/lib/types";
 
@@ -59,7 +59,19 @@ export async function submitPublicApplication(
   formId: string,
   raw: unknown,
 ): Promise<ActionResult<{ id: string; referenceCode: string }>> {
-  const parsed = publicApplicationSchema.safeParse(raw);
+  // Which Standards require a Stream (Std 11/12) isn't static — looked up
+  // fresh so the schema's "Select your stream" check attaches to the
+  // stream_id field itself (an inline error, same as every other required
+  // field here) rather than only surfacing as the RPC's raw exception text.
+  const supabaseForLookup = createClient();
+  const { data: streamStandards } = await supabaseForLookup
+    .from(T.standards)
+    .select("id")
+    .eq("org_id", ORG_ID)
+    .in("level", [11, 12]);
+  const streamRequiredStandardIds = new Set((streamStandards ?? []).map((s) => s.id as string));
+
+  const parsed = buildPublicApplicationSchema(streamRequiredStandardIds).safeParse(raw);
   if (!parsed.success) {
     return {
       ok: false,
@@ -91,6 +103,7 @@ export async function submitPublicApplication(
       p_other_board_name: parsed.data.other_board_name,
       p_medium_id: parsed.data.medium_id,
       p_standard_id: parsed.data.standard_id,
+      p_stream_id: parsed.data.stream_id,
       p_course_id: parsed.data.course_id,
       p_other_course_name: parsed.data.other_course_name,
       p_other_course_structure: parsed.data.other_course_structure,

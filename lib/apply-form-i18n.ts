@@ -36,6 +36,8 @@ export const APPLY_LABELS = {
   otherBoardName: bl("Your board's name", "તમારા બોર્ડનું નામ"),
   course: bl("Course", "અભ્યાસક્રમ"),
   standard: bl("Standard", "ધોરણ"),
+  // Only shown for Std 11/12 — every other Standard has no stream concept.
+  stream: bl("Stream", "પ્રવાહ"),
   year: bl("Year", "વર્ષ"),
   semester: bl("Semester", "સેમેસ્ટર"),
   // Only shown for a custom ("Other — not listed") course, so these are a
@@ -144,6 +146,7 @@ export const APPLY_MESSAGES = {
   selectMedium: bl("Select medium", "માધ્યમ પસંદ કરો"),
   selectCourse: bl("Select course", "અભ્યાસક્રમ પસંદ કરો"),
   selectStandard: bl("Select standard", "ધોરણ પસંદ કરો"),
+  selectStream: bl("Select stream", "પ્રવાહ પસંદ કરો"),
   selectCourseFirst: bl("Select a course first", "પહેલા અભ્યાસક્રમ પસંદ કરો"),
   periodRangeHint: (n: number) => bl(`1 to ${n}`, `૧ થી ${n}`),
   selectInstitutionFirst: bl("Select your institution first", "પહેલા તમારી સંસ્થા પસંદ કરો"),

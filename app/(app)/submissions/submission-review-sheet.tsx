@@ -73,6 +73,7 @@ type Values = {
   board_id: string;
   medium_id: string;
   standard_id: string;
+  stream_id: string;
   course_id: string;
   period_no: string;
   roll_no: string;
@@ -134,6 +135,9 @@ export function SubmissionReviewSheet({
   const isCollege = institution?.type === "college" || (!institution && Boolean(submission?.course_id || submission?.other_course_name));
   const course = courses.find((c) => c.id === courseId);
   const isPending = submission?.status === "pending";
+  const selectedStandard = lookups.standards.find((s) => s.id === standardId);
+  // Only Std 11/12 split into streams — every other Standard has none.
+  const needsStream = Boolean(selectedStandard) && (selectedStandard!.level === 11 || selectedStandard!.level === 12);
 
   const needsInstitutionResolve = isPending && !institutionId && Boolean(submission?.other_institution_name);
   const needsCourseResolve = isPending && !courseId && !standardId && Boolean(submission?.other_course_name);
@@ -333,6 +337,7 @@ export function SubmissionReviewSheet({
       board_id: submission.board_id ?? "",
       medium_id: submission.medium_id ?? "",
       standard_id: submission.standard_id ?? "",
+      stream_id: submission.stream_id ?? "",
       course_id: submission.course_id ?? "",
       period_no: submission.period_no ? String(submission.period_no) : "",
       roll_no: submission.roll_no ?? "",
@@ -373,6 +378,7 @@ export function SubmissionReviewSheet({
       other_board_name: submission.other_board_name ?? undefined,
       medium_id: values.medium_id || null,
       standard_id: values.standard_id || null,
+      stream_id: values.stream_id || null,
       course_id: values.course_id || null,
       other_course_name: submission.other_course_name ?? undefined,
       other_course_structure: submission.other_course_structure ?? undefined,
@@ -688,20 +694,52 @@ export function SubmissionReviewSheet({
                   </Field>
                 </FieldGrid>
               ) : (
-                <Field label="Standard">
-                  <Select value={watch("standard_id")} onValueChange={(v) => setValue("standard_id", v)} disabled={!isPending}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select standard" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {lookups.standards.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
+                <FieldGrid>
+                  <Field label="Standard">
+                    <Select
+                      value={watch("standard_id")}
+                      onValueChange={(v) => {
+                        setValue("standard_id", v);
+                        // A new standard may not need a stream at all (or
+                        // need a different one) — clear rather than carry
+                        // over a choice that no longer applies.
+                        setValue("stream_id", "");
+                      }}
+                      disabled={!isPending}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select standard" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lookups.standards.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  {needsStream && (
+                    <Field label="Stream">
+                      <Select
+                        value={watch("stream_id")}
+                        onValueChange={(v) => setValue("stream_id", v)}
+                        disabled={!isPending}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select stream" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {lookups.streams.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  )}
+                </FieldGrid>
               )}
 
               <FieldGrid>

@@ -160,6 +160,7 @@ export async function approveSubmission(id: string): Promise<ActionResult<{ stud
         institution_id: sub.institution_id,
         academic_year_id: sub.academic_year_id,
         standard_id: sub.standard_id,
+        stream_id: sub.stream_id,
         course_id: sub.course_id,
         period_no: sub.period_no,
         roll_no: sub.roll_no,

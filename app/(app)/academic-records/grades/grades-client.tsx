@@ -47,6 +47,7 @@ export function GradesClient({
   const [institutionId, setInstitutionId] = React.useState("");
   const [yearId, setYearId] = React.useState(defaultYearId ?? "");
   const [standardId, setStandardId] = React.useState("");
+  const [streamId, setStreamId] = React.useState("");
   const [courseId, setCourseId] = React.useState("");
   const [periodNo, setPeriodNo] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -56,6 +57,9 @@ export function GradesClient({
 
   const isCollege = instType === "college";
   const course = lookups.courses.find((c) => c.id === courseId);
+  const standard = lookups.standards.find((s) => s.id === standardId);
+  // Only Std 11/12 split into streams — every other Standard has none.
+  const needsStream = Boolean(standard) && (standard!.level === 11 || standard!.level === 12);
 
   const availableInstitutions = lookups.institutions.filter((i) => {
     if (!instType || i.type !== instType) return false;
@@ -76,14 +80,21 @@ export function GradesClient({
 
   React.useEffect(() => {
     setStandardId("");
+    setStreamId("");
     setCourseId("");
     setPeriodNo("");
     setEntries([]);
     setLoaded(false);
   }, [institutionId]);
 
+  // A new standard may not need a stream at all (or need a different one) —
+  // clear rather than carry over a choice that no longer applies.
+  React.useEffect(() => {
+    setStreamId("");
+  }, [standardId]);
+
   const canLoad = Boolean(
-    institutionId && yearId && (isCollege ? courseId && periodNo : standardId),
+    institutionId && yearId && (isCollege ? courseId && periodNo : standardId && (!needsStream || streamId)),
   );
 
   async function load() {
@@ -92,6 +103,7 @@ export function GradesClient({
       institution_id: institutionId,
       academic_year_id: yearId,
       standard_id: isCollege ? undefined : standardId || undefined,
+      stream_id: isCollege ? undefined : (needsStream ? streamId || undefined : undefined),
       course_id: isCollege ? courseId || undefined : undefined,
       period_no: isCollege && periodNo ? Number(periodNo) : undefined,
     });
@@ -271,20 +283,38 @@ export function GradesClient({
                 </Field>
               </FieldGrid>
             ) : (
-              <Field label="Standard" required>
-                <Select value={standardId} onValueChange={setStandardId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select standard" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {lookups.standards.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+              <FieldGrid>
+                <Field label="Standard" required>
+                  <Select value={standardId} onValueChange={setStandardId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select standard" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {lookups.standards.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {needsStream && (
+                  <Field label="Stream" required hint="Std 11/12 split into streams — load one at a time">
+                    <Select value={streamId} onValueChange={setStreamId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select stream" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lookups.streams.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              </FieldGrid>
             ))}
 
           <div className="flex justify-end">

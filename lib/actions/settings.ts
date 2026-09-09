@@ -14,6 +14,7 @@ import {
   institutionSchema,
   mediumSchema,
   standardSchema,
+  streamSchema,
 } from "@/lib/validators";
 import type { ActionResult } from "@/lib/types";
 
@@ -24,6 +25,7 @@ const REGISTRY = {
   mediums: mediumSchema,
   courses: courseSchema,
   standards: standardSchema,
+  streams: streamSchema,
   award_categories: awardCategorySchema,
   gift_items: giftItemSchema,
   institutions: institutionSchema,
@@ -37,6 +39,7 @@ const REVALIDATE: Record<ConfigTable, string[]> = {
   mediums: ["/settings", "/institutions", "/students"],
   courses: ["/settings", "/students", "/academic-records"],
   standards: ["/settings", "/students", "/academic-records"],
+  streams: ["/settings", "/students", "/academic-records", "/awards", "/reports"],
   award_categories: ["/settings", "/awards", "/reports", "/distribution"],
   gift_items: ["/settings", "/gifts", "/awards", "/distribution"],
   institutions: ["/institutions", "/students", "/academic-records", "/dashboard", "/reports"],

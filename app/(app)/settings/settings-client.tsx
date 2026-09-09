@@ -43,6 +43,7 @@ export function SettingsClient({
           <TabsTrigger value="boards">Boards</TabsTrigger>
           <TabsTrigger value="mediums">Mediums</TabsTrigger>
           <TabsTrigger value="standards">Standards</TabsTrigger>
+          <TabsTrigger value="streams">Streams</TabsTrigger>
           <TabsTrigger value="courses">Courses</TabsTrigger>
           <TabsTrigger value="categories">Award categories</TabsTrigger>
           <TabsTrigger value="qr">Links & QR</TabsTrigger>
@@ -136,6 +137,18 @@ export function SettingsClient({
               },
               { name: "label", label: "Label", type: "text", required: true, hint: "e.g. Play Group, Nursery, LKG, UKG, Std 10" },
             ]}
+          />
+        </TabsContent>
+
+        <TabsContent value="streams">
+          <ConfigSection
+            table="streams"
+            title="Streams"
+            description="Arts, Commerce, Science — only used for Std 11 and 12. Every other Standard has no stream."
+            addLabel="Add stream"
+            rows={lookups.streams as unknown as Record<string, unknown>[]}
+            columns={[{ key: "name", label: "Name" }]}
+            fields={[{ name: "name", label: "Name", type: "text", required: true }]}
           />
         </TabsContent>
 

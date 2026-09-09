@@ -11,6 +11,7 @@ const DETAIL_SELECT = `
     institutions:am_institutions ( id, name, type ),
     academic_years:am_academic_years ( id, label ),
     standards:am_standards ( id, label ),
+    streams:am_streams ( id, name ),
     courses:am_courses ( id, name, structure_type ),
     student_awards:am_student_awards ( id, subject_or_criteria, award_categories:am_award_categories ( id, name ) )
   )

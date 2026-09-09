@@ -151,6 +151,7 @@ export function ImportWizard({
         roll_no: r.roll_no,
         contact_no: r.contact_no,
         standard_id: r.standard_id,
+        stream_id: r.stream_id,
         course_id: r.course_id,
         period_no: r.period_no,
       })),

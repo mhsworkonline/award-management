@@ -16,6 +16,7 @@ export type ParsedImportRow = {
   roll_no: string | null;
   contact_no: string | null;
   standard_id: string | null;
+  stream_id: string | null;
   course_id: string | null;
   period_no: number | null;
   placement: string;
@@ -74,19 +75,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const [standards, courses, existing] = await Promise.all([
+    const [standards, streams, courses, existing] = await Promise.all([
       supabase.from(T.standards).select("id,label,level").eq("org_id", ORG_ID),
+      supabase.from(T.streams).select("id,name").eq("org_id", ORG_ID),
       supabase.from(T.courses).select("id,name,structure_type,total_periods").eq("org_id", ORG_ID),
       supabase.from(T.students).select("first_name,middle_name,last_name").eq("org_id", ORG_ID).limit(50000),
     ]);
 
-    const standardByKey = new Map<string, { id: string; label: string }>();
+    const standardByKey = new Map<string, { id: string; label: string; level: number }>();
     for (const s of standards.data ?? []) {
-      standardByKey.set(normalizeName(s.label), { id: s.id, label: s.label });
-      standardByKey.set(String(s.level), { id: s.id, label: s.label });
-      standardByKey.set(`std ${s.level}`, { id: s.id, label: s.label });
-      standardByKey.set(`class ${s.level}`, { id: s.id, label: s.label });
+      standardByKey.set(normalizeName(s.label), { id: s.id, label: s.label, level: s.level });
+      standardByKey.set(String(s.level), { id: s.id, label: s.label, level: s.level });
+      standardByKey.set(`std ${s.level}`, { id: s.id, label: s.label, level: s.level });
+      standardByKey.set(`class ${s.level}`, { id: s.id, label: s.label, level: s.level });
     }
+
+    const streamByName = new Map<string, { id: string; name: string }>();
+    for (const s of streams.data ?? []) streamByName.set(normalizeName(s.name), s);
 
     const courseByName = new Map<
       string,
@@ -119,18 +124,34 @@ export async function POST(request: Request) {
       if (first_name.length > 100 || last_name.length > 100) errors.push("Name is too long");
 
       let standard_id: string | null = null;
+      let stream_id: string | null = null;
       let course_id: string | null = null;
       let period_no: number | null = null;
       let placement = "—";
 
       const standardRaw = values.standard_label;
       const courseRaw = values.course_name;
+      const streamRaw = values.stream_name;
 
       if (standardRaw) {
         const match = standardByKey.get(normalizeName(standardRaw));
         if (match) {
           standard_id = match.id;
           placement = match.label;
+
+          if (match.level === 11 || match.level === 12) {
+            if (!streamRaw) {
+              errors.push(`Stream is required for ${match.label} (Arts, Commerce or Science)`);
+            } else {
+              const streamMatch = streamByName.get(normalizeName(streamRaw));
+              if (streamMatch) {
+                stream_id = streamMatch.id;
+                placement = `${match.label} (${streamMatch.name})`;
+              } else {
+                errors.push(`Unknown stream "${streamRaw}" — add it under Settings first`);
+              }
+            }
+          }
         } else {
           errors.push(`Unknown standard "${standardRaw}" — add it under Settings first`);
         }
@@ -188,6 +209,7 @@ export async function POST(request: Request) {
         roll_no: values.roll_no ?? null,
         contact_no: values.contact_no ?? null,
         standard_id,
+        stream_id,
         course_id,
         period_no,
         placement,

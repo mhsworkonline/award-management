@@ -29,6 +29,7 @@ export const BACKUP_TABLES: BackupTable[] = [
   { table: "am_mediums", filterColumn: "org_id" },
   { table: "am_courses", filterColumn: "org_id" },
   { table: "am_standards", filterColumn: "org_id" },
+  { table: "am_streams", filterColumn: "org_id" },
   { table: "am_award_categories", filterColumn: "org_id" },
   { table: "am_gift_items", filterColumn: "org_id" },
   { table: "am_institutions", filterColumn: "org_id" },

@@ -71,7 +71,7 @@ export function AwardsClient({
 
       <FilterBar
         lookups={lookups}
-        advanced={["institution_id", "award_category_id"]}
+        advanced={["institution_id", "standard_id", "stream_id", "award_category_id"]}
         searchPlaceholder="Search awarded student…"
       >
         {withoutGift > 0 && (

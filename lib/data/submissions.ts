@@ -8,6 +8,7 @@ const SELECT = `
   institutions:am_institutions ( id, name, type ),
   academic_years:am_academic_years ( id, label ),
   standards:am_standards ( id, label ),
+  streams:am_streams ( id, name ),
   courses:am_courses ( id, name, structure_type ),
   boards:am_boards ( id, name ),
   mediums:am_mediums ( id, name ),

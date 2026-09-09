@@ -9,6 +9,7 @@ const EMPTY_LOOKUPS: Lookups = {
   mediums: [],
   courses: [],
   standards: [],
+  streams: [],
   awardCategories: [],
   giftItems: [],
   institutions: [],

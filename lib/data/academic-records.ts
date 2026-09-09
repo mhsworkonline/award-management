@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ORG_ID, PAGE_SIZE } from "@/lib/constants";
 import type { AcademicRecordFilters } from "@/lib/validators";
 import type { AcademicRecordRow } from "@/lib/types";
+import { placementLabel } from "@/lib/placement";
 import { REL, T } from "@/lib/tables";
 
 const SELECT = `
@@ -10,6 +11,7 @@ const SELECT = `
   institutions:am_institutions!inner ( id, name, type, board_id, medium_id ),
   academic_years:am_academic_years ( id, label ),
   standards:am_standards ( id, label ),
+  streams:am_streams ( id, name ),
   courses:am_courses ( id, name, structure_type ),
   student_awards:am_student_awards ( id, subject_or_criteria, award_categories:am_award_categories ( id, name ) )
 `;
@@ -41,6 +43,7 @@ export async function listAcademicRecords(filters: AcademicRecordFilters) {
   if (filters.academic_year_id) query = query.eq("academic_year_id", filters.academic_year_id);
   if (filters.institution_id) query = query.eq("institution_id", filters.institution_id);
   if (filters.standard_id) query = query.eq("standard_id", filters.standard_id);
+  if (filters.stream_id) query = query.eq("stream_id", filters.stream_id);
   if (filters.course_id) query = query.eq("course_id", filters.course_id);
   if (filters.institution_type) query = query.eq("institutions.type", filters.institution_type);
   if (filters.board_id) query = query.eq("institutions.board_id", filters.board_id);
@@ -108,6 +111,7 @@ export async function listRosterForGrading(input: {
   institution_id: string;
   academic_year_id: string;
   standard_id?: string;
+  stream_id?: string;
   course_id?: string;
   period_no?: number;
 }) {
@@ -125,6 +129,7 @@ export async function listRosterForGrading(input: {
     .limit(500);
 
   if (input.standard_id) query = query.eq("standard_id", input.standard_id);
+  if (input.stream_id) query = query.eq("stream_id", input.stream_id);
   if (input.course_id) query = query.eq("course_id", input.course_id);
   if (input.period_no) query = query.eq("period_no", input.period_no);
 
@@ -180,9 +185,15 @@ export type TopPerformerGroup = {
  *  Grouped by Standard for schools — a school award is decided by Standard
  *  alone, pooling every student in that Standard across every institution,
  *  board and medium, so a Std 5 topper must never be ranked against a Std
- *  12 topper on the same list. Colleges have no such rule (a "Standard"
- *  doesn't apply to a degree/diploma), so they stay exactly as before: one
- *  combined list ranked by raw percentage across every course. */
+ *  12 topper on the same list. Std 11 and 12 split one level further, into
+ *  Arts/Commerce/Science (see 0032_am_streams.sql) — those students sit
+ *  different subjects entirely, so a raw percentage isn't comparable across
+ *  streams the way it is within one. A record with no stream set yet (data
+ *  from before this feature existed) lands in its own "Unspecified stream"
+ *  group rather than being silently dropped or mixed into a real one.
+ *  Colleges have no such rule (a "Standard" doesn't apply to a
+ *  degree/diploma), so they stay exactly as before: one combined list
+ *  ranked by raw percentage across every course. */
 export async function listTopPerformers(input: {
   academic_year_id: string;
   institution_id?: string;
@@ -198,6 +209,7 @@ export async function listTopPerformers(input: {
        students:am_students!inner ( id, salutation, first_name, middle_name, last_name ),
        institutions:am_institutions!inner ( id, name, type ),
        standards:am_standards ( id, label, level ),
+       streams:am_streams ( id, name ),
        courses:am_courses ( id, name, structure_type ),
        student_awards:am_student_awards ( id )`,
     )
@@ -222,7 +234,8 @@ export async function listTopPerformers(input: {
     students: { id: string; first_name: string; middle_name: string | null; last_name: string } | null;
     institutions: { id: string; name: string; type: string } | null;
     standards: { id: string; label: string; level: number } | null;
-    courses: { id: string; name: string; structure_type: string } | null;
+    streams: { id: string; name: string } | null;
+    courses: { id: string; name: string; structure_type: "year" | "semester" } | null;
     student_awards: { id: string }[];
   };
 
@@ -238,26 +251,33 @@ export async function listTopPerformers(input: {
     student_name: `${r.students!.first_name} ${r.students!.last_name}`,
     father_name: r.students!.middle_name,
     institution_name: r.institutions?.name ?? "—",
-    placement: r.standards?.label ?? r.courses?.name ?? "—",
+    placement: placementLabel(r),
   });
 
-  const schoolGroups = new Map<string, { label: string; level: number; rows: Row[] }>();
+  const STREAM_LEVELS = new Set([11, 12]);
+  const schoolGroups = new Map<string, { label: string; level: number; streamName: string; rows: Row[] }>();
   const collegeRows: Row[] = [];
 
   for (const r of eligible) {
     if (r.institutions?.type === "school" && r.standards) {
-      const existing = schoolGroups.get(r.standards.id);
+      const splitByStream = STREAM_LEVELS.has(r.standards.level);
+      const streamKey = splitByStream ? (r.streams?.id ?? "unspecified") : "";
+      const streamName = splitByStream ? (r.streams?.name ?? "Unspecified stream") : "";
+      const key = `${r.standards.id}:${streamKey}`;
+      const label = splitByStream ? `${r.standards.label} — ${streamName}` : r.standards.label;
+
+      const existing = schoolGroups.get(key);
       if (existing) existing.rows.push(r);
-      else schoolGroups.set(r.standards.id, { label: r.standards.label, level: r.standards.level, rows: [r] });
+      else schoolGroups.set(key, { label, level: r.standards.level, streamName, rows: [r] });
     } else {
       collegeRows.push(r);
     }
   }
 
   const groups: TopPerformerGroup[] = [...schoolGroups.entries()]
-    .sort(([, a], [, b]) => a.level - b.level)
-    .map(([standardId, group]) => ({
-      key: standardId,
+    .sort(([, a], [, b]) => a.level - b.level || a.streamName.localeCompare(b.streamName))
+    .map(([groupKey, group]) => ({
+      key: groupKey,
       label: group.label,
       performers: group.rows.slice(0, perGroupLimit).map(toPerformer),
     }));

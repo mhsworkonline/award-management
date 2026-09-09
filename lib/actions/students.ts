@@ -151,6 +151,7 @@ export async function createStudentWithRecord(input: {
   institution_id: string;
   academic_year_id: string;
   standard_id?: string | null;
+  stream_id?: string | null;
   course_id?: string | null;
   period_no?: number | null;
   roll_no?: string | null;
@@ -182,6 +183,7 @@ export async function createStudentWithRecord(input: {
     academic_year_id: input.academic_year_id,
     institution_id: input.institution_id,
     standard_id: input.standard_id,
+    stream_id: input.stream_id,
     course_id: input.course_id,
     period_no: input.period_no,
     roll_no: input.roll_no,
@@ -253,6 +255,7 @@ export type ImportRow = {
   roll_no: string | null;
   contact_no: string | null;
   standard_id: string | null;
+  stream_id: string | null;
   course_id: string | null;
   period_no: number | null;
   errors: string[];
@@ -271,6 +274,7 @@ export async function commitImport(input: {
     roll_no: string | null;
     contact_no: string | null;
     standard_id: string | null;
+    stream_id: string | null;
     course_id: string | null;
     period_no: number | null;
   }[];
@@ -329,6 +333,7 @@ export async function commitImport(input: {
         institution_id: input.institution_id,
         academic_year_id: input.academic_year_id,
         standard_id: row.standard_id,
+        stream_id: row.stream_id,
         course_id: row.course_id,
         period_no: row.period_no,
         roll_no: row.roll_no,

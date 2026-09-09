@@ -3,12 +3,18 @@
 export type PlacementSource = {
   period_no?: number | null;
   standards?: { label: string } | null;
+  streams?: { name: string } | null;
   courses?: { name: string; structure_type?: "year" | "semester" | null } | null;
 };
 
 export function placementLabel(source: PlacementSource | null | undefined) {
   if (!source) return "—";
-  if (source.standards?.label) return source.standards.label;
+  // Stream only ever accompanies a Standard (Std 11/12 — see
+  // 0032_am_streams.sql), never a course, so it's folded in here rather
+  // than needing a separate column everywhere this label is already used.
+  if (source.standards?.label) {
+    return source.streams?.name ? `${source.standards.label} (${source.streams.name})` : source.standards.label;
+  }
   if (source.courses?.name) {
     const unit = source.courses.structure_type === "semester" ? "Sem" : "Year";
     return source.period_no

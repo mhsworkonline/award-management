@@ -44,6 +44,10 @@ export type Standard = {
   created_at: string;
 };
 
+/** Arts / Commerce / Science — only meaningful for Std 11 and 12 (see
+ *  0032_am_streams.sql); every other Standard leaves stream_id null. */
+export type Stream = { id: string; org_id: string; name: string; created_at: string };
+
 export type AwardCategory = {
   id: string;
   org_id: string;
@@ -130,6 +134,7 @@ export type AcademicRecord = {
   academic_year_id: string;
   institution_id: string;
   standard_id: string | null;
+  stream_id: string | null;
   course_id: string | null;
   period_no: number | null;
   roll_no: string | null;
@@ -152,6 +157,7 @@ export type AcademicRecordRow = AcademicRecord & {
   institutions?: Pick<Institution, "id" | "name" | "type"> | null;
   academic_years?: Pick<AcademicYear, "id" | "label"> | null;
   standards?: Pick<Standard, "id" | "label"> | null;
+  streams?: Pick<Stream, "id" | "name"> | null;
   courses?: Pick<Course, "id" | "name" | "structure_type"> | null;
   student_awards?: Array<{
     id: string;
@@ -233,6 +239,7 @@ export type Lookups = {
   mediums: Medium[];
   courses: Course[];
   standards: Standard[];
+  streams: Stream[];
   awardCategories: AwardCategory[];
   giftItems: GiftItem[];
   institutions: Pick<Institution, "id" | "name" | "type" | "board_id" | "medium_id">[];
@@ -252,6 +259,7 @@ export type PublicFormOptions = {
   boards: { id: string; name: string }[];
   mediums: { id: string; name: string }[];
   standards: { id: string; label: string; level: number }[];
+  streams: { id: string; name: string }[];
   courses: { id: string; name: string; structure_type: CourseStructure; total_periods: number }[];
   academicYear: { id: string; label: string } | null;
 };
@@ -274,6 +282,7 @@ export type PublicSubmission = {
   medium_id: string | null;
   academic_year_id: string;
   standard_id: string | null;
+  stream_id: string | null;
   course_id: string | null;
   other_course_name: string | null;
   other_course_structure: CourseStructure | null;
@@ -297,6 +306,7 @@ export type PublicSubmissionRow = PublicSubmission & {
   institutions?: Pick<Institution, "id" | "name" | "type"> | null;
   academic_years?: Pick<AcademicYear, "id" | "label"> | null;
   standards?: Pick<Standard, "id" | "label"> | null;
+  streams?: Pick<Stream, "id" | "name"> | null;
   courses?: Pick<Course, "id" | "name" | "structure_type"> | null;
   boards?: Pick<Board, "id" | "name"> | null;
   mediums?: Pick<Medium, "id" | "name"> | null;
