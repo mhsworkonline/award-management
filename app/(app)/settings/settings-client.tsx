@@ -7,6 +7,7 @@ import { ConfigSection } from "./config-section";
 import { BrandingSection } from "./branding-section";
 import { QrCodeSection } from "./qr-code-section";
 import { ShortLinkSection } from "./short-link-section";
+import { BackupSection } from "./backup-section";
 import { AccessSection } from "./access-section";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { Lookups, Organization, RoleWithPermissions, ShortLink, UserRow } from "@/lib/types";
@@ -45,6 +46,7 @@ export function SettingsClient({
           <TabsTrigger value="courses">Courses</TabsTrigger>
           <TabsTrigger value="categories">Award categories</TabsTrigger>
           <TabsTrigger value="qr">Links & QR</TabsTrigger>
+          <TabsTrigger value="backup">Backup</TabsTrigger>
           {isAdmin && <TabsTrigger value="access">Users & Roles</TabsTrigger>}
         </TabsList>
 
@@ -221,6 +223,10 @@ export function SettingsClient({
             <ShortLinkSection links={shortLinks} />
             <QrCodeSection />
           </div>
+        </TabsContent>
+
+        <TabsContent value="backup">
+          <BackupSection />
         </TabsContent>
 
         {isAdmin && (
