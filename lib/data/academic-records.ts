@@ -156,15 +156,40 @@ export async function listRosterForGrading(input: {
     .sort((a, b) => (a.roll_no ?? "").localeCompare(b.roll_no ?? "") || a.first_name.localeCompare(b.first_name));
 }
 
-/** Top performers within a standard/course+year that don't have an award yet —
- *  feeds the "suggested" panel on the Awards page. Manual assignment stays
- *  available regardless; this is a shortcut, not the only path. */
+export type TopPerformer = {
+  academic_record_id: string;
+  percentage: number | null;
+  rank: number | null;
+  roll_no: string | null;
+  student_name: string;
+  father_name: string | null;
+  institution_name: string;
+  placement: string;
+};
+
+export type TopPerformerGroup = {
+  key: string;
+  label: string;
+  performers: TopPerformer[];
+};
+
+/** Top performers per year that don't have an award yet — feeds the
+ *  "suggested" panel on the Awards page. Manual assignment stays available
+ *  regardless; this is a shortcut, not the only path.
+ *
+ *  Grouped by Standard for schools — a school award is decided by Standard
+ *  alone, pooling every student in that Standard across every institution,
+ *  board and medium, so a Std 5 topper must never be ranked against a Std
+ *  12 topper on the same list. Colleges have no such rule (a "Standard"
+ *  doesn't apply to a degree/diploma), so they stay exactly as before: one
+ *  combined list ranked by raw percentage across every course. */
 export async function listTopPerformers(input: {
   academic_year_id: string;
   institution_id?: string;
   limit?: number;
-}) {
+}): Promise<TopPerformerGroup[]> {
   const supabase = createClient();
+  const perGroupLimit = input.limit ?? 10;
 
   let query = supabase
     .from(T.academicRecords)
@@ -172,7 +197,7 @@ export async function listTopPerformers(input: {
       `id, percentage, rank, roll_no,
        students:am_students!inner ( id, salutation, first_name, middle_name, last_name ),
        institutions:am_institutions!inner ( id, name, type ),
-       standards:am_standards ( id, label ),
+       standards:am_standards ( id, label, level ),
        courses:am_courses ( id, name, structure_type ),
        student_awards:am_student_awards ( id )`,
     )
@@ -180,7 +205,9 @@ export async function listTopPerformers(input: {
     .eq("academic_year_id", input.academic_year_id)
     .not("percentage", "is", null)
     .order("percentage", { ascending: false })
-    .limit(500);
+    // Enough headroom that a standard with many students isn't starved by
+    // an unrelated standard's students filling up a single shared cap.
+    .limit(3000);
 
   if (input.institution_id) query = query.eq("institution_id", input.institution_id);
 
@@ -194,22 +221,54 @@ export async function listTopPerformers(input: {
     roll_no: string | null;
     students: { id: string; first_name: string; middle_name: string | null; last_name: string } | null;
     institutions: { id: string; name: string; type: string } | null;
-    standards: { id: string; label: string } | null;
+    standards: { id: string; label: string; level: number } | null;
     courses: { id: string; name: string; structure_type: string } | null;
     student_awards: { id: string }[];
   };
 
-  return ((data ?? []) as unknown as Row[])
-    .filter((r) => r.students && r.student_awards.length === 0)
-    .slice(0, input.limit ?? 20)
-    .map((r) => ({
-      academic_record_id: r.id,
-      percentage: r.percentage,
-      rank: r.rank,
-      roll_no: r.roll_no,
-      student_name: `${r.students!.first_name} ${r.students!.last_name}`,
-      father_name: r.students!.middle_name,
-      institution_name: r.institutions?.name ?? "—",
-      placement: r.standards?.label ?? r.courses?.name ?? "—",
+  const eligible = ((data ?? []) as unknown as Row[]).filter(
+    (r) => r.students && r.student_awards.length === 0,
+  );
+
+  const toPerformer = (r: Row): TopPerformer => ({
+    academic_record_id: r.id,
+    percentage: r.percentage,
+    rank: r.rank,
+    roll_no: r.roll_no,
+    student_name: `${r.students!.first_name} ${r.students!.last_name}`,
+    father_name: r.students!.middle_name,
+    institution_name: r.institutions?.name ?? "—",
+    placement: r.standards?.label ?? r.courses?.name ?? "—",
+  });
+
+  const schoolGroups = new Map<string, { label: string; level: number; rows: Row[] }>();
+  const collegeRows: Row[] = [];
+
+  for (const r of eligible) {
+    if (r.institutions?.type === "school" && r.standards) {
+      const existing = schoolGroups.get(r.standards.id);
+      if (existing) existing.rows.push(r);
+      else schoolGroups.set(r.standards.id, { label: r.standards.label, level: r.standards.level, rows: [r] });
+    } else {
+      collegeRows.push(r);
+    }
+  }
+
+  const groups: TopPerformerGroup[] = [...schoolGroups.entries()]
+    .sort(([, a], [, b]) => a.level - b.level)
+    .map(([standardId, group]) => ({
+      key: standardId,
+      label: group.label,
+      performers: group.rows.slice(0, perGroupLimit).map(toPerformer),
     }));
+
+  if (collegeRows.length > 0) {
+    groups.push({
+      key: "colleges",
+      label: "Colleges",
+      performers: collegeRows.slice(0, perGroupLimit).map(toPerformer),
+    });
+  }
+
+  return groups;
 }
