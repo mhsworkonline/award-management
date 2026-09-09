@@ -226,7 +226,7 @@ export function SettingsClient({
         </TabsContent>
 
         <TabsContent value="backup">
-          <BackupSection />
+          <BackupSection isAdmin={isAdmin} />
         </TabsContent>
 
         {isAdmin && (
