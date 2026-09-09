@@ -1,8 +1,11 @@
 "use client";
 
-import { Download, DatabaseBackup } from "lucide-react";
+import { useState } from "react";
+import { Download, DatabaseBackup, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { downloadFile } from "@/lib/download-file";
 import { RestoreSection } from "./restore-section";
 
 /** Two backups, deliberately kept separate rather than merged into one
@@ -15,12 +18,38 @@ import { RestoreSection } from "./restore-section";
  *    data in one file, so it's admin-only (see the /api/backup/full-backup
  *    route, gated by requireAdmin()).
  *
+ *  Both routes build the whole ZIP in memory before responding, so a plain
+ *  `<a href>` would sit there giving no sign anything was happening —
+ *  fetched via downloadFile() instead so the button can show a spinner and
+ *  disable itself while it works. This stays non-blocking on purpose: the
+ *  operation is read-only and safe, so there's no reason to freeze the
+ *  rest of the app while it runs — the busy button is just there so a
+ *  second click can't start a second one, and so it's obvious it's
+ *  working rather than broken.
+ *
  *  No external service, no credentials, nothing that can expire or need
  *  re-authorizing — the tradeoff against a real Google Drive integration
  *  is these can't record a Drive link back into the database for you;
  *  you'd drag the ZIP's contents into Drive yourself afterward, same as
  *  saving it anywhere else. */
 export function BackupSection({ isAdmin }: { isAdmin: boolean }) {
+  const [filesBusy, setFilesBusy] = useState(false);
+  const [fullBusy, setFullBusy] = useState(false);
+
+  async function handleDownload(
+    url: string,
+    fallbackFilename: string,
+    setBusy: (busy: boolean) => void,
+  ) {
+    setBusy(true);
+    try {
+      const error = await downloadFile(url, fallbackFilename);
+      if (error) toast.error(error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="grid gap-5">
       <Card>
@@ -33,10 +62,15 @@ export function BackupSection({ isAdmin }: { isAdmin: boolean }) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button asChild>
-            <a href="/api/backup/attachments-zip">
-              <Download /> Download all files (ZIP)
-            </a>
+          <Button
+            type="button"
+            disabled={filesBusy}
+            onClick={() =>
+              handleDownload("/api/backup/attachments-zip", "award-management-files.zip", setFilesBusy)
+            }
+          >
+            {filesBusy ? <Loader2 className="animate-spin" /> : <Download />}
+            {filesBusy ? "Preparing…" : "Download all files (ZIP)"}
           </Button>
         </CardContent>
       </Card>
@@ -54,10 +88,20 @@ export function BackupSection({ isAdmin }: { isAdmin: boolean }) {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild variant="secondary">
-              <a href="/api/backup/full-backup">
-                <DatabaseBackup /> Download full backup (ZIP)
-              </a>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={fullBusy}
+              onClick={() =>
+                handleDownload(
+                  "/api/backup/full-backup",
+                  "award-management-full-backup.zip",
+                  setFullBusy,
+                )
+              }
+            >
+              {fullBusy ? <Loader2 className="animate-spin" /> : <DatabaseBackup />}
+              {fullBusy ? "Preparing backup…" : "Download full backup (ZIP)"}
             </Button>
           </CardContent>
         </Card>
