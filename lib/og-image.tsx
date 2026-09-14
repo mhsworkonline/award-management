@@ -6,8 +6,6 @@ export const OG_IMAGE_SIZE = { width: 1200, height: 630 } as const;
 type OgImageInput = {
   appName: string;
   logoUrl: string | null;
-  heading: string;
-  subheading?: string | null;
 };
 
 /** Fetches the logo and inlines it as a data URI so satori (which renders
@@ -29,8 +27,12 @@ async function fetchLogoDataUri(logoUrl: string): Promise<string | null> {
 }
 
 /** The banner behind /apply and /apply/[slug]'s opengraph-image routes —
- *  this is what shows up as the link preview thumbnail in WhatsApp. */
-export async function renderApplyOgImage({ appName, logoUrl, heading, subheading }: OgImageInput) {
+ *  this is what shows up as the link preview thumbnail in WhatsApp. Kept
+ *  deliberately simple (logo + name only): the form title and academic
+ *  year are already carried by the page's og:title/description text, so
+ *  repeating them here just added small, redundant text. Colors are the
+ *  app's own --primary (a deep rose/maroon) rather than a generic gradient. */
+export async function renderApplyOgImage({ appName, logoUrl }: OgImageInput) {
   const logoDataUri = logoUrl ? await fetchLogoDataUri(logoUrl) : null;
 
   return new ImageResponse(
@@ -43,8 +45,8 @@ export async function renderApplyOgImage({ appName, logoUrl, heading, subheading
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: 24,
-          background: "linear-gradient(135deg, #4338ca 0%, #6d28d9 100%)",
+          gap: 40,
+          background: "linear-gradient(135deg, #571922 0%, #d3455a 100%)",
           fontFamily: "sans-serif",
         }}
       >
@@ -52,28 +54,24 @@ export async function renderApplyOgImage({ appName, logoUrl, heading, subheading
           // eslint-disable-next-line @next/next/no-img-element -- satori element, not a DOM <img>
           <img
             src={logoDataUri}
-            width={140}
-            height={140}
-            style={{ borderRadius: 28, objectFit: "contain", background: "#fff", padding: 12 }}
+            width={220}
+            height={220}
+            style={{ borderRadius: 32, objectFit: "contain", background: "#fff", padding: 16 }}
           />
         ) : null}
-        <div style={{ display: "flex", fontSize: 56, color: "#fff", textAlign: "center", padding: "0 60px" }}>
-          {appName}
-        </div>
         <div
           style={{
             display: "flex",
-            fontSize: 30,
-            color: "rgba(255,255,255,0.85)",
+            fontSize: 76,
+            fontWeight: 700,
+            color: "#fff",
             textAlign: "center",
-            padding: "0 80px",
+            padding: "0 60px",
+            lineHeight: 1.15,
           }}
         >
-          {heading}
+          {appName}
         </div>
-        {subheading ? (
-          <div style={{ display: "flex", fontSize: 22, color: "rgba(255,255,255,0.65)" }}>{subheading}</div>
-        ) : null}
       </div>
     ),
     OG_IMAGE_SIZE
