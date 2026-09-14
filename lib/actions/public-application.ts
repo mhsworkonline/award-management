@@ -1,6 +1,7 @@
 "use server";
 
 import { createHash } from "node:crypto";
+import { cache } from "react";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
@@ -11,8 +12,11 @@ import type { ActionResult, PublicFormOptions, ResolvedForm } from "@/lib/types"
 
 /** Unauthenticated — resolves which form /apply (or /apply/[slug]) should
  *  render. No slug = the org's current default (active-year form, else most
- *  recently created enabled one). */
-export async function resolveApplicationForm(slug?: string): Promise<ActionResult<ResolvedForm>> {
+ *  recently created enabled one). Wrapped in React's request-scoped cache so
+ *  a page's generateMetadata and its body share one RPC round trip instead
+ *  of two (the opengraph-image route is a separate request and always
+ *  resolves its own copy). */
+export const resolveApplicationForm = cache(async (slug?: string): Promise<ActionResult<ResolvedForm>> => {
   try {
     const supabase = createClient();
     const { data, error } = await supabase.rpc(FN.resolveApplicationForm, {
@@ -24,7 +28,7 @@ export async function resolveApplicationForm(slug?: string): Promise<ActionResul
   } catch (e) {
     return { ok: false, error: message(e) };
   }
-}
+});
 
 /** Unauthenticated — powers the /apply page's dropdowns via a security-definer
  *  RPC that exposes only safe columns from institutions/boards/standards/courses. */
