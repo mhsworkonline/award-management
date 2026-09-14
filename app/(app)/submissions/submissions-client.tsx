@@ -52,10 +52,12 @@ export function SubmissionsClient({
   submissions,
   lookups,
   status,
+  counts,
 }: {
   submissions: PublicSubmissionRow[];
   lookups: Lookups;
   status: SubmissionStatus | "all";
+  counts: Record<SubmissionStatus | "all", number>;
 }) {
   const { setParams } = useQueryParams();
   const [active, setActive] = React.useState<PublicSubmissionRow | null>(null);
@@ -98,12 +100,12 @@ export function SubmissionsClient({
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <Tabs value={status} onValueChange={(v) => setParams({ status: v })}>
+        <Tabs value={status} onValueChange={(v) => setParams({ status: v }, { keepAllValue: true })}>
           <TabsList>
-            <TabsTrigger value="pending">Pending</TabsTrigger>
-            <TabsTrigger value="approved">Approved</TabsTrigger>
-            <TabsTrigger value="rejected">Rejected</TabsTrigger>
-            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="pending">Pending ({counts.pending})</TabsTrigger>
+            <TabsTrigger value="approved">Approved ({counts.approved})</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected ({counts.rejected})</TabsTrigger>
+            <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
           </TabsList>
         </Tabs>
 

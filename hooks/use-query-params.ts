@@ -12,11 +12,21 @@ export function useQueryParams() {
   const [pending, startTransition] = React.useTransition();
 
   const setParams = React.useCallback(
-    (updates: Record<string, string | number | null | undefined>, opts?: { resetPage?: boolean }) => {
+    (
+      updates: Record<string, string | number | null | undefined>,
+      opts?: { resetPage?: boolean; keepAllValue?: boolean },
+    ) => {
       const next = new URLSearchParams(searchParams.toString());
 
       for (const [key, value] of Object.entries(updates)) {
-        if (value === null || value === undefined || value === "" || value === "all") {
+        // "all" normally means "no filter", so it's dropped from the URL
+        // rather than written out — that matches most list pages, where an
+        // absent param already means "show everything". A page whose default
+        // (absent-param) view is something narrower than "all" — Submissions
+        // defaults to "pending" — needs `keepAllValue` so "all" survives as a
+        // real, explicit value instead of collapsing back to that default.
+        const dropAll = value === "all" && !opts?.keepAllValue;
+        if (value === null || value === undefined || value === "" || dropAll) {
           next.delete(key);
         } else {
           next.set(key, String(value));
