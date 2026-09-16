@@ -33,6 +33,12 @@ function placementLabelFor(s: PublicSubmissionRow) {
   }
   return "—";
 }
+/** Same "college if there's a course, school otherwise" fallback the review
+ *  sheet uses for an unresolved "Other" institution that has no `.type` yet. */
+function institutionTypeLabel(s: PublicSubmissionRow): "School" | "College" {
+  if (s.institutions) return s.institutions.type === "college" ? "College" : "School";
+  return s.course_id || s.other_course_name ? "College" : "School";
+}
 
 /** Shared with the review sheet's status badge — one mapping so the two
  *  surfaces can't show a status in different colors. */
@@ -53,8 +59,8 @@ type SortKey =
   | "code"
   | "applicant"
   | "institution"
+  | "institutionType"
   | "placement"
-  | "rollNo"
   | "percentage"
   | "submitted"
   | "status"
@@ -65,8 +71,8 @@ const SORT_VALUE: Record<SortKey, (s: PublicSubmissionRow) => string | number> =
   code: (s) => s.reference_code.toLowerCase(),
   applicant: (s) => studentName(s).toLowerCase(),
   institution: (s) => institutionLabel(s).toLowerCase(),
+  institutionType: (s) => institutionTypeLabel(s),
   placement: (s) => placementLabelFor(s).toLowerCase(),
-  rollNo: (s) => (s.roll_no ?? "").toLowerCase(),
   percentage: (s) => s.percentage ?? -1,
   submitted: (s) => new Date(s.created_at).getTime(),
   status: (s) => s.status,
@@ -163,8 +169,14 @@ export function SubmissionsClient({
               <LocalSortHeader sortKey="placement" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[11%]">
                 Std / Course
               </LocalSortHeader>
-              <LocalSortHeader sortKey="rollNo" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[7%]">
-                Roll no
+              <LocalSortHeader
+                sortKey="institutionType"
+                current={sortKey}
+                dir={sortDir}
+                onSort={toggleSort}
+                className="w-[7%]"
+              >
+                Type
               </LocalSortHeader>
               <LocalSortHeader
                 sortKey="percentage"
@@ -232,7 +244,7 @@ export function SubmissionsClient({
                   <TableCell>
                     <Badge variant="secondary">{placementLabelFor(s)}</Badge>
                   </TableCell>
-                  <TableCell className="tabular text-muted-foreground">{s.roll_no || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{institutionTypeLabel(s)}</TableCell>
                   <TableCell className="tabular text-muted-foreground">
                     {s.percentage !== null ? `${s.percentage}%` : "—"}
                   </TableCell>
