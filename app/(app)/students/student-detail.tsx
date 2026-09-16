@@ -61,7 +61,7 @@ export function StudentDetail({
             </SheetHeader>
 
             <SheetBody className="space-y-5">
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3.5">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-3.5 sm:grid-cols-2">
                 <Item label="Institution" value={record.institutions?.name} />
                 <Item
                   label="Type"

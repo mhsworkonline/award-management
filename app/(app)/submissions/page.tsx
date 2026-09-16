@@ -10,10 +10,10 @@ export default async function SubmissionsPage({
 }: {
   searchParams: { status?: string };
 }) {
-  const status: SubmissionStatus | "all" =
-    searchParams.status === "approved" || searchParams.status === "rejected" || searchParams.status === "all"
-      ? (searchParams.status as SubmissionStatus | "all")
-      : "pending";
+  const VALID_STATUSES = ["approved", "rejected", "doubtful", "all"];
+  const status: SubmissionStatus | "all" = VALID_STATUSES.includes(searchParams.status ?? "")
+    ? (searchParams.status as SubmissionStatus | "all")
+    : "pending";
 
   const [lookups, submissions, counts] = await Promise.all([
     getLookups(),

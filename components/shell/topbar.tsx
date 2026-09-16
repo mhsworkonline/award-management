@@ -20,7 +20,7 @@ import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { useOffline } from "@/components/offline/offline-sync-provider";
 import { createClient } from "@/lib/supabase/client";
 
-export function Topbar({ email }: { email: string }) {
+export function Topbar({ email, leading }: { email: string; leading?: React.ReactNode }) {
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [q, setQ] = React.useState("");
@@ -64,8 +64,10 @@ export function Topbar({ email }: { email: string }) {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      <form onSubmit={submit} className="relative w-full max-w-md">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:gap-3 sm:px-4">
+      {leading}
+
+      <form onSubmit={submit} className="relative min-w-0 flex-1 sm:max-w-md sm:flex-initial">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={inputRef}
@@ -80,7 +82,7 @@ export function Topbar({ email }: { email: string }) {
         </kbd>
       </form>
 
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
         {!online && (
           <Badge variant="warning" className="gap-1">
             <CloudOff className="h-3 w-3" /> Offline

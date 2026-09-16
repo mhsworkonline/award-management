@@ -11,6 +11,7 @@ import {
   Gift,
   Inbox,
   LayoutDashboard,
+  Menu,
   School,
   ScrollText,
   Settings,
@@ -20,6 +21,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useOffline } from "@/components/offline/offline-sync-provider";
 import type { ModuleName, ModulePermissions } from "@/lib/types";
 
@@ -68,21 +71,26 @@ const FOOTER_NAV = [
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: false, module: "settings" },
 ] as const satisfies readonly { href: string; label: string; icon: unknown; adminOnly: boolean; module: ModuleName | null }[];
 
-export function Sidebar({
-  className,
-  pendingSubmissions = 0,
-  appName = "Awards",
-  logoUrl = null,
-  isAdmin = false,
-  modules,
-}: {
-  className?: string;
+type SidebarProps = {
   pendingSubmissions?: number;
   appName?: string;
   logoUrl?: string | null;
   isAdmin?: boolean;
   modules?: Record<ModuleName, ModulePermissions>;
-}) {
+};
+
+/** The branding header + nav links + footer nav shared by the desktop
+ *  `<aside>` and the mobile drawer — one source of truth for the nav tree so
+ *  the two surfaces can't drift apart. `onNavigate` closes the mobile Sheet
+ *  when a link is tapped (a Link navigating doesn't close it on its own). */
+function SidebarBody({
+  pendingSubmissions = 0,
+  appName = "Awards",
+  logoUrl = null,
+  isAdmin = false,
+  modules,
+  onNavigate,
+}: SidebarProps & { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { pending } = useOffline();
 
@@ -95,13 +103,8 @@ export function Sidebar({
   const footerNav = FOOTER_NAV.filter((item) => (item.adminOnly ? isAdmin : canSee(item.module)));
 
   return (
-    <aside
-      className={cn(
-        "flex h-full w-60 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground",
-        className,
-      )}
-    >
-      <div className="flex h-14 items-center gap-2.5 px-5">
+    <>
+      <div className="flex h-14 shrink-0 items-center gap-2.5 px-5">
         {logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- external Supabase Storage URL
           <img src={logoUrl} alt="" className="h-7 w-7 shrink-0 rounded-md object-contain" />
@@ -127,6 +130,7 @@ export function Sidebar({
               <Link
                 key={href}
                 href={href}
+                onClick={onNavigate}
                 className={cn(
                   "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] font-medium transition-colors",
                   isActive(href)
@@ -157,6 +161,7 @@ export function Sidebar({
           <Link
             key={href}
             href={href}
+            onClick={onNavigate}
             className={cn(
               "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] font-medium transition-colors",
               isActive(href)
@@ -169,6 +174,55 @@ export function Sidebar({
           </Link>
         ))}
       </div>
+    </>
+  );
+}
+
+/** Desktop sidebar — a permanent column. Hidden below `md`; MobileSidebar
+ *  covers that range instead (see app/(app)/layout.tsx). */
+export function Sidebar({ className, ...props }: SidebarProps & { className?: string }) {
+  return (
+    <aside
+      className={cn(
+        "flex h-full w-60 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground",
+        className,
+      )}
+    >
+      <SidebarBody {...props} />
     </aside>
+  );
+}
+
+/** Mobile nav — a hamburger button that opens the same nav tree as a
+ *  slide-in drawer. Closes itself on link tap and on route change (covers
+ *  back/forward navigation and any programmatic redirect, neither of which
+ *  fires a Link's onClick). */
+export function MobileSidebar(props: SidebarProps) {
+  const [open, setOpen] = React.useState(false);
+  const pathname = usePathname();
+
+  React.useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Open menu"
+        className="shrink-0 md:hidden"
+        onClick={() => setOpen(true)}
+      >
+        <Menu className="h-4 w-4" />
+      </Button>
+      <SheetContent
+        side="left"
+        className="flex flex-col gap-0 bg-sidebar p-0 text-sidebar-foreground [&>button]:text-sidebar-foreground"
+      >
+        <SheetTitle className="sr-only">Navigation menu</SheetTitle>
+        <SidebarBody {...props} onNavigate={() => setOpen(false)} />
+      </SheetContent>
+    </Sheet>
   );
 }

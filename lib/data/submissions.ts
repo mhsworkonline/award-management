@@ -36,7 +36,7 @@ export async function getPendingSubmissionCount() {
   return count ?? 0;
 }
 
-/** Per-status counts for the Submissions page's tab headers — four cheap
+/** Per-status counts for the Submissions page's tab headers — five cheap
  *  head-only count queries rather than fetching and tallying rows. */
 export async function getSubmissionCounts(): Promise<Record<SubmissionStatus | "all", number>> {
   const supabase = createClient();
@@ -49,10 +49,11 @@ export async function getSubmissionCounts(): Promise<Record<SubmissionStatus | "
     return query;
   };
 
-  const [pending, approved, rejected, all] = await Promise.all([
+  const [pending, approved, rejected, doubtful, all] = await Promise.all([
     countFor("pending"),
     countFor("approved"),
     countFor("rejected"),
+    countFor("doubtful"),
     countFor(),
   ]);
 
@@ -60,6 +61,7 @@ export async function getSubmissionCounts(): Promise<Record<SubmissionStatus | "
     pending: pending.count ?? 0,
     approved: approved.count ?? 0,
     rejected: rejected.count ?? 0,
+    doubtful: doubtful.count ?? 0,
     all: all.count ?? 0,
   };
 }

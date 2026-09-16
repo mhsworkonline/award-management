@@ -4,7 +4,7 @@ export type CourseStructure = "year" | "semester";
 export type DistributionStatus = "pending" | "distributed";
 export type SyncStatus = "synced" | "queued_offline";
 export type AuditAction = "create" | "update" | "delete";
-export type SubmissionStatus = "pending" | "approved" | "rejected";
+export type SubmissionStatus = "pending" | "approved" | "rejected" | "doubtful";
 export type GradeSource = "staff" | "self_reported";
 
 export type AcademicYear = {
@@ -298,7 +298,7 @@ export type PublicSubmission = {
   academic_record_id: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
-  rejection_reason: string | null;
+  review_note: string | null;
   created_at: string;
 };
 

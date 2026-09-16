@@ -8,6 +8,8 @@ export const metadata = { title: "Audit log" };
 
 const ENTITIES = [
   "students",
+  "public_submissions",
+  "academic_records",
   "institutions",
   "student_awards",
   "gift_items",

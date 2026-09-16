@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getMyPermissionMap, requireUser } from "@/lib/supabase/server";
 import { getPendingSubmissionCount } from "@/lib/data/submissions";
 import { getPublicBranding } from "@/lib/actions/organization";
-import { Sidebar } from "@/components/shell/sidebar";
+import { MobileSidebar, Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { PermissionsProvider } from "@/components/providers/permissions-provider";
 
@@ -34,7 +34,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           modules={modules}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar email={user.email ?? "Signed in"} />
+          <Topbar
+            email={user.email ?? "Signed in"}
+            leading={
+              <MobileSidebar
+                pendingSubmissions={pendingSubmissions}
+                appName={branding.app_name}
+                logoUrl={branding.logo_url}
+                isAdmin={isAdmin}
+                modules={modules}
+              />
+            }
+          />
           <main className="scrollbar-thin flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[1400px] space-y-6 px-5 py-6 lg:px-8">
               {children}

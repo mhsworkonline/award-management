@@ -34,7 +34,31 @@ function placementLabelFor(s: PublicSubmissionRow) {
   return "—";
 }
 
-type SortKey = "code" | "applicant" | "institution" | "placement" | "rollNo" | "percentage" | "submitted" | "status";
+/** Shared with the review sheet's status badge — one mapping so the two
+ *  surfaces can't show a status in different colors. */
+export function statusBadgeVariant(status: SubmissionStatus) {
+  switch (status) {
+    case "approved":
+      return "success" as const;
+    case "rejected":
+      return "destructive" as const;
+    case "doubtful":
+      return "secondary" as const;
+    default:
+      return "warning" as const;
+  }
+}
+
+type SortKey =
+  | "code"
+  | "applicant"
+  | "institution"
+  | "placement"
+  | "rollNo"
+  | "percentage"
+  | "submitted"
+  | "status"
+  | "reviewedBy";
 type SortDir = "asc" | "desc";
 
 const SORT_VALUE: Record<SortKey, (s: PublicSubmissionRow) => string | number> = {
@@ -46,6 +70,7 @@ const SORT_VALUE: Record<SortKey, (s: PublicSubmissionRow) => string | number> =
   percentage: (s) => s.percentage ?? -1,
   submitted: (s) => new Date(s.created_at).getTime(),
   status: (s) => s.status,
+  reviewedBy: (s) => (s.reviewed_by ?? "").toLowerCase(),
 };
 
 export function SubmissionsClient({
@@ -105,6 +130,7 @@ export function SubmissionsClient({
             <TabsTrigger value="pending">Pending ({counts.pending})</TabsTrigger>
             <TabsTrigger value="approved">Approved ({counts.approved})</TabsTrigger>
             <TabsTrigger value="rejected">Rejected ({counts.rejected})</TabsTrigger>
+            <TabsTrigger value="doubtful">Doubtful ({counts.doubtful})</TabsTrigger>
             <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -125,19 +151,19 @@ export function SubmissionsClient({
         <Table>
           <TableHeader>
             <TableRow>
-              <LocalSortHeader sortKey="code" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[10%]">
+              <LocalSortHeader sortKey="code" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[9%]">
                 Code
               </LocalSortHeader>
-              <LocalSortHeader sortKey="applicant" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[18%]">
+              <LocalSortHeader sortKey="applicant" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[15%]">
                 Applicant
               </LocalSortHeader>
-              <LocalSortHeader sortKey="institution" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[20%]">
+              <LocalSortHeader sortKey="institution" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[16%]">
                 Institution
               </LocalSortHeader>
-              <LocalSortHeader sortKey="placement" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[13%]">
+              <LocalSortHeader sortKey="placement" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[11%]">
                 Std / Course
               </LocalSortHeader>
-              <LocalSortHeader sortKey="rollNo" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[9%]">
+              <LocalSortHeader sortKey="rollNo" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[7%]">
                 Roll no
               </LocalSortHeader>
               <LocalSortHeader
@@ -145,7 +171,7 @@ export function SubmissionsClient({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="w-[8%]"
+                className="w-[6%]"
               >
                 %
               </LocalSortHeader>
@@ -154,19 +180,28 @@ export function SubmissionsClient({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="w-[13%]"
+                className="w-[11%]"
               >
                 Submitted
               </LocalSortHeader>
-              <LocalSortHeader sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[9%]">
+              <LocalSortHeader sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[8%]">
                 Status
+              </LocalSortHeader>
+              <LocalSortHeader
+                sortKey="reviewedBy"
+                current={sortKey}
+                dir={sortDir}
+                onSort={toggleSort}
+                className="w-[13%]"
+              >
+                Reviewed by
               </LocalSortHeader>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sorted.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={8} className="border-b-0">
+                <TableCell colSpan={9} className="border-b-0">
                   <EmptyState
                     icon={Inbox}
                     title="Nothing here"
@@ -203,13 +238,19 @@ export function SubmissionsClient({
                   </TableCell>
                   <TableCell className="text-muted-foreground">{formatDateTime(s.created_at)}</TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        s.status === "approved" ? "success" : s.status === "rejected" ? "destructive" : "warning"
-                      }
-                    >
-                      {s.status}
-                    </Badge>
+                    <Badge variant={statusBadgeVariant(s.status)}>{s.status}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {s.reviewed_by ? (
+                      <>
+                        <span className="block truncate">{s.reviewed_by}</span>
+                        {s.reviewed_at && (
+                          <span className="block text-[11px]">{formatDateTime(s.reviewed_at)}</span>
+                        )}
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                 </TableRow>
               ))

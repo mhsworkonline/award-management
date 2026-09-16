@@ -48,6 +48,8 @@ import {
   checkSubmissionDuplicates,
   deleteSubmissionAttachment,
   getAttachmentSignedUrl,
+  getSubmissionHistory,
+  markSubmissionDoubtful,
   rejectSubmission,
   replaceSubmissionAttachment,
   updateSubmission,
@@ -59,7 +61,32 @@ import { MAX_SOURCE_IMAGE_BYTES, compressMarksheetImage } from "@/lib/image-comp
 import { formatDateTime } from "@/lib/utils";
 import { usePermissions } from "@/components/providers/permissions-provider";
 import { SALUTATIONS } from "@/lib/types";
-import type { Board, Course, Lookups, PublicSubmissionRow } from "@/lib/types";
+import { statusBadgeVariant } from "./submissions-client";
+import type { AuditLog, Board, Course, Lookups, PublicSubmissionRow } from "@/lib/types";
+
+type DecisionKind = "approve" | "reject" | "doubtful";
+
+const DECISION_LABEL: Record<DecisionKind, string> = {
+  approve: "Approve",
+  reject: "Reject",
+  doubtful: "Mark doubtful",
+};
+
+/** Renders one History entry from its audit diff — the shape approve/reject/
+ *  doubtful/edit each write (see lib/actions/submissions.ts), not a generic
+ *  diff viewer. */
+function describeHistoryEntry(log: AuditLog): string {
+  const diff = log.diff_json as Record<string, unknown> | null;
+  if (!diff) return "Updated";
+  if (diff.status && typeof diff.status === "object") {
+    const transition = diff.status as { from?: string; to?: string };
+    const note = typeof diff.note === "string" && diff.note ? ` — "${diff.note}"` : "";
+    return `${transition.from ?? "?"} → ${transition.to ?? "?"}${note}`;
+  }
+  if ("synced_from_submission_edit" in diff) return "Synced into the roster";
+  const keys = Object.keys(diff).filter((k) => k !== "source");
+  return keys.length ? `Edited: ${keys.join(", ")}` : "Edited";
+}
 
 type Values = {
   salutation: string;
@@ -97,11 +124,11 @@ export function SubmissionReviewSheet({
   // record in one action, so it needs both of those Create grants too.
   const canApproveSubmission = canUpdateSubmission && can("students", "create") && can("academic_records", "create");
   const [saving, setSaving] = React.useState(false);
-  const [approving, setApproving] = React.useState(false);
-  const [rejecting, setRejecting] = React.useState(false);
-  const [rejectReason, setRejectReason] = React.useState("");
-  const [showReject, setShowReject] = React.useState(false);
+  const [deciding, setDeciding] = React.useState(false);
+  const [decisionKind, setDecisionKind] = React.useState<DecisionKind | null>(null);
+  const [decisionNote, setDecisionNote] = React.useState("");
   const [duplicates, setDuplicates] = React.useState<string[]>([]);
+  const [history, setHistory] = React.useState<AuditLog[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [pendingInstitutions, setPendingInstitutions] = React.useState<Lookups["institutions"]>([]);
   const [pendingCourses, setPendingCourses] = React.useState<
@@ -134,17 +161,21 @@ export function SubmissionReviewSheet({
   const institution = institutions.find((i) => i.id === institutionId);
   const isCollege = institution?.type === "college" || (!institution && Boolean(submission?.course_id || submission?.other_course_name));
   const course = courses.find((c) => c.id === courseId);
-  const isPending = submission?.status === "pending";
+  // Approved is the one status this sheet won't move away from (see
+  // lib/actions/submissions.ts) — every field stays editable at every other
+  // status, gated only by permission, not by where the submission currently sits.
+  const isApproved = submission?.status === "approved";
+  const canEdit = canUpdateSubmission;
   const selectedStandard = lookups.standards.find((s) => s.id === standardId);
   // Only Std 11/12 split into streams — every other Standard has none.
   const needsStream = Boolean(selectedStandard) && (selectedStandard!.level === 11 || selectedStandard!.level === 12);
 
-  const needsInstitutionResolve = isPending && !institutionId && Boolean(submission?.other_institution_name);
-  const needsCourseResolve = isPending && !courseId && !standardId && Boolean(submission?.other_course_name);
-  const needsBoardResolve = isPending && Boolean(standardId) && !boardId && Boolean(submission?.other_board_name);
-  const needsMediumResolve = isPending && Boolean(standardId) && !mediumId;
+  const needsInstitutionResolve = !institutionId && Boolean(submission?.other_institution_name);
+  const needsCourseResolve = !courseId && !standardId && Boolean(submission?.other_course_name);
+  const needsBoardResolve = Boolean(standardId) && !boardId && Boolean(submission?.other_board_name);
+  const needsMediumResolve = Boolean(standardId) && !mediumId;
   const canApprove =
-    isPending &&
+    !isApproved &&
     !needsInstitutionResolve &&
     !needsCourseResolve &&
     !needsBoardResolve &&
@@ -318,13 +349,14 @@ export function SubmissionReviewSheet({
 
   React.useEffect(() => {
     if (!submission) return;
-    setShowReject(false);
-    setRejectReason("");
+    setDecisionKind(null);
+    setDecisionNote("");
     setError(null);
     setPendingInstitutions([]);
     setPendingCourses([]);
     setPendingBoards([]);
     setAttachments(submission.attachments ?? []);
+    setHistory([]);
     reset({
       salutation: submission.salutation ?? "",
       first_name: submission.first_name,
@@ -350,6 +382,8 @@ export function SubmissionReviewSheet({
       middle_name: submission.middle_name,
       last_name: submission.last_name,
     }).then((r) => setDuplicates(r.ok ? r.data : []));
+
+    getSubmissionHistory(submission.id).then((r) => setHistory(r.ok ? r.data : []));
   }, [submission, reset]);
 
   function copyCode() {
@@ -396,31 +430,36 @@ export function SubmissionReviewSheet({
     return true;
   }
 
-  async function onApprove(values: Values) {
-    const saved = await saveDraft(values);
-    if (!saved || !submission) return;
-    setApproving(true);
-    const result = await approveSubmission(submission.id);
-    setApproving(false);
-    if (!result.ok) {
-      toast.error("Could not approve", { description: result.error });
-      return;
-    }
-    toast.success("Approved — added to the roster");
-    router.refresh();
-    onOpenChange(false);
-  }
-
-  async function onReject() {
+  /** Every decision — Approve, Reject, Mark doubtful — saves whatever's
+   *  currently in the form first (fields stay editable right up to the
+   *  moment of deciding), then requires a note before it takes effect. */
+  async function onDecide(kind: DecisionKind, values: Values) {
     if (!submission) return;
-    setRejecting(true);
-    const result = await rejectSubmission(submission.id, rejectReason || undefined);
-    setRejecting(false);
-    if (!result.ok) {
-      toast.error("Could not reject", { description: result.error });
+    const note = decisionNote.trim();
+    if (!note) {
+      setError("A note is required");
       return;
     }
-    toast.success("Submission rejected");
+
+    const saved = await saveDraft(values);
+    if (!saved) return;
+
+    setDeciding(true);
+    const result =
+      kind === "approve"
+        ? await approveSubmission(submission.id, note)
+        : kind === "reject"
+          ? await rejectSubmission(submission.id, note)
+          : await markSubmissionDoubtful(submission.id, note);
+    setDeciding(false);
+
+    if (!result.ok) {
+      toast.error(`Could not ${DECISION_LABEL[kind].toLowerCase()}`, { description: result.error });
+      return;
+    }
+    toast.success(
+      kind === "approve" ? "Approved — added to the roster" : kind === "reject" ? "Submission rejected" : "Marked doubtful",
+    );
     router.refresh();
     onOpenChange(false);
   }
@@ -442,17 +481,7 @@ export function SubmissionReviewSheet({
               </button>
               <SheetTitle className="flex flex-wrap items-center gap-2 pr-8">
                 Review application
-                <Badge
-                  variant={
-                    submission.status === "approved"
-                      ? "success"
-                      : submission.status === "rejected"
-                        ? "destructive"
-                        : "warning"
-                  }
-                >
-                  {submission.status}
-                </Badge>
+                <Badge variant={statusBadgeVariant(submission.status)}>{submission.status}</Badge>
               </SheetTitle>
               <SheetDescription>Submitted {formatDateTime(submission.created_at)}</SheetDescription>
             </SheetHeader>
@@ -471,7 +500,7 @@ export function SubmissionReviewSheet({
 
               <FieldGrid cols={1} className="sm:grid-cols-4">
                 <Field label="Salutation" htmlFor="rs">
-                  <Select value={watch("salutation")} onValueChange={(v) => setValue("salutation", v)} disabled={!isPending}>
+                  <Select value={watch("salutation")} onValueChange={(v) => setValue("salutation", v)} disabled={!canEdit}>
                     <SelectTrigger>
                       <SelectValue placeholder="—" />
                     </SelectTrigger>
@@ -485,26 +514,26 @@ export function SubmissionReviewSheet({
                   </Select>
                 </Field>
                 <Field label="First name" htmlFor="rf" required error={errors.first_name?.message}>
-                  <Input id="rf" disabled={!isPending} {...register("first_name", { required: "Required" })} />
+                  <Input id="rf" disabled={!canEdit} {...register("first_name", { required: "Required" })} />
                 </Field>
                 <Field label="Middle" htmlFor="rm">
-                  <Input id="rm" disabled={!isPending} {...register("middle_name")} />
+                  <Input id="rm" disabled={!canEdit} {...register("middle_name")} />
                 </Field>
                 <Field label="Last name" htmlFor="rl" required error={errors.last_name?.message}>
-                  <Input id="rl" disabled={!isPending} {...register("last_name", { required: "Required" })} />
+                  <Input id="rl" disabled={!canEdit} {...register("last_name", { required: "Required" })} />
                 </Field>
               </FieldGrid>
 
               <Field label="Lanedaar name" htmlFor="rln">
-                <Input id="rln" disabled={!isPending} {...register("lanedaar_name")} />
+                <Input id="rln" disabled={!canEdit} {...register("lanedaar_name")} />
               </Field>
 
               <FieldGrid>
                 <Field label="Email" htmlFor="re" required error={errors.email?.message}>
-                  <Input id="re" type="email" disabled={!isPending} {...register("email", { required: "Required" })} />
+                  <Input id="re" type="email" disabled={!canEdit} {...register("email", { required: "Required" })} />
                 </Field>
                 <Field label="Contact no" htmlFor="rc" required error={errors.contact_no?.message}>
-                  <Input id="rc" disabled={!isPending} {...register("contact_no", { required: "Required" })} />
+                  <Input id="rc" disabled={!canEdit} {...register("contact_no", { required: "Required" })} />
                 </Field>
               </FieldGrid>
 
@@ -554,7 +583,7 @@ export function SubmissionReviewSheet({
                   <Select
                     value={institutionId}
                     onValueChange={(v) => setValue("institution_id", v)}
-                    disabled={!isPending}
+                    disabled={!canEdit}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select institution" />
@@ -567,7 +596,7 @@ export function SubmissionReviewSheet({
                       ))}
                     </SelectContent>
                   </Select>
-                  {isPending && needsInstitutionResolve && (
+                  {needsInstitutionResolve && (
                     <QuickAddInstitution
                       instType="school"
                       boardId=""
@@ -597,7 +626,7 @@ export function SubmissionReviewSheet({
                   )}
                   <Field label="Board" required>
                     <div className="flex gap-2">
-                      <Select value={boardId} onValueChange={(v) => setValue("board_id", v)} disabled={!isPending}>
+                      <Select value={boardId} onValueChange={(v) => setValue("board_id", v)} disabled={!canEdit}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select board" />
                         </SelectTrigger>
@@ -609,7 +638,7 @@ export function SubmissionReviewSheet({
                           ))}
                         </SelectContent>
                       </Select>
-                      {isPending && needsBoardResolve && (
+                      {needsBoardResolve && (
                         <QuickAddBoard
                           defaultName={submission.other_board_name ?? ""}
                           onCreated={(b) => {
@@ -621,7 +650,7 @@ export function SubmissionReviewSheet({
                     </div>
                   </Field>
                   <Field label="Medium of instruction" required>
-                    <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v)} disabled={!isPending}>
+                    <Select value={watch("medium_id")} onValueChange={(v) => setValue("medium_id", v)} disabled={!canEdit}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select medium" />
                       </SelectTrigger>
@@ -653,7 +682,7 @@ export function SubmissionReviewSheet({
                 <FieldGrid>
                   <Field label="Course">
                     <div className="flex gap-2">
-                      <Select value={courseId} onValueChange={(v) => setValue("course_id", v)} disabled={!isPending}>
+                      <Select value={courseId} onValueChange={(v) => setValue("course_id", v)} disabled={!canEdit}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select course" />
                         </SelectTrigger>
@@ -665,7 +694,7 @@ export function SubmissionReviewSheet({
                           ))}
                         </SelectContent>
                       </Select>
-                      {isPending && needsCourseResolve && (
+                      {needsCourseResolve && (
                         <QuickAddCourse
                           defaultName={submission.other_course_name ?? ""}
                           defaultStructure={submission.other_course_structure}
@@ -679,7 +708,7 @@ export function SubmissionReviewSheet({
                     </div>
                   </Field>
                   <Field label={course?.structure_type === "semester" ? "Semester" : "Year"}>
-                    <Select value={watch("period_no")} onValueChange={(v) => setValue("period_no", v)} disabled={!isPending || !course}>
+                    <Select value={watch("period_no")} onValueChange={(v) => setValue("period_no", v)} disabled={!canEdit || !course}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
@@ -705,7 +734,7 @@ export function SubmissionReviewSheet({
                         // over a choice that no longer applies.
                         setValue("stream_id", "");
                       }}
-                      disabled={!isPending}
+                      disabled={!canEdit}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select standard" />
@@ -724,7 +753,7 @@ export function SubmissionReviewSheet({
                       <Select
                         value={watch("stream_id")}
                         onValueChange={(v) => setValue("stream_id", v)}
-                        disabled={!isPending}
+                        disabled={!canEdit}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select stream" />
@@ -744,14 +773,14 @@ export function SubmissionReviewSheet({
 
               <FieldGrid>
                 <Field label="Roll / GR no" htmlFor="rr">
-                  <Input id="rr" disabled={!isPending} {...register("roll_no")} />
+                  <Input id="rr" disabled={!canEdit} {...register("roll_no")} />
                 </Field>
                 <Field label="Percentage" htmlFor="rp" hint="Self-reported by applicant">
-                  <PercentInput id="rp" disabled={!isPending} {...register("percentage")} />
+                  <PercentInput id="rp" disabled={!canEdit} {...register("percentage")} />
                 </Field>
               </FieldGrid>
               <Field label="Grade" htmlFor="rg">
-                <Input id="rg" disabled={!isPending} {...register("grade")} />
+                <Input id="rg" disabled={!canEdit} {...register("grade")} />
               </Field>
 
               {submission.notes && (
@@ -863,15 +892,49 @@ export function SubmissionReviewSheet({
                 )}
               </Field>
 
-              {submission.status === "rejected" && submission.rejection_reason && (
-                <p className="text-[13px] text-muted-foreground">
-                  Rejection reason: {submission.rejection_reason}
-                </p>
+              {submission.reviewed_by && (
+                <div className="rounded-lg border bg-muted/30 p-3.5">
+                  <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {submission.status === "approved"
+                      ? "Approved"
+                      : submission.status === "rejected"
+                        ? "Rejected"
+                        : submission.status === "doubtful"
+                          ? "Marked doubtful"
+                          : "Last reviewed"}{" "}
+                    by {submission.reviewed_by}
+                    {submission.reviewed_at && ` · ${formatDateTime(submission.reviewed_at)}`}
+                  </p>
+                  {submission.review_note && (
+                    <p className="mt-1 text-[13px] leading-relaxed whitespace-pre-wrap">{submission.review_note}</p>
+                  )}
+                </div>
               )}
 
-              {showReject && (
-                <Field label="Rejection reason (optional)" htmlFor="reason">
-                  <Textarea id="reason" rows={2} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+              {history.length > 0 && (
+                <Field label="History">
+                  <ul className="scrollbar-thin max-h-40 space-y-1.5 overflow-y-auto rounded-md border bg-muted/20 p-3 text-[12px]">
+                    {history.map((log) => (
+                      <li key={log.id} className="flex flex-wrap items-baseline gap-x-1.5 leading-snug">
+                        <span className="shrink-0 text-muted-foreground">{formatDateTime(log.created_at)}</span>
+                        <span className="shrink-0 font-medium">{log.actor ?? "unknown"}</span>
+                        <span className="text-muted-foreground">— {describeHistoryEntry(log)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Field>
+              )}
+
+              {decisionKind && (
+                <Field label={`Note for ${DECISION_LABEL[decisionKind].toLowerCase()}`} htmlFor="decision-note" required>
+                  <Textarea
+                    id="decision-note"
+                    rows={2}
+                    autoFocus
+                    value={decisionNote}
+                    onChange={(e) => setDecisionNote(e.target.value)}
+                    placeholder="Why? This is required and stays on record."
+                  />
                 </Field>
               )}
 
@@ -882,46 +945,63 @@ export function SubmissionReviewSheet({
               )}
             </SheetBody>
 
-            {isPending && (canUpdateSubmission || canApproveSubmission) && (
+            {!isApproved && (canUpdateSubmission || canApproveSubmission) && (
               <SheetFooter className="flex-wrap justify-between">
-                {canUpdateSubmission && (
-                  !showReject ? (
-                    <Button type="button" variant="outline" onClick={() => setShowReject(true)}>
-                      <X /> Reject
-                    </Button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <Button type="button" variant="ghost" onClick={() => setShowReject(false)}>
-                        Cancel
-                      </Button>
-                      <Button type="button" variant="destructive" onClick={() => void onReject()} disabled={rejecting}>
-                        {rejecting ? <Loader2 className="animate-spin" /> : <X />}
-                        Confirm reject
-                      </Button>
-                    </div>
-                  )
-                )}
-
-                {!showReject && (
+                {decisionKind ? (
                   <div className="flex gap-2">
-                    {canUpdateSubmission && (
-                      <Button type="button" variant="outline" onClick={handleSubmit(saveDraft)} disabled={saving}>
-                        {saving && <Loader2 className="animate-spin" />}
-                        Save changes
-                      </Button>
-                    )}
-                    {canApproveSubmission && (
-                      <Button
-                        type="button"
-                        onClick={handleSubmit(onApprove)}
-                        disabled={approving || !canApprove}
-                        title={!canApprove ? "Resolve the custom institution/course first" : undefined}
-                      >
-                        {approving ? <Loader2 className="animate-spin" /> : <Check />}
-                        Approve
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setDecisionKind(null);
+                        setDecisionNote("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={decisionKind === "reject" ? "destructive" : "default"}
+                      onClick={handleSubmit((values) => onDecide(decisionKind, values))}
+                      disabled={deciding || !decisionNote.trim()}
+                    >
+                      {deciding ? <Loader2 className="animate-spin" /> : decisionKind === "reject" ? <X /> : <Check />}
+                      Confirm — {DECISION_LABEL[decisionKind]}
+                    </Button>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      {canUpdateSubmission && submission.status !== "rejected" && (
+                        <Button type="button" variant="outline" onClick={() => setDecisionKind("reject")}>
+                          <X /> Reject
+                        </Button>
+                      )}
+                      {canUpdateSubmission && submission.status !== "doubtful" && (
+                        <Button type="button" variant="outline" onClick={() => setDecisionKind("doubtful")}>
+                          <AlertTriangle /> Mark doubtful
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {canUpdateSubmission && (
+                        <Button type="button" variant="outline" onClick={handleSubmit(saveDraft)} disabled={saving}>
+                          {saving && <Loader2 className="animate-spin" />}
+                          Save changes
+                        </Button>
+                      )}
+                      {canApproveSubmission && (
+                        <Button
+                          type="button"
+                          onClick={() => setDecisionKind("approve")}
+                          disabled={!canApprove}
+                          title={!canApprove ? "Resolve the custom institution/course first" : undefined}
+                        >
+                          <Check /> Approve
+                        </Button>
+                      )}
+                    </div>
+                  </>
                 )}
               </SheetFooter>
             )}

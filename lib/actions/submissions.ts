@@ -10,13 +10,31 @@ import { normalizeName } from "@/lib/utils";
 import { findDuplicateStudents } from "@/lib/data/students";
 import { ATTACHMENTS_BUCKET, T } from "@/lib/tables";
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
-import type { ActionResult } from "@/lib/types";
+import type { ActionResult, AuditLog, SubmissionStatus } from "@/lib/types";
 
 function revalidateAll() {
   revalidatePath("/submissions");
   revalidatePath("/students");
   revalidatePath("/academic-records");
   revalidatePath("/dashboard");
+}
+
+/** The same "is this actually placeable" bar approving has always enforced —
+ *  reused when editing could just as easily un-resolve one of these (e.g.
+ *  clearing institution_id by mistake) on a submission that's already
+ *  approved and syncing straight into the roster. */
+function validatePlacement(sub: {
+  institution_id: string | null;
+  standard_id: string | null;
+  course_id: string | null;
+  board_id: string | null;
+  medium_id: string | null;
+}): string | null {
+  if (!sub.institution_id) return "Resolve the custom institution to a real one before saving";
+  if (!sub.standard_id && !sub.course_id) return "Resolve the custom course to a real one before saving";
+  if (sub.standard_id && !sub.board_id) return "Resolve the custom board to a real one before saving";
+  if (sub.standard_id && !sub.medium_id) return "Select a medium of instruction before saving";
+  return null;
 }
 
 /** Same possible-duplicate warning shown on the Add Student page, reused here
@@ -38,7 +56,10 @@ export async function checkSubmissionDuplicates(input: {
   }
 }
 
-/** Edits a pending submission's fields without approving it yet. */
+/** Edits a submission's fields, at any status — not just Pending. A
+ *  submission that's already Approved has a real student + academic record
+ *  riding on it, so an edit there also pushes the correction into both
+ *  rather than letting the submission and the live roster disagree. */
 export async function updateSubmission(raw: unknown): Promise<ActionResult<null>> {
   const parsed = submissionEditSchema.safeParse(raw);
   if (!parsed.success) {
@@ -52,14 +73,83 @@ export async function updateSubmission(raw: unknown): Promise<ActionResult<null>
   const { id, ...values } = parsed.data;
 
   try {
-    const { supabase } = await requireUser();
+    const { supabase, actor } = await requireUser();
+
+    const { data: before, error: beforeError } = await supabase
+      .from(T.publicSubmissions)
+      .select("*")
+      .eq("id", id)
+      .eq("org_id", ORG_ID)
+      .single();
+    if (beforeError || !before) return { ok: false, error: "Submission not found" };
+
+    if (before.status === "approved") {
+      const placementError = validatePlacement(values);
+      if (placementError) return { ok: false, error: placementError };
+    }
+
     const { error } = await supabase
       .from(T.publicSubmissions)
       .update(values)
       .eq("id", id)
-      .eq("org_id", ORG_ID)
-      .eq("status", "pending");
+      .eq("org_id", ORG_ID);
     if (error) return { ok: false, error: friendly(error.message) };
+
+    if (before.status === "approved" && before.student_id && before.academic_record_id) {
+      const { error: studentError } = await supabase
+        .from(T.students)
+        .update({
+          salutation: values.salutation ?? null,
+          first_name: values.first_name,
+          middle_name: values.middle_name ?? null,
+          last_name: values.last_name,
+          lanedaar_name: values.lanedaar_name ?? null,
+          email: values.email,
+          contact_no: values.contact_no,
+        })
+        .eq("id", before.student_id);
+      if (studentError) return { ok: false, error: friendly(studentError.message) };
+
+      const { error: recordError } = await supabase
+        .from(T.academicRecords)
+        .update({
+          institution_id: values.institution_id,
+          standard_id: values.standard_id,
+          stream_id: values.stream_id,
+          course_id: values.course_id,
+          period_no: values.period_no,
+          roll_no: values.roll_no,
+          percentage: values.percentage,
+          grade: values.grade,
+          remarks: values.notes,
+        })
+        .eq("id", before.academic_record_id);
+      if (recordError) return { ok: false, error: friendly(recordError.message) };
+
+      await writeAudit(supabase, {
+        entity: "students",
+        entityId: before.student_id,
+        action: "update",
+        actor,
+        diff: { synced_from_submission_edit: id },
+      });
+      await writeAudit(supabase, {
+        entity: "academic_records",
+        entityId: before.academic_record_id,
+        action: "update",
+        actor,
+        diff: { synced_from_submission_edit: id },
+      });
+    }
+
+    await writeAudit(supabase, {
+      entity: "public_submissions",
+      entityId: id,
+      action: "update",
+      actor,
+      diff: buildDiff(before, { ...before, ...values }),
+    });
+
     revalidateAll();
     return { ok: true, data: null };
   } catch (e) {
@@ -73,31 +163,31 @@ export async function updateSubmission(raw: unknown): Promise<ActionResult<null>
  *  A percentage/grade the student typed in themselves is tagged
  *  grade_source='self_reported' so it's never silently indistinguishable
  *  from a staff-verified number in Grade Entry or award suggestions. */
-export async function approveSubmission(id: string): Promise<ActionResult<{ studentId: string; recordId: string }>> {
+export async function approveSubmission(
+  id: string,
+  note: string,
+): Promise<ActionResult<{ studentId: string; recordId: string }>> {
+  const trimmedNote = note.trim();
+  if (!trimmedNote) return { ok: false, error: "A note is required" };
+
   try {
     const { supabase, actor } = await requireUser();
 
+    // Reachable from Pending, Doubtful or Rejected — approving is the one
+    // transition allowed from anywhere, since it only ever creates data,
+    // never removes it. Not reachable a second time from Approved itself,
+    // since that would try to create a duplicate student/academic record.
     const { data: sub, error: subError } = await supabase
       .from(T.publicSubmissions)
       .select("*")
       .eq("id", id)
       .eq("org_id", ORG_ID)
-      .eq("status", "pending")
+      .neq("status", "approved")
       .single();
-    if (subError || !sub) return { ok: false, error: "Submission not found or already reviewed" };
+    if (subError || !sub) return { ok: false, error: "Submission not found or already approved" };
 
-    if (!sub.institution_id) {
-      return { ok: false, error: "Resolve the custom institution to a real one before approving" };
-    }
-    if (!sub.standard_id && !sub.course_id) {
-      return { ok: false, error: "Resolve the custom course to a real one before approving" };
-    }
-    if (sub.standard_id && !sub.board_id) {
-      return { ok: false, error: "Resolve the custom board to a real one before approving" };
-    }
-    if (sub.standard_id && !sub.medium_id) {
-      return { ok: false, error: "Select a medium of instruction before approving" };
-    }
+    const placementError = validatePlacement(sub);
+    if (placementError) return { ok: false, error: placementError };
 
     const existing = await supabase
       .from(T.students)
@@ -182,10 +272,18 @@ export async function approveSubmission(id: string): Promise<ActionResult<{ stud
         academic_record_id: record.id,
         reviewed_by: actor,
         reviewed_at: new Date().toISOString(),
+        review_note: trimmedNote,
       })
       .eq("id", id);
     if (updateError) return { ok: false, error: friendly(updateError.message) };
 
+    await writeAudit(supabase, {
+      entity: "public_submissions",
+      entityId: id,
+      action: "update",
+      actor,
+      diff: { status: { from: sub.status, to: "approved" }, note: trimmedNote },
+    });
     await writeAudit(supabase, {
       entity: "academic_records",
       entityId: record.id,
@@ -366,20 +464,43 @@ export async function deleteSubmissionAttachment(id: string): Promise<ActionResu
   }
 }
 
-export async function rejectSubmission(id: string, reason?: string): Promise<ActionResult<null>> {
+/** Shared by Reject and Doubtful — identical shape, neither creates or
+ *  touches any other table, so there's nothing to guard beyond "not already
+ *  Approved" (moving away from Approved isn't supported — see submissions.ts
+ *  module notes / the conversation that designed this). */
+async function setReviewStatus(
+  id: string,
+  status: Extract<SubmissionStatus, "rejected" | "doubtful">,
+  note: string,
+): Promise<ActionResult<null>> {
+  const trimmedNote = note.trim();
+  if (!trimmedNote) return { ok: false, error: "A note is required" };
+
   try {
     const { supabase, actor } = await requireUser();
+
+    const { data: before, error: beforeError } = await supabase
+      .from(T.publicSubmissions)
+      .select("status")
+      .eq("id", id)
+      .eq("org_id", ORG_ID)
+      .single();
+    if (beforeError || !before) return { ok: false, error: "Submission not found" };
+    if (before.status === "approved") {
+      return { ok: false, error: "Already approved — edit it instead of changing its status" };
+    }
+
     const { error } = await supabase
       .from(T.publicSubmissions)
       .update({
-        status: "rejected",
+        status,
         reviewed_by: actor,
         reviewed_at: new Date().toISOString(),
-        rejection_reason: reason || null,
+        review_note: trimmedNote,
       })
       .eq("id", id)
       .eq("org_id", ORG_ID)
-      .eq("status", "pending");
+      .neq("status", "approved");
     if (error) return { ok: false, error: friendly(error.message) };
 
     await writeAudit(supabase, {
@@ -387,11 +508,42 @@ export async function rejectSubmission(id: string, reason?: string): Promise<Act
       entityId: id,
       action: "update",
       actor,
-      diff: { status: { to: "rejected" }, reason: reason ?? null },
+      diff: { status: { from: before.status, to: status }, note: trimmedNote },
     });
 
     revalidateAll();
     return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+export async function rejectSubmission(id: string, note: string): Promise<ActionResult<null>> {
+  return setReviewStatus(id, "rejected", note);
+}
+
+/** Processed, but staff aren't confident about this student — a resolution
+ *  distinct from Rejected (which says "no") and Pending (which says "not
+ *  looked at yet"). */
+export async function markSubmissionDoubtful(id: string, note: string): Promise<ActionResult<null>> {
+  return setReviewStatus(id, "doubtful", note);
+}
+
+/** Every approve/reject/doubtful/edit against this submission, newest
+ *  first — powers the History section in the review sheet. Reuses the
+ *  general audit log rather than a dedicated table. */
+export async function getSubmissionHistory(id: string): Promise<ActionResult<AuditLog[]>> {
+  try {
+    const { supabase } = await requireUser();
+    const { data, error } = await supabase
+      .from(T.auditLogs)
+      .select("*")
+      .eq("org_id", ORG_ID)
+      .eq("entity_name", "public_submissions")
+      .eq("entity_id", id)
+      .order("created_at", { ascending: false });
+    if (error) return { ok: false, error: friendly(error.message) };
+    return { ok: true, data: (data ?? []) as AuditLog[] };
   } catch (e) {
     return { ok: false, error: message(e) };
   }
