@@ -36,16 +36,18 @@ export function QuickAddInstitution({
   boardId,
   boardName,
   mediums,
+  defaultName = "",
   onCreated,
 }: {
   instType: "school" | "college" | "";
   boardId: string;
   boardName: string;
   mediums: Medium[];
+  defaultName?: string;
   onCreated: (institution: CreatedInstitution) => void;
 }) {
   const [open, setOpen] = React.useState(false);
-  const [name, setName] = React.useState("");
+  const [name, setName] = React.useState(defaultName);
   const [mediumId, setMediumId] = React.useState("");
   const [city, setCity] = React.useState("");
   const [saving, setSaving] = React.useState(false);
@@ -56,11 +58,11 @@ export function QuickAddInstitution({
 
   React.useEffect(() => {
     if (!open) return;
-    setName("");
+    setName(defaultName);
     setMediumId("");
     setCity("");
     setError(null);
-  }, [open]);
+  }, [open, defaultName]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

@@ -601,6 +601,7 @@ export function SubmissionReviewSheet({
                       instType={isCollege ? "college" : "school"}
                       boardId={boardId}
                       boardName={boards.find((b) => b.id === boardId)?.name ?? ""}
+                      defaultName={submission.other_institution_name ?? ""}
                       mediums={lookups.mediums}
                       onCreated={(inst) => {
                         setPendingInstitutions((p) => [...p, inst]);
