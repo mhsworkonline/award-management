@@ -598,9 +598,9 @@ export function SubmissionReviewSheet({
                   </Select>
                   {needsInstitutionResolve && (
                     <QuickAddInstitution
-                      instType="school"
-                      boardId=""
-                      boardName=""
+                      instType={isCollege ? "college" : "school"}
+                      boardId={boardId}
+                      boardName={boards.find((b) => b.id === boardId)?.name ?? ""}
                       mediums={lookups.mediums}
                       onCreated={(inst) => {
                         setPendingInstitutions((p) => [...p, inst]);
