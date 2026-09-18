@@ -62,6 +62,7 @@ type SortKey =
   | "institutionType"
   | "placement"
   | "percentage"
+  | "grade"
   | "submitted"
   | "status"
   | "reviewedBy";
@@ -74,6 +75,7 @@ const SORT_VALUE: Record<SortKey, (s: PublicSubmissionRow) => string | number> =
   institutionType: (s) => institutionTypeLabel(s),
   placement: (s) => placementLabelFor(s).toLowerCase(),
   percentage: (s) => s.percentage ?? -1,
+  grade: (s) => (s.grade ?? "").toLowerCase(),
   submitted: (s) => new Date(s.created_at).getTime(),
   status: (s) => s.status,
   reviewedBy: (s) => (s.reviewed_by ?? "").toLowerCase(),
@@ -154,19 +156,24 @@ export function SubmissionsClient({
       </div>
 
       <TableWrap className="max-h-[calc(100vh-320px)]">
-        <Table>
+        {/* table-fixed: without it, a long institution name grows that column
+         *  past its w-[%] hint (table-layout: auto only treats it as a
+         *  minimum), pushing every column after it off screen. Fixed layout
+         *  makes the widths below load-bearing, so every long value now
+         *  needs to truncate within its cell instead of stretching it. */}
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <LocalSortHeader sortKey="code" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[9%]">
+              <LocalSortHeader sortKey="code" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[8%]">
                 Code
               </LocalSortHeader>
-              <LocalSortHeader sortKey="applicant" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[15%]">
+              <LocalSortHeader sortKey="applicant" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[13%]">
                 Applicant
               </LocalSortHeader>
-              <LocalSortHeader sortKey="institution" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[16%]">
+              <LocalSortHeader sortKey="institution" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[17%]">
                 Institution
               </LocalSortHeader>
-              <LocalSortHeader sortKey="placement" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[11%]">
+              <LocalSortHeader sortKey="placement" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[10%]">
                 Std / Course
               </LocalSortHeader>
               <LocalSortHeader
@@ -174,7 +181,7 @@ export function SubmissionsClient({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="w-[7%]"
+                className="h-9 w-[7%]"
               >
                 Type
               </LocalSortHeader>
@@ -183,20 +190,23 @@ export function SubmissionsClient({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="w-[6%]"
+                className="h-9 w-[6%]"
               >
                 %
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="grade" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[5%]">
+                Grade
               </LocalSortHeader>
               <LocalSortHeader
                 sortKey="submitted"
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="w-[11%]"
+                className="h-9 w-[10%]"
               >
                 Submitted
               </LocalSortHeader>
-              <LocalSortHeader sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} className="w-[8%]">
+              <LocalSortHeader sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[9%]">
                 Status
               </LocalSortHeader>
               <LocalSortHeader
@@ -204,7 +214,7 @@ export function SubmissionsClient({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="w-[13%]"
+                className="h-9 w-[15%]"
               >
                 Reviewed by
               </LocalSortHeader>
@@ -213,7 +223,7 @@ export function SubmissionsClient({
           <TableBody>
             {sorted.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={9} className="border-b-0">
+                <TableCell colSpan={10} className="border-b-0">
                   <EmptyState
                     icon={Inbox}
                     title="Nothing here"
@@ -224,40 +234,53 @@ export function SubmissionsClient({
             ) : (
               sorted.map((s) => (
                 <TableRow key={s.id} className="cursor-pointer" onClick={() => setActive(s)}>
-                  <TableCell className="font-mono text-[12px] text-muted-foreground">{s.reference_code}</TableCell>
-                  <TableCell>
-                    <span className="font-medium">
+                  <TableCell className="truncate py-1.5 font-mono text-[12px] text-muted-foreground">
+                    {s.reference_code}
+                  </TableCell>
+                  <TableCell className="max-w-0 py-1.5">
+                    <span className="block truncate font-medium" title={studentName(s)}>
                       {studentName(s)}
                     </span>
                     {s.middle_name && (
-                      <span className="block text-[12px] text-muted-foreground">s/o {s.middle_name}</span>
+                      <span className="block truncate text-[11px] leading-tight text-muted-foreground">
+                        s/o {s.middle_name}
+                      </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    <span className="truncate">{institutionLabel(s)}</span>
+                  <TableCell className="max-w-0 py-1.5 text-muted-foreground">
+                    <span className="block truncate" title={institutionLabel(s)}>
+                      {institutionLabel(s)}
+                    </span>
                     {s.other_institution_name && !s.institution_id && (
-                      <Badge variant="warning" className="ml-1.5">
+                      <Badge variant="warning" className="mt-0.5">
                         Other
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{placementLabelFor(s)}</Badge>
+                  <TableCell className="max-w-0 py-1.5">
+                    <Badge variant="secondary" className="block max-w-full truncate" title={placementLabelFor(s)}>
+                      {placementLabelFor(s)}
+                    </Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{institutionTypeLabel(s)}</TableCell>
-                  <TableCell className="tabular text-muted-foreground">
+                  <TableCell className="py-1.5 text-muted-foreground">{institutionTypeLabel(s)}</TableCell>
+                  <TableCell className="tabular py-1.5 text-muted-foreground">
                     {s.percentage !== null ? `${s.percentage}%` : "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDateTime(s.created_at)}</TableCell>
-                  <TableCell>
+                  <TableCell className="truncate py-1.5 text-muted-foreground">{s.grade || "—"}</TableCell>
+                  <TableCell className="py-1.5 text-muted-foreground">{formatDateTime(s.created_at)}</TableCell>
+                  <TableCell className="py-1.5">
                     <Badge variant={statusBadgeVariant(s.status)}>{s.status}</Badge>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="max-w-0 py-1.5 text-muted-foreground">
                     {s.reviewed_by ? (
                       <>
-                        <span className="block truncate">{s.reviewed_by}</span>
+                        <span className="block truncate" title={s.reviewed_by}>
+                          {s.reviewed_by}
+                        </span>
                         {s.reviewed_at && (
-                          <span className="block text-[11px]">{formatDateTime(s.reviewed_at)}</span>
+                          <span className="block truncate text-[11px] leading-tight">
+                            {formatDateTime(s.reviewed_at)}
+                          </span>
                         )}
                       </>
                     ) : (
