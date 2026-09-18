@@ -31,6 +31,27 @@ There is no test suite in this project.
 Vercel's GitHub integration (push to `main` → auto-deploy); there is no separate deploy step
 beyond pushing.
 
+## UI changes
+
+**Every UI change must preserve or fix mobile responsiveness — check it at ~375px width, not
+just desktop, before considering it done.** This app was made fully mobile-responsive in one
+pass (see the mobile-nav and Dialog notes below) and a later "fix long text overflowing a
+table column" change regressed it: switching a table to `table-fixed` without also giving it a
+`min-w-[Npx]` forced all its columns to cram into a phone's actual width instead of letting
+`TableWrap`'s `overflow-auto` scroll sideways (the pattern every other table in the app relies
+on for mobile). A desktop-only fix that breaks mobile is not a finished fix. Reuse the
+established patterns rather than re-deriving them:
+- **Tables**: `table-fixed` (to stop content-driven column growth) needs a `min-w-[Npx]`
+  alongside it, so the percentages stay meaningful and `TableWrap` (`overflow-auto`) scrolls
+  horizontally below that width instead of crushing every column.
+- **Modals/dialogs**: `Dialog`'s content is `w-[calc(100%-2rem)]`, not `w-full` — it's
+  `position: fixed` against the viewport, so `w-full` would go edge-to-edge with no side gutter
+  on a phone.
+- **Forms**: `FieldGrid` defaults to a single column below `sm:` (`cols={1}` behavior even when
+  `cols={2}` is passed) — never hardcode a multi-column grid without a mobile-width fallback.
+- **Navigation**: mobile uses `MobileSidebar` (hamburger + `Sheet` drawer), not the desktop
+  `<aside>` — see the Shell / mobile nav note below.
+
 ## Stack
 
 Next.js 14 (App Router) · TypeScript · Tailwind + shadcn/ui (Radix primitives) · Supabase

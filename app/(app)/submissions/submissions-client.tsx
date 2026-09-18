@@ -160,8 +160,13 @@ export function SubmissionsClient({
          *  past its w-[%] hint (table-layout: auto only treats it as a
          *  minimum), pushing every column after it off screen. Fixed layout
          *  makes the widths below load-bearing, so every long value now
-         *  needs to truncate within its cell instead of stretching it. */}
-        <Table className="table-fixed">
+         *  needs to truncate within its cell instead of stretching it.
+         *  min-w-[900px] keeps those percentages meaningful instead of
+         *  crushing all 10 columns into a phone-width table — TableWrap's
+         *  overflow-auto (the app's usual mobile pattern for wide tables)
+         *  takes over and scrolls sideways below that width, same as every
+         *  other data table in the app. */}
+        <Table className="min-w-[900px] table-fixed">
           <TableHeader>
             <TableRow>
               <LocalSortHeader sortKey="code" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[8%]">
