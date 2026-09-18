@@ -565,3 +565,8 @@ export const updateUserRoleSchema = z.object({
   role_id: uuid.nullable(),
   is_admin: z.boolean(),
 });
+
+export const resetUserPasswordSchema = z.object({
+  id: uuid,
+  password: z.string().min(8, "Password must be at least 8 characters").max(72),
+});

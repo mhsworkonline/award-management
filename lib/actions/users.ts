@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { T } from "@/lib/tables";
 import { buildDiff, writeAudit } from "@/lib/audit";
 import { friendly, message } from "@/lib/actions/crud";
-import { createUserSchema, updateUserRoleSchema } from "@/lib/validators";
+import { createUserSchema, resetUserPasswordSchema, updateUserRoleSchema } from "@/lib/validators";
 import type { ActionResult, UserRow } from "@/lib/types";
 
 /** Only rows this app actually provisioned — auth.users (and so am_profiles,
@@ -103,6 +103,38 @@ export async function updateUserRole(raw: unknown): Promise<ActionResult<null>> 
       action: "update",
       actor,
       diff: buildDiff(before ?? null, data),
+    });
+    revalidatePath("/settings");
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+/** Sets a new password directly (no email step) — the admin hands it to the
+ *  user out-of-band, same as the temp password at account creation. Never
+ *  logs the password itself, only that a reset happened. */
+export async function resetUserPassword(raw: unknown): Promise<ActionResult<null>> {
+  const parsed = resetUserPasswordSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Please correct the highlighted fields", fieldErrors: parsed.error.flatten().fieldErrors };
+  }
+
+  try {
+    const { supabase, actor } = await requireAdmin();
+    const admin = createAdminClient();
+
+    const { error } = await admin.auth.admin.updateUserById(parsed.data.id, {
+      password: parsed.data.password,
+    });
+    if (error) return { ok: false, error: friendly(error.message) };
+
+    await writeAudit(supabase, {
+      entity: "users",
+      entityId: parsed.data.id,
+      action: "update",
+      actor,
+      diff: { password_reset: true },
     });
     revalidatePath("/settings");
     return { ok: true, data: null };

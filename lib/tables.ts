@@ -79,6 +79,7 @@ export const FN = {
   publicBranding: "am_public_branding",
   getLookups: "am_get_lookups",
   resolveShortLink: "am_resolve_short_link",
+  listSubmissions: "am_list_submissions",
 } as const;
 
 /** Logical entity name → physical table, for the config CRUD surface. */

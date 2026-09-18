@@ -1,9 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Inbox, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -17,6 +25,7 @@ import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { LocalSortHeader } from "@/components/data-table/local-sort-header";
 import { SubmissionReviewSheet } from "./submission-review-sheet";
 import { useQueryParams } from "@/hooks/use-query-params";
+import { PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/constants";
 import { placementLabel } from "@/lib/placement";
 import { formatDateTime, parentRelation, studentName } from "@/lib/utils";
 import type { Lookups, PublicSubmissionRow, SubmissionStatus } from "@/lib/types";
@@ -97,6 +106,8 @@ export function SubmissionsClient({
   const [term, setTerm] = React.useState("");
   const [sortKey, setSortKey] = React.useState<SortKey>("submitted");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState<number>(PAGE_SIZE);
 
   const filtered = React.useMemo(() => {
     const q = term.trim().toLowerCase();
@@ -124,6 +135,20 @@ export function SubmissionsClient({
       setSortDir("asc");
     }
   }
+
+  // A tab switch (new `submissions`), a search, or a re-sort can all put the
+  // previously-viewed page out of range — land back on page 1 rather than
+  // showing an empty page the user has to notice and back out of.
+  React.useEffect(() => {
+    setPage(1);
+  }, [submissions, term, sortKey, sortDir]);
+
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const clampedPage = Math.min(page, pageCount);
+  const paged = React.useMemo(
+    () => sorted.slice((clampedPage - 1) * pageSize, clampedPage * pageSize),
+    [sorted, clampedPage, pageSize],
+  );
 
   return (
     <>
@@ -237,7 +262,7 @@ export function SubmissionsClient({
                 </TableCell>
               </TableRow>
             ) : (
-              sorted.map((s) => (
+              paged.map((s) => (
                 <TableRow key={s.id} className="cursor-pointer" onClick={() => setActive(s)}>
                   <TableCell className="truncate py-1.5 font-mono text-[12px] text-muted-foreground">
                     {s.reference_code}
@@ -298,6 +323,62 @@ export function SubmissionsClient({
           </TableBody>
         </Table>
       </TableWrap>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 py-1">
+        <p className="tabular text-[13px] text-muted-foreground">
+          {sorted.length === 0
+            ? "No records"
+            : `${(clampedPage - 1) * pageSize + 1}–${Math.min(clampedPage * pageSize, sorted.length)} of ${sorted.length.toLocaleString("en-IN")}`}
+        </p>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] text-muted-foreground">Rows</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(v) => {
+                setPageSize(Number(v));
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="h-8 w-[74px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Previous page"
+              disabled={clampedPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft />
+            </Button>
+            <span className="tabular px-1 text-[13px] text-muted-foreground">
+              {clampedPage} / {pageCount}
+            </span>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Next page"
+              disabled={clampedPage >= pageCount}
+              onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        </div>
+      </div>
 
       <SubmissionReviewSheet submission={active} lookups={lookups} onOpenChange={(open) => !open && setActive(null)} />
     </>

@@ -24,7 +24,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Field } from "@/components/form/field";
-import { createUser, updateUserRole } from "@/lib/actions/users";
+import { createUser, resetUserPassword, updateUserRole } from "@/lib/actions/users";
 import type { Role, UserRow } from "@/lib/types";
 
 type Values = {
@@ -59,10 +59,15 @@ export function UserSheet({
   const [values, setValues] = React.useState<Values>(EMPTY);
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  // Edit mode only: password stays untouched unless the admin explicitly
+  // opts in — showing a live password field on every edit (just to change a
+  // role) would invite it being changed by accident.
+  const [changingPassword, setChangingPassword] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
     setServerError(null);
+    setChangingPassword(false);
     setValues(
       user
         ? { email: user.email ?? "", password: "", full_name: user.full_name ?? "", role_id: user.role_id ?? "", is_admin: user.is_admin }
@@ -91,9 +96,27 @@ export function UserSheet({
         return;
       }
 
+      // A role/admin change and a password reset are two independent
+      // actions server-side — run the reset second so a role-only edit
+      // never touches auth.users at all, and so a failed reset here doesn't
+      // undo the role change that already succeeded.
+      if (isEdit && changingPassword && values.password) {
+        const pwResult = await resetUserPassword({ id: user!.id, password: values.password });
+        if (!pwResult.ok) {
+          setServerError(
+            pwResult.fieldErrors ? Object.values(pwResult.fieldErrors).flat().join(" · ") : pwResult.error,
+          );
+          return;
+        }
+      }
+
+      const passwordChanged = isEdit && changingPassword && values.password;
       toast.success(isEdit ? "User updated" : "User created", {
-        description: !isEdit ? `Temp password: ${values.password} — share it with them directly.` : undefined,
-        duration: !isEdit ? 15000 : undefined,
+        description:
+          !isEdit || passwordChanged
+            ? `New password: ${values.password} — share it with them directly.`
+            : undefined,
+        duration: !isEdit || passwordChanged ? 15000 : undefined,
       });
       router.refresh();
       onOpenChange(false);
@@ -137,6 +160,50 @@ export function UserSheet({
                   onChange={(e) => setValues((v) => ({ ...v, password: e.target.value }))}
                 />
               </Field>
+            )}
+
+            {isEdit && (
+              changingPassword ? (
+                <Field
+                  label="New password"
+                  htmlFor="password"
+                  required
+                  hint="Share this with the user directly — they aren't emailed automatically."
+                >
+                  <div className="flex gap-2">
+                    <Input
+                      id="password"
+                      autoFocus
+                      autoComplete="off"
+                      value={values.password}
+                      onChange={(e) => setValues((v) => ({ ...v, password: e.target.value }))}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => {
+                        setChangingPassword(false);
+                        setValues((v) => ({ ...v, password: "" }));
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </Field>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  onClick={() => {
+                    setChangingPassword(true);
+                    setValues((v) => ({ ...v, password: randomPassword() }));
+                  }}
+                >
+                  Change password
+                </Button>
+              )
             )}
 
             {!isEdit && (
