@@ -24,7 +24,13 @@ type Raw = {
         standards: { label: string } | null;
         streams: { name: string } | null;
         courses: { name: string; structure_type: "year" | "semester" } | null;
-        students: { id: string; first_name: string; middle_name: string | null; last_name: string } | null;
+        students: {
+          id: string;
+          salutation: string | null;
+          first_name: string;
+          middle_name: string | null;
+          last_name: string;
+        } | null;
       } | null;
     } | null;
   } | null;
@@ -128,6 +134,7 @@ function flatten(raw: Raw): DistributionRow | null {
     student_id: student.id,
     student_name: `${student.first_name} ${student.last_name}`,
     father_name: student.middle_name,
+    student_salutation: student.salutation,
     institution_name: record.institutions?.name ?? "—",
     institution_type: record.institutions?.type ?? "school",
     academic_year_id: record.academic_years?.id ?? "",

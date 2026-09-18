@@ -26,6 +26,7 @@ import {
 import { Field, FieldGrid } from "@/components/form/field";
 import { saveAward } from "@/lib/actions/awards";
 import { searchStudents, type RecordOption } from "@/lib/actions/search";
+import { parentRelation } from "@/lib/utils";
 import type { Lookups } from "@/lib/types";
 
 export function AwardSheet({
@@ -162,7 +163,9 @@ export function AwardSheet({
                 <div className="min-w-0">
                   <p className="truncate text-[13.5px] font-medium">{selected.student_name}</p>
                   <p className="truncate text-[12px] text-muted-foreground">
-                    {selected.father_name ? `s/o ${selected.father_name} · ` : ""}
+                    {selected.father_name
+                      ? `${parentRelation(selected.student_salutation)} ${selected.father_name} · `
+                      : ""}
                     {selected.institution_name} · {selected.placement}
                   </p>
                 </div>
@@ -209,7 +212,7 @@ export function AwardSheet({
                                 {s.student_name}
                               </span>
                               <span className="block truncate text-[12px] text-muted-foreground">
-                                {s.father_name ? `s/o ${s.father_name} · ` : ""}
+                                {s.father_name ? `${parentRelation(s.student_salutation)} ${s.father_name} · ` : ""}
                                 {s.institution_name}
                               </span>
                             </span>

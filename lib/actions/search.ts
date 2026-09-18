@@ -10,6 +10,7 @@ export type RecordOption = {
   academic_record_id: string;
   student_name: string;
   father_name: string | null;
+  student_salutation: string | null;
   institution_name: string;
   placement: string;
 };

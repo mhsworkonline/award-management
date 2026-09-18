@@ -44,6 +44,15 @@ export function studentName(s: { salutation?: string | null; first_name: string;
   return [s.salutation, s.first_name, s.last_name].filter(Boolean).join(" ").trim();
 }
 
+/** "s/o"/"d/o" before a student's father's/lanedaar name, based on salutation
+ *  — never assume "s/o" by default. Falls back to the gender-neutral "c/o"
+ *  when the salutation doesn't indicate one (e.g. "Dr.", or unset). */
+export function parentRelation(salutation?: string | null) {
+  if (salutation === "Mr.") return "s/o";
+  if (salutation === "Ms." || salutation === "Mrs." || salutation === "Miss") return "d/o";
+  return "c/o";
+}
+
 /** Wraps a react-hook-form `register(...)` result so the field's actual
  *  value — not just how it's displayed — is forced to uppercase as the user
  *  types or pastes. Mutates the input's DOM value before react-hook-form's

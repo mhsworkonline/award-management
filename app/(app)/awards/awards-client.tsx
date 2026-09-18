@@ -27,6 +27,7 @@ import { AwardSheet } from "./award-sheet";
 import { AllocateSheet } from "./allocate-sheet";
 import { SuggestedPerformers } from "./suggested-performers";
 import { deleteAward } from "@/lib/actions/awards";
+import { parentRelation } from "@/lib/utils";
 import { usePermissions } from "@/components/providers/permissions-provider";
 import type { AwardRow } from "@/lib/data/awards";
 import type { listTopPerformers } from "@/lib/data/academic-records";
@@ -124,7 +125,7 @@ export function AwardsClient({
                     <span className="font-medium">{row.student_name}</span>
                     {row.father_name && (
                       <span className="block text-[12px] text-muted-foreground">
-                        s/o {row.father_name}
+                        {parentRelation(row.student_salutation)} {row.father_name}
                       </span>
                     )}
                   </TableCell>

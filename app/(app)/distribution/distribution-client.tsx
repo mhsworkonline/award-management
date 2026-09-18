@@ -35,7 +35,7 @@ import {
   getQueue,
   newLocalUuid,
 } from "@/lib/offline/db";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, parentRelation } from "@/lib/utils";
 import { usePermissions } from "@/components/providers/permissions-provider";
 import type { DistributionRow, Lookups } from "@/lib/types";
 
@@ -248,7 +248,7 @@ export function DistributionClient({
                       <span className="font-medium">{row.student_name}</span>
                       {row.father_name && (
                         <span className="block text-[12px] text-muted-foreground">
-                          s/o {row.father_name}
+                          {parentRelation(row.student_salutation)} {row.father_name}
                         </span>
                       )}
                     </TableCell>

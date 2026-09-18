@@ -15,7 +15,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { placementLabel } from "@/lib/placement";
-import { formatDateTime, studentName } from "@/lib/utils";
+import { formatDateTime, parentRelation, studentName } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
 import type { AcademicRecordRow } from "@/lib/types";
@@ -53,7 +53,9 @@ export function StudentDetail({
                 <div className="min-w-0">
                   <SheetTitle className="truncate">{record.students ? studentName(record.students) : "—"}</SheetTitle>
                   <SheetDescription className="truncate">
-                    {record.students?.middle_name ? `s/o ${record.students.middle_name} · ` : ""}
+                    {record.students?.middle_name
+                      ? `${parentRelation(record.students.salutation)} ${record.students.middle_name} · `
+                      : ""}
                     {record.institutions?.name ?? "—"}
                   </SheetDescription>
                 </div>

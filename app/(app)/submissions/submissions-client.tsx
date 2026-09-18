@@ -18,7 +18,7 @@ import { LocalSortHeader } from "@/components/data-table/local-sort-header";
 import { SubmissionReviewSheet } from "./submission-review-sheet";
 import { useQueryParams } from "@/hooks/use-query-params";
 import { placementLabel } from "@/lib/placement";
-import { formatDateTime, studentName } from "@/lib/utils";
+import { formatDateTime, parentRelation, studentName } from "@/lib/utils";
 import type { Lookups, PublicSubmissionRow, SubmissionStatus } from "@/lib/types";
 
 /** Falls back to the applicant's free-typed institution/course when there's no
@@ -243,7 +243,7 @@ export function SubmissionsClient({
                     </span>
                     {s.middle_name && (
                       <span className="block truncate text-[11px] leading-tight text-muted-foreground">
-                        s/o {s.middle_name}
+                        {parentRelation(s.salutation)} {s.middle_name}
                       </span>
                     )}
                   </TableCell>

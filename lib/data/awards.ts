@@ -10,6 +10,7 @@ export type AwardRow = {
   student_id: string;
   student_name: string;
   father_name: string | null;
+  student_salutation: string | null;
   institution_name: string;
   institution_type: InstitutionType;
   placement: string;
@@ -38,7 +39,13 @@ type Raw = {
     streams: { name: string } | null;
     courses: { name: string; structure_type: "year" | "semester" } | null;
     institutions: { name: string; type: InstitutionType } | null;
-    students: { id: string; first_name: string; middle_name: string | null; last_name: string } | null;
+    students: {
+      id: string;
+      salutation: string | null;
+      first_name: string;
+      middle_name: string | null;
+      last_name: string;
+    } | null;
   } | null;
   gift_allocations: {
     id: string;
@@ -116,6 +123,7 @@ export async function listAwards(filters: {
         student_id: student.id,
         student_name: `${student.first_name} ${student.last_name}`,
         father_name: student.middle_name,
+        student_salutation: student.salutation,
         institution_name: record.institutions?.name ?? "—",
         institution_type: record.institutions?.type ?? "school",
         placement: placementLabel(record),
@@ -173,7 +181,13 @@ export async function searchAwardableRecords(input: {
   type Row = {
     id: string;
     period_no: number | null;
-    students: { id: string; first_name: string; middle_name: string | null; last_name: string } | null;
+    students: {
+      id: string;
+      salutation: string | null;
+      first_name: string;
+      middle_name: string | null;
+      last_name: string;
+    } | null;
     institutions: { name: string; type: string } | null;
     standards: { label: string } | null;
     courses: { name: string; structure_type: "year" | "semester" } | null;
@@ -185,6 +199,7 @@ export async function searchAwardableRecords(input: {
       academic_record_id: r.id,
       student_name: `${r.students!.first_name} ${r.students!.last_name}`,
       father_name: r.students!.middle_name,
+      student_salutation: r.students!.salutation,
       institution_name: r.institutions?.name ?? "—",
       placement: placementLabel(r),
     }));

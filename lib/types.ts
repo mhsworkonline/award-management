@@ -214,6 +214,7 @@ export type DistributionRow = {
   student_id: string;
   student_name: string;
   father_name: string | null; // = middle_name
+  student_salutation: string | null;
   institution_name: string;
   institution_type: InstitutionType;
   academic_year_id: string;
