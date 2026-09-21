@@ -3,6 +3,23 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ORG_ID } from "@/lib/constants";
 import { ATTACHMENTS_BUCKET, STUDENT_PHOTOS_BUCKET, T } from "@/lib/tables";
 
+/** Runs `fn` over `items` with at most `limit` in flight at once — a plain
+ *  sequential for-loop here (one Storage download at a time, each a full
+ *  network round trip) was the actual cause of backups hanging for minutes
+ *  once there were enough submissions to have hundreds of attachments/
+ *  photos. Bounded rather than a single `Promise.all` so a large org
+ *  doesn't fire hundreds of simultaneous requests at Supabase Storage. */
+async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
 /** Shared by both the files-only ZIP and the full backup — downloads every
  *  marksheet attachment and student photo and adds them to `zip` under
  *  marksheets/ and student-photos/, each prefixed with the applicant's
@@ -38,13 +55,13 @@ export async function addFilesToZip(supabase: SupabaseClient<any>, zip: JSZip): 
   const photos = zip.folder("student-photos");
   let fileCount = 0;
 
-  for (const a of attachments.data ?? []) {
+  await mapWithConcurrency(attachments.data ?? [], 8, async (a) => {
     const { data } = await supabase.storage.from(ATTACHMENTS_BUCKET).download(a.file_path);
-    if (!data) continue;
+    if (!data) return;
     const code = submissionById.get(a.submission_id)?.reference_code ?? "UNKNOWN";
     marksheets?.file(`${code}-${a.file_name}`, await data.arrayBuffer());
     fileCount++;
-  }
+  });
 
   const photoByPath = new Map<string, { label: string }>();
   for (const s of submissions.data ?? []) {
@@ -57,14 +74,14 @@ export async function addFilesToZip(supabase: SupabaseClient<any>, zip: JSZip): 
     photoByPath.set(s.photo_path, { label: `${code}-${s.first_name}-${s.last_name}` });
   }
 
-  for (const [path, { label }] of photoByPath) {
+  await mapWithConcurrency([...photoByPath], 8, async ([path, { label }]) => {
     const { data } = await supabase.storage.from(STUDENT_PHOTOS_BUCKET).download(path);
-    if (!data) continue;
+    if (!data) return;
     const ext = path.split(".").pop() || "jpg";
     const safeLabel = label.replace(/[^a-zA-Z0-9-]+/g, "-");
     photos?.file(`${safeLabel}.${ext}`, await data.arrayBuffer());
     fileCount++;
-  }
+  });
 
   return fileCount;
 }
@@ -91,22 +108,22 @@ export async function addRestorableFilesToZip(supabase: SupabaseClient<any>, zip
   let fileCount = 0;
 
   const attachmentPaths = new Set((attachments.data ?? []).map((a) => a.file_path));
-  for (const path of attachmentPaths) {
+  await mapWithConcurrency([...attachmentPaths], 8, async (path) => {
     const { data } = await supabase.storage.from(ATTACHMENTS_BUCKET).download(path);
-    if (!data) continue;
+    if (!data) return;
     attachmentsFolder?.file(path, await data.arrayBuffer());
     fileCount++;
-  }
+  });
 
   const photoPaths = new Set<string>();
   for (const s of submissions.data ?? []) if (s.photo_path) photoPaths.add(s.photo_path);
   for (const s of students.data ?? []) if (s.photo_path) photoPaths.add(s.photo_path);
-  for (const path of photoPaths) {
+  await mapWithConcurrency([...photoPaths], 8, async (path) => {
     const { data } = await supabase.storage.from(STUDENT_PHOTOS_BUCKET).download(path);
-    if (!data) continue;
+    if (!data) return;
     photosFolder?.file(path, await data.arrayBuffer());
     fileCount++;
-  }
+  });
 
   return fileCount;
 }

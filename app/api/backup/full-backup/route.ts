@@ -31,10 +31,18 @@ export async function GET() {
     const data = zip.folder("data");
     const rowCounts: Record<string, number> = {};
 
-    for (const { table, filterColumn } of BACKUP_TABLES) {
-      let query = supabase.from(table).select("*");
-      if (filterColumn) query = query.eq(filterColumn, ORG_ID);
-      const { data: rows, error } = await query;
+    // Independent queries, fired together — no reason to make the table
+    // dump pay for 23 sequential round trips on top of the file downloads
+    // below.
+    const tableResults = await Promise.all(
+      BACKUP_TABLES.map(async ({ table, filterColumn }) => {
+        let query = supabase.from(table).select("*");
+        if (filterColumn) query = query.eq(filterColumn, ORG_ID);
+        const { data: rows, error } = await query;
+        return { table, rows, error };
+      }),
+    );
+    for (const { table, rows, error } of tableResults) {
       if (error) {
         return new Response(`Failed reading ${table}: ${error.message}`, { status: 500 });
       }
