@@ -123,9 +123,10 @@ export function SubmissionReviewSheet({
   // Deleting an attachment removes the stored file itself — needs its own
   // Delete grant, not just Update.
   const canDeleteSubmission = can("submissions", "delete");
-  // Approving converts the submission into a student + its first academic
-  // record in one action, so it needs both of those Create grants too.
-  const canApproveSubmission = canUpdateSubmission && can("students", "create") && can("academic_records", "create");
+  // Approving is part of reviewing: Submissions: Update is enough. The server
+  // creates the student and their enrollment itself, so the reviewer doesn't
+  // need Students / Academic Records: Create (see approveSubmission).
+  const canApproveSubmission = canUpdateSubmission;
   const [saving, setSaving] = React.useState(false);
   const [deciding, setDeciding] = React.useState(false);
   const [decisionKind, setDecisionKind] = React.useState<DecisionKind | null>(null);

@@ -1,21 +1,27 @@
 import Link from "next/link";
 import {
+  AlertTriangle,
   Award,
   CheckCircle2,
   Clock,
   Gift,
   GraduationCap,
+  Inbox,
   Package,
   School,
   Users,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/shell/page-header";
-import { getDashboardStats } from "@/lib/data/dashboard";
+import { EmptyState, PageHeader } from "@/components/shell/page-header";
+import { EMPTY_DASHBOARD_STATS, getDashboardStats } from "@/lib/data/dashboard";
 import { activeYearId, getLookups } from "@/lib/data/lookups";
+import { getSubmissionCounts } from "@/lib/data/submissions";
+import { getMyPermissionMap } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/utils";
+import type { ModuleName } from "@/lib/types";
 
 export const metadata = { title: "Dashboard" };
 
@@ -24,14 +30,42 @@ export default async function DashboardPage({
 }: {
   searchParams: { year?: string };
 }) {
-  // If the URL already names a year, stats can be fetched alongside lookups
-  // instead of waiting on them just to look up the active year.
-  const lookupsPromise = getLookups();
-  const [lookups, stats] = searchParams.year
-    ? await Promise.all([lookupsPromise, getDashboardStats(searchParams.year)])
-    : await lookupsPromise.then(async (l) => [l, await getDashboardStats(activeYearId(l))] as const);
-  const yearId = searchParams.year ?? activeYearId(lookups);
-  const year = lookups.academicYears.find((y) => y.id === yearId);
+  // Every widget is built from one module's data, and RLS answers a module a
+  // role can't read with zeros - which reads as "no data" when it really means
+  // "no access". So each widget renders only for roles that can read the
+  // module it comes from (admins see everything).
+  const { isAdmin, modules } = await getMyPermissionMap();
+  const canRead = (m: ModuleName) => isAdmin || Boolean(modules[m]?.read);
+  const show = {
+    submissions: canRead("submissions"),
+    students: canRead("students"),
+    awards: canRead("awards"),
+    gifts: canRead("gifts"),
+    distribution: canRead("distribution"),
+    institutions: canRead("institutions"),
+    activity: isAdmin, // the audit log is admin-only at the database level
+  };
+  const canAddStudents = isAdmin || Boolean(modules.students?.create);
+  // A role with only Submissions skips the awards-pipeline queries entirely.
+  const needsStats = show.students || show.awards || show.gifts || show.distribution || show.institutions;
+
+  const loadStats = async () => {
+    // If the URL already names a year, stats can be fetched alongside lookups
+    // instead of waiting on them just to look up the active year.
+    const lookupsPromise = getLookups();
+    const [lookups, stats] = searchParams.year
+      ? await Promise.all([lookupsPromise, getDashboardStats(searchParams.year)])
+      : await lookupsPromise.then(async (l) => [l, await getDashboardStats(activeYearId(l))] as const);
+    const yearId = searchParams.year ?? activeYearId(lookups);
+    return { stats, year: lookups.academicYears.find((y) => y.id === yearId) };
+  };
+
+  const [loaded, submissionCounts] = await Promise.all([
+    needsStats ? loadStats() : null,
+    show.submissions ? getSubmissionCounts() : null,
+  ]);
+  const stats = loaded?.stats ?? EMPTY_DASHBOARD_STATS;
+  const year = loaded?.year;
 
   const distributionTotal = stats.distributed + stats.pendingDistribution;
   const progress = distributionTotal === 0 ? 0 : Math.round((stats.distributed / distributionTotal) * 100);
@@ -43,52 +77,107 @@ export default async function DashboardPage({
         description={
           year
             ? `Overview for academic year ${year.label}`
-            : "Create an academic year under Settings to get started"
+            : needsStats
+              ? "Create an academic year under Settings to get started"
+              : "Your overview"
         }
         actions={
-          <>
-            <Button asChild variant="outline">
-              <Link href="/students/import">Import students</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/students/new">Add student</Link>
-            </Button>
-          </>
+          canAddStudents && (
+            <>
+              <Button asChild variant="outline">
+                <Link href="/students/import">Import students</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/students/new">Add student</Link>
+              </Button>
+            </>
+          )
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          icon={Users}
-          label="Students"
-          value={stats.students}
-          hint={`${stats.schoolStudents} school · ${stats.collegeStudents} college (all years)`}
-          href="/students"
+      {!needsStats && !submissionCounts && (
+        <EmptyState
+          icon={Inbox}
+          title="Nothing to show here yet"
+          description="This overview is built from the parts of the app your role can open. Use the menu on the left to get to the ones you have access to."
         />
-        <Stat
-          icon={Award}
-          label="Awards assigned"
-          value={stats.awards}
-          hint={`across ${stats.byCategory.length} categor${stats.byCategory.length === 1 ? "y" : "ies"}`}
-          href="/awards"
-        />
-        <Stat
-          icon={Gift}
-          label="Gifts allocated"
-          value={stats.allocations}
-          hint={`${stats.giftStock} units still in stock`}
-          href="/gifts"
-        />
-        <Stat
-          icon={CheckCircle2}
-          label="Gifts distributed"
-          value={stats.distributed}
-          hint={`${stats.pendingDistribution} pending${stats.queuedOffline ? ` · ${stats.queuedOffline} synced offline` : ""}`}
-          href="/distribution"
-        />
-      </div>
+      )}
 
+      {submissionCounts && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Stat
+            icon={Inbox}
+            label="Pending review"
+            value={submissionCounts.pending}
+            hint="Waiting for a decision"
+            href="/submissions"
+          />
+          <Stat
+            icon={CheckCircle2}
+            label="Approved"
+            value={submissionCounts.approved}
+            href="/submissions?status=approved"
+          />
+          <Stat
+            icon={XCircle}
+            label="Rejected"
+            value={submissionCounts.rejected}
+            href="/submissions?status=rejected"
+          />
+          <Stat
+            icon={AlertTriangle}
+            label="Doubtful"
+            value={submissionCounts.doubtful}
+            hint="Processed, but not sure"
+            href="/submissions?status=doubtful"
+          />
+        </div>
+      )}
+
+      {(show.students || show.awards || show.gifts || show.distribution) && (
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {show.students && (
+          <Stat
+            icon={Users}
+            label="Students"
+            value={stats.students}
+            hint={`${stats.schoolStudents} school · ${stats.collegeStudents} college (all years)`}
+            href="/students"
+          />
+        )}
+        {show.awards && (
+          <Stat
+            icon={Award}
+            label="Awards assigned"
+            value={stats.awards}
+            hint={`across ${stats.byCategory.length} categor${stats.byCategory.length === 1 ? "y" : "ies"}`}
+            href="/awards"
+          />
+        )}
+        {show.gifts && (
+          <Stat
+            icon={Gift}
+            label="Gifts allocated"
+            value={stats.allocations}
+            hint={`${stats.giftStock} units still in stock`}
+            href="/gifts"
+          />
+        )}
+        {show.distribution && (
+          <Stat
+            icon={CheckCircle2}
+            label="Gifts distributed"
+            value={stats.distributed}
+            hint={`${stats.pendingDistribution} pending${stats.queuedOffline ? ` · ${stats.queuedOffline} synced offline` : ""}`}
+            href="/distribution"
+          />
+        )}
+      </div>
+      )}
+
+      {(show.distribution || show.awards) && (
       <div className="grid gap-4 lg:grid-cols-3">
+        {show.distribution && (
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>Distribution progress</CardTitle>
@@ -119,7 +208,9 @@ export default async function DashboardPage({
             )}
           </CardContent>
         </Card>
+        )}
 
+        {show.awards && (
         <Card>
           <CardHeader>
             <CardTitle>Awards by category</CardTitle>
@@ -139,9 +230,13 @@ export default async function DashboardPage({
             )}
           </CardContent>
         </Card>
+        )}
       </div>
+      )}
 
+      {(show.students || show.institutions || show.activity) && (
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {show.students && (
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>School students by board</CardTitle>
@@ -169,7 +264,9 @@ export default async function DashboardPage({
             )}
           </CardContent>
         </Card>
+        )}
 
+        {show.institutions && (
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>Top institutions</CardTitle>
@@ -201,7 +298,9 @@ export default async function DashboardPage({
             )}
           </CardContent>
         </Card>
+        )}
 
+        {show.activity && (
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>Recent activity</CardTitle>
@@ -241,7 +340,9 @@ export default async function DashboardPage({
             )}
           </CardContent>
         </Card>
+        )}
       </div>
+      )}
     </>
   );
 }

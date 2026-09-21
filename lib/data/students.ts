@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
 import { normalizeName } from "@/lib/utils";
@@ -33,13 +34,20 @@ export async function getStudent(id: string) {
 /** Persistent-identity duplicate check — a student exists once regardless of
  *  how many years/institutions they've been enrolled in, so this matches on
  *  name only, org-wide. A warning, never a hard block — namesakes are real. */
-export async function findDuplicateStudents(input: {
-  first_name: string;
-  middle_name?: string | null;
-  last_name: string;
-  excludeId?: string;
-}) {
-  const supabase = createClient();
+export async function findDuplicateStudents(
+  input: {
+    first_name: string;
+    middle_name?: string | null;
+    last_name: string;
+    excludeId?: string;
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client?: SupabaseClient<any>,
+) {
+  // Defaults to the signed-in user's own (RLS-scoped) client. The Submissions
+  // review passes an elevated one instead: a reviewer who can approve but
+  // can't read Students would otherwise always get "no duplicates".
+  const supabase = client ?? createClient();
   const term = input.first_name.trim().split(/\s+/)[0] ?? input.first_name;
 
   let query = supabase

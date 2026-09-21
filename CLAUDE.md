@@ -78,6 +78,14 @@ middleware alone. Fine-grained module permissions (`lib/actions/roles.ts`, the
 action)` in `components/providers/permissions-provider.tsx`); RLS policies are the real
 enforcement underneath that, not the UI check.
 
+**Destructive actions need a server-side check, not just RLS.** RLS deletes zero rows *without an
+error* when it blocks a delete, and Storage buckets have no per-module policy of their own. So
+every delete action calls `requirePermission(module, "delete")` up front, uses `.select("id")` to
+confirm a row was really removed (`NOTHING_DELETED` in `lib/actions/crud.ts`), and only then
+touches Storage or the audit log. Migration 0037 also gates the three buckets' DELETE policies on
+`am_has_permission`. Any new delete path must do the same, and its button must check
+`can(module, "delete")`, not "update".
+
 **Identity vs. per-year data — the core data model split.** `am_students` is a student's
 *permanent identity* (name, contact) — one row per person, never duplicated across years.
 Everything year-specific lives in `am_academic_records` (one row per student per academic
@@ -102,7 +110,12 @@ decisions and edits is written to the general audit log (`am_audit_logs`, entity
 by normalized name match, plus an `am_academic_records` row) and is reachable from any other
 status; there is deliberately no path back out of `approved` through this flow — editing an
 already-approved submission instead pushes the correction into the linked student/academic
-record to keep them in sync, rather than letting the two drift apart.
+record to keep them in sync, rather than letting the two drift apart. **Reviewing needs only
+Submissions: Update** — approving, the duplicate-student check, and the roster sync on edit all
+run through the service-role client (`createAdminClient`) after `requirePermission("submissions",
+"update")`, so a Checker-style role doesn't need Students/Academic Records: Create (which would
+also let it add students by hand). This means approval depends on `SUPABASE_SERVICE_ROLE_KEY`
+being set wherever the app runs.
 
 **Gift stock integrity.** `allocate_gift()` is a Postgres function holding a row lock while it
 checks stock, inserts the allocation, and decrements inventory — two staff members can't

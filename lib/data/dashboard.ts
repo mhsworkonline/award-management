@@ -28,6 +28,27 @@ export type DashboardStats = {
   }[];
 };
 
+/** What a role with no awards-pipeline access sees underneath widgets it
+ *  never renders - lets the page skip all the queries instead of running 14
+ *  that RLS would just answer with zeros. */
+export const EMPTY_DASHBOARD_STATS: DashboardStats = {
+  students: 0,
+  schoolStudents: 0,
+  collegeStudents: 0,
+  institutions: 0,
+  awards: 0,
+  allocations: 0,
+  distributed: 0,
+  pendingDistribution: 0,
+  queuedOffline: 0,
+  giftStock: 0,
+  ungraded: 0,
+  byCategory: [],
+  byInstitution: [],
+  byBoard: [],
+  recentAudit: [],
+};
+
 /** All 13 queries run in one Promise.all — the page awaiting this must not
  *  also serially await getLookups() first; run them together. */
 export async function getDashboardStats(academicYearId: string | null): Promise<DashboardStats> {

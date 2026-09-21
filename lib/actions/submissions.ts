@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canAccess, requirePermission, requireUser } from "@/lib/supabase/server";
+import { canAccess, requirePermission } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
 import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
@@ -45,8 +46,10 @@ export async function checkSubmissionDuplicates(input: {
   last_name: string;
 }) {
   try {
-    await requireUser();
-    const rows = await findDuplicateStudents(input);
+    await requirePermission("submissions", "read");
+    // Elevated on purpose - see findDuplicateStudents. Only ever returns names
+    // matching this one applicant's own name.
+    const rows = await findDuplicateStudents(input, createAdminClient());
     return {
       ok: true as const,
       data: rows.map((r) => [r.first_name, r.middle_name, r.last_name].filter(Boolean).join(" ")),
@@ -73,7 +76,7 @@ export async function updateSubmission(raw: unknown): Promise<ActionResult<null>
   const { id, ...values } = parsed.data;
 
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("submissions", "update");
 
     const { data: before, error: beforeError } = await supabase
       .from(T.publicSubmissions)
@@ -96,7 +99,12 @@ export async function updateSubmission(raw: unknown): Promise<ActionResult<null>
     if (error) return { ok: false, error: friendly(error.message) };
 
     if (before.status === "approved" && before.student_id && before.academic_record_id) {
-      const { error: studentError } = await supabase
+      // Pushing a correction into the roster is part of editing a submission,
+      // so it's allowed by Submissions: Update alone - done with the elevated
+      // client, since the reviewer may not have Students/Academic Records
+      // access of their own (RLS would silently update zero rows).
+      const admin = createAdminClient();
+      const { error: studentError } = await admin
         .from(T.students)
         .update({
           salutation: values.salutation ?? null,
@@ -110,7 +118,7 @@ export async function updateSubmission(raw: unknown): Promise<ActionResult<null>
         .eq("id", before.student_id);
       if (studentError) return { ok: false, error: friendly(studentError.message) };
 
-      const { error: recordError } = await supabase
+      const { error: recordError } = await admin
         .from(T.academicRecords)
         .update({
           institution_id: values.institution_id,
@@ -171,7 +179,13 @@ export async function approveSubmission(
   if (!trimmedNote) return { ok: false, error: "A note is required" };
 
   try {
-    const { supabase, actor } = await requireUser();
+    // Approving needs only Submissions: Update - not Students/Academic
+    // Records: Create. "Can review submissions" is what makes someone a
+    // reviewer; requiring general create rights on the roster would hand
+    // them the ability to add students by hand too. The student and their
+    // enrollment are created with the elevated client below, after this check.
+    const { supabase, actor } = await requirePermission("submissions", "update");
+    const admin = createAdminClient();
 
     // Reachable from Pending, Doubtful or Rejected — approving is the one
     // transition allowed from anywhere, since it only ever creates data,
@@ -189,14 +203,33 @@ export async function approveSubmission(
     const placementError = validatePlacement(sub);
     if (placementError) return { ok: false, error: placementError };
 
-    const existing = await supabase
-      .from(T.students)
-      .select("id, salutation, first_name, middle_name, last_name, lanedaar_name, email, photo_path")
-      .eq("org_id", ORG_ID)
-      .limit(50000);
+    // Read every student, in pages - a single request is capped at 1000 rows,
+    // and a match missed past that would create a duplicate student.
+    type StudentMatch = {
+      id: string;
+      salutation: string | null;
+      first_name: string;
+      middle_name: string | null;
+      last_name: string;
+      lanedaar_name: string | null;
+      email: string | null;
+      photo_path: string | null;
+    };
+    const existingStudents: StudentMatch[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: page, error: pageError } = await admin
+        .from(T.students)
+        .select("id, salutation, first_name, middle_name, last_name, lanedaar_name, email, photo_path")
+        .eq("org_id", ORG_ID)
+        .order("id")
+        .range(from, from + 999);
+      if (pageError) return { ok: false, error: friendly(pageError.message) };
+      existingStudents.push(...((page ?? []) as StudentMatch[]));
+      if (!page || page.length < 1000) break;
+    }
 
     const key = `${normalizeName(sub.first_name)}|${normalizeName(sub.middle_name)}|${normalizeName(sub.last_name)}`;
-    const match = (existing.data ?? []).find(
+    const match = existingStudents.find(
       (s) => `${normalizeName(s.first_name)}|${normalizeName(s.middle_name)}|${normalizeName(s.last_name)}` === key,
     );
 
@@ -210,12 +243,12 @@ export async function approveSubmission(
       if (!match?.photo_path && sub.photo_path) backfill.photo_path = sub.photo_path;
       if (!match?.lanedaar_name && sub.lanedaar_name) backfill.lanedaar_name = sub.lanedaar_name;
       if (Object.keys(backfill).length > 0) {
-        await supabase.from(T.students).update(backfill).eq("id", studentId);
+        await admin.from(T.students).update(backfill).eq("id", studentId);
       }
     }
 
     if (!studentId) {
-      const { data: newStudent, error: studentError } = await supabase
+      const { data: newStudent, error: studentError } = await admin
         .from(T.students)
         .insert({
           org_id: ORG_ID,
@@ -242,7 +275,7 @@ export async function approveSubmission(
       });
     }
 
-    const { data: record, error: recordError } = await supabase
+    const { data: record, error: recordError } = await admin
       .from(T.academicRecords)
       .insert({
         org_id: ORG_ID,
@@ -303,7 +336,7 @@ export async function approveSubmission(
  *  every view goes through a short-lived signed URL generated server-side. */
 export async function getAttachmentSignedUrl(attachmentId: string): Promise<ActionResult<{ url: string }>> {
   try {
-    const { supabase } = await requireUser();
+    const { supabase } = await requirePermission("submissions", "read");
     const { data: attachment, error: attError } = await supabase
       .from(T.submissionAttachments)
       .select("file_path")
@@ -490,7 +523,7 @@ async function setReviewStatus(
   if (!trimmedNote) return { ok: false, error: "A note is required" };
 
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("submissions", "update");
 
     const { data: before, error: beforeError } = await supabase
       .from(T.publicSubmissions)
@@ -547,8 +580,12 @@ export async function markSubmissionDoubtful(id: string, note: string): Promise<
  *  general audit log rather than a dedicated table. */
 export async function getSubmissionHistory(id: string): Promise<ActionResult<AuditLog[]>> {
   try {
-    const { supabase } = await requireUser();
-    const { data, error } = await supabase
+    await requirePermission("submissions", "read");
+    // The audit log is admin-only at the database level, so a reviewer would
+    // always see an empty History through their own client. This reads it
+    // elevated, but only ever the entries for this one submission.
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from(T.auditLogs)
       .select("*")
       .eq("org_id", ORG_ID)
