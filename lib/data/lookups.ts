@@ -28,6 +28,21 @@ export async function getLookups(): Promise<Lookups> {
   return data as unknown as Lookups;
 }
 
+/** The Submissions page's version of getLookups — same `Lookups` shape, but
+ *  populated via a narrow SECURITY DEFINER RPC (am_get_submission_lookups)
+ *  that only returns the six lists the review sheet's dropdowns use, gated
+ *  on Submissions:Read. getLookups() itself stays SECURITY INVOKER on
+ *  purpose, so a Submissions-only role would otherwise get blank dropdowns
+ *  for anything behind the Institutions/Settings modules. Every key the
+ *  RPC doesn't return (academic years, gift items, award categories) stays
+ *  an empty array — the review sheet never reads them. */
+export async function getSubmissionLookups(): Promise<Lookups> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc(FN.getSubmissionLookups, { p_org_id: ORG_ID });
+  if (error || !data) return EMPTY_LOOKUPS;
+  return { ...EMPTY_LOOKUPS, ...(data as unknown as Partial<Lookups>) };
+}
+
 /** The year used as the default filter everywhere. */
 export function activeYearId(lookups: Lookups) {
   return lookups.academicYears.find((y) => y.is_active)?.id ?? lookups.academicYears[0]?.id ?? null;

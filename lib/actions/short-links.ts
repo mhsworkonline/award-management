@@ -2,10 +2,10 @@
 
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/supabase/server";
+import { requirePermission, requireUser } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
 import { writeAudit } from "@/lib/audit";
-import { friendly, message } from "@/lib/actions/crud";
+import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
 import { T } from "@/lib/tables";
 import type { ActionResult } from "@/lib/types";
 
@@ -72,11 +72,17 @@ export async function createShortLink(url: string): Promise<ActionResult<{ code:
 
 export async function deleteShortLink(id: string): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("settings", "delete");
 
     const { data: before } = await supabase.from(T.shortLinks).select("*").eq("id", id).single();
-    const { error } = await supabase.from(T.shortLinks).delete().eq("id", id).eq("org_id", ORG_ID);
+    const { data: removed, error } = await supabase
+      .from(T.shortLinks)
+      .delete()
+      .eq("id", id)
+      .eq("org_id", ORG_ID)
+      .select("id");
     if (error) return { ok: false, error: friendly(error.message) };
+    if (!removed?.length) return { ok: false, error: NOTHING_DELETED };
 
     await writeAudit(supabase, {
       entity: "short_links",

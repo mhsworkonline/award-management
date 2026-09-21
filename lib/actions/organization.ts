@@ -2,7 +2,7 @@
 
 import { cache } from "react";
 import { revalidatePath } from "next/cache";
-import { requireUser, createClient } from "@/lib/supabase/server";
+import { requirePermission, requireUser, createClient } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
 import { friendly, message } from "@/lib/actions/crud";
@@ -103,7 +103,9 @@ export async function updateLogo(path: string): Promise<ActionResult<null>> {
 
 export async function removeLogo(): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requireUser();
+    // Deletes the stored file as well as clearing the setting, and the
+    // branding bucket has no per-module policy — so gate it here.
+    const { supabase, actor } = await requirePermission("settings", "delete");
     const { data: before } = await supabase
       .from(T.organizations)
       .select("logo_path")

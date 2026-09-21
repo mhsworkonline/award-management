@@ -29,16 +29,29 @@ const SORTABLE: Record<string, string> = {
 /** The roster — one row per student-year enrollment. This is what the Students
  *  list page actually filters and displays; the persistent Student record only
  *  surfaces on the detail panel and the add/edit forms. */
-export async function listAcademicRecords(filters: AcademicRecordFilters) {
+export async function listAcademicRecords(
+  filters: AcademicRecordFilters,
+  options: { unawarded?: boolean } = {},
+) {
   const supabase = createClient();
   const page = filters.page ?? 1;
   const size = filters.size ?? PAGE_SIZE;
   const ascending = (filters.dir ?? "asc") === "asc";
 
+  // `unawarded` (the Awards page's "Not yet awarded" worklist) filters to
+  // records with zero awards via a PostgREST anti-join — which needs the
+  // awards embed spelled as an explicit left join. Only rewritten for that
+  // case, so every other caller's query is byte-for-byte what it was.
+  const select = options.unawarded
+    ? SELECT.replace("student_awards:am_student_awards (", "student_awards:am_student_awards!left (")
+    : SELECT;
+
   let query = supabase
     .from(T.academicRecords)
-    .select(SELECT, { count: "exact" })
+    .select(select, { count: "exact" })
     .eq("org_id", ORG_ID);
+
+  if (options.unawarded) query = query.is("student_awards", null);
 
   if (filters.academic_year_id) query = query.eq("academic_year_id", filters.academic_year_id);
   if (filters.institution_id) query = query.eq("institution_id", filters.institution_id);

@@ -1,9 +1,15 @@
 import { revalidatePath } from "next/cache";
 import type { ZodTypeAny } from "zod";
-import { requireUser } from "@/lib/supabase/server";
+import { requirePermission, requireUser } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
-import type { ActionResult } from "@/lib/types";
+import type { ActionResult, ModuleName } from "@/lib/types";
+
+/** What a delete that removed zero rows means: the database refused it (RLS
+ *  deletes nothing silently, no error) or it was already gone. Every delete
+ *  action checks for this rather than reporting success and auditing a
+ *  deletion that never happened. */
+export const NOTHING_DELETED = "Nothing was deleted — you may not have permission, or it no longer exists.";
 
 /** Shared save/delete path for the eight config entities. Each one differs only
  *  by table, schema and the paths to revalidate — so the pipeline (auth → validate
@@ -82,10 +88,11 @@ export async function deleteEntity(config: {
   table: string;
   entity: string;
   id: string;
+  module: ModuleName;
   revalidate?: string[];
 }): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission(config.module, "delete");
 
     const { data: before } = await supabase
       .from(config.table)
@@ -93,13 +100,15 @@ export async function deleteEntity(config: {
       .eq("id", config.id)
       .single();
 
-    const { error } = await supabase
+    const { data: removed, error } = await supabase
       .from(config.table)
       .delete()
       .eq("id", config.id)
-      .eq("org_id", ORG_ID);
+      .eq("org_id", ORG_ID)
+      .select("id");
 
     if (error) return { ok: false, error: friendly(error.message) };
+    if (!removed?.length) return { ok: false, error: NOTHING_DELETED };
 
     await writeAudit(supabase, {
       entity: config.table,

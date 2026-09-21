@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/supabase/server";
+import { requirePermission, requireUser } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
-import { friendly, message } from "@/lib/actions/crud";
+import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
 import { academicRecordSchema, gradeEntrySchema } from "@/lib/validators";
 import { listRosterForGrading } from "@/lib/data/academic-records";
 import { T } from "@/lib/tables";
@@ -110,15 +110,17 @@ export async function saveAcademicRecord(raw: unknown): Promise<ActionResult<{ i
 
 export async function deleteAcademicRecord(id: string): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("academic_records", "delete");
     const { data: before } = await supabase.from(T.academicRecords).select("*").eq("id", id).single();
 
-    const { error } = await supabase
+    const { data: removed, error } = await supabase
       .from(T.academicRecords)
       .delete()
       .eq("id", id)
-      .eq("org_id", ORG_ID);
+      .eq("org_id", ORG_ID)
+      .select("id");
     if (error) return { ok: false, error: friendly(error.message) };
+    if (!removed?.length) return { ok: false, error: NOTHING_DELETED };
 
     await writeAudit(supabase, {
       entity: "academic_records",

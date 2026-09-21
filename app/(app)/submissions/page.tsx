@@ -1,4 +1,4 @@
-import { getLookups } from "@/lib/data/lookups";
+import { getSubmissionLookups } from "@/lib/data/lookups";
 import { getSubmissionCounts, listSubmissions } from "@/lib/data/submissions";
 import { SubmissionsClient } from "./submissions-client";
 import type { SubmissionStatus } from "@/lib/types";
@@ -16,7 +16,7 @@ export default async function SubmissionsPage({
     : "pending";
 
   const [lookups, submissions, counts] = await Promise.all([
-    getLookups(),
+    getSubmissionLookups(),
     listSubmissions(status),
     getSubmissionCounts(),
   ]);

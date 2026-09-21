@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/supabase/server";
+import { canAccess, requirePermission, requireUser } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
-import { friendly, message } from "@/lib/actions/crud";
+import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
 import { submissionEditSchema } from "@/lib/validators";
 import { normalizeName } from "@/lib/utils";
 import { findDuplicateStudents } from "@/lib/data/students";
@@ -335,7 +335,7 @@ export async function addSubmissionAttachment(input: {
   sizeBytes: number;
 }): Promise<ActionResult<{ id: string }>> {
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("submissions", "update");
 
     const { count } = await supabase
       .from(T.submissionAttachments)
@@ -389,7 +389,7 @@ export async function replaceSubmissionAttachment(input: {
   sizeBytes: number;
 }): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("submissions", "update");
 
     if (input.sizeBytes <= 0 || input.sizeBytes > MAX_ATTACHMENT_BYTES) {
       return { ok: false, error: "File must be 5MB or smaller" };
@@ -416,9 +416,14 @@ export async function replaceSubmissionAttachment(input: {
       .eq("id", input.id);
     if (error) return { ok: false, error: friendly(error.message) };
 
-    // Best-effort — the DB row is already correct even if the old object
-    // lingers in Storage (orphaned, but harmless and never referenced again).
-    await supabase.storage.from(ATTACHMENTS_BUCKET).remove([before.file_path]);
+    // Removing the old file is a delete, and Storage has no per-module
+    // policy of its own — so only do it for someone who has Submissions:
+    // Delete. Without it the old object is left behind, orphaned but
+    // harmless (the row no longer points at it), rather than a role that
+    // can edit-but-not-delete quietly deleting a file by "replacing" it.
+    if (await canAccess("submissions", "delete")) {
+      await supabase.storage.from(ATTACHMENTS_BUCKET).remove([before.file_path]);
+    }
 
     await writeAudit(supabase, {
       entity: "submission_attachments",
@@ -436,7 +441,7 @@ export async function replaceSubmissionAttachment(input: {
 
 export async function deleteSubmissionAttachment(id: string): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("submissions", "delete");
 
     const { data: attachment } = await supabase
       .from(T.submissionAttachments)
@@ -445,8 +450,16 @@ export async function deleteSubmissionAttachment(id: string): Promise<ActionResu
       .single();
     if (!attachment) return { ok: false, error: "Attachment not found" };
 
-    const { error } = await supabase.from(T.submissionAttachments).delete().eq("id", id);
+    // Only remove the file once the row is confirmed gone — a blocked delete
+    // reports no error, and the Storage bucket itself will happily delete for
+    // any signed-in user, so this ordering is what keeps the two in step.
+    const { data: removed, error } = await supabase
+      .from(T.submissionAttachments)
+      .delete()
+      .eq("id", id)
+      .select("id");
     if (error) return { ok: false, error: friendly(error.message) };
+    if (!removed?.length) return { ok: false, error: NOTHING_DELETED };
 
     await supabase.storage.from(ATTACHMENTS_BUCKET).remove([attachment.file_path]);
 

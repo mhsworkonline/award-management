@@ -114,8 +114,10 @@ export const getMyPermissionMap = cache(async function getMyPermissionMap(): Pro
 });
 
 /** App-layer permission check — a friendly early error before the RLS round
- *  trip, for pages/actions that want to fail fast. RLS on the underlying
- *  table is still the real enforcement; this is never the only gate. */
+ *  trip, for pages/actions that want to fail fast. Every destructive action
+ *  must call this: RLS alone isn't enough for deletes, because a blocked
+ *  delete removes zero rows *without an error*, and Storage buckets have no
+ *  per-module policy at all (any signed-in user can delete a file). */
 export async function requirePermission(module: ModuleName, action: CrudAction) {
   const { supabase, ...rest } = await requireUser();
   const { data } = await supabase.rpc("am_has_permission", { p_module: module, p_action: action });

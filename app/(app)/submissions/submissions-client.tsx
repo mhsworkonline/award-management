@@ -30,10 +30,20 @@ import { placementLabel } from "@/lib/placement";
 import { formatDateTime, parentRelation, studentName } from "@/lib/utils";
 import type { Lookups, PublicSubmissionRow, SubmissionStatus } from "@/lib/types";
 
+// Everything is already loaded client-side (up to 500), so bigger pages cost
+// nothing — extra options beyond the app-wide 25/50/100 for this table only.
+const ROW_OPTIONS = [...PAGE_SIZE_OPTIONS, 200, 500];
+
 /** Falls back to the applicant's free-typed institution/course when there's no
  *  matched row yet — placementLabel alone only knows about real standards/courses. */
 function institutionLabel(s: PublicSubmissionRow) {
   return s.institutions?.name ?? s.other_institution_name ?? "—";
+}
+/** A typed-in ("Other") board shows as its text until staff resolve it to a
+ *  real one — so a new board is visible straight from the list, not only
+ *  after opening that student. Colleges have no board, so "—". */
+function boardLabel(s: PublicSubmissionRow) {
+  return s.boards?.name ?? s.other_board_name ?? "—";
 }
 function placementLabelFor(s: PublicSubmissionRow) {
   if (s.standards || s.courses) return placementLabel(s);
@@ -41,6 +51,20 @@ function placementLabelFor(s: PublicSubmissionRow) {
     return `${s.other_course_name} (${s.other_course_structure ?? "—"})`;
   }
   return "—";
+}
+/** Date and time on two compact lines. The single "21 Sept 2026, 3:46 pm"
+ *  string wrapped onto two full-size lines in this narrow column, which made
+ *  every row taller than any other cell needed — fewer rows on screen. */
+const DATE_FMT = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" });
+const TIME_FMT = new Intl.DateTimeFormat("en-IN", { timeStyle: "short" });
+function DateTimeLines({ value }: { value: string }) {
+  const d = new Date(value);
+  return (
+    <>
+      <span className="block truncate text-[13px] leading-tight">{DATE_FMT.format(d)}</span>
+      <span className="block truncate text-[11px] leading-tight">{TIME_FMT.format(d)}</span>
+    </>
+  );
 }
 /** Same "college if there's a course, school otherwise" fallback the review
  *  sheet uses for an unresolved "Other" institution that has no `.type` yet. */
@@ -68,6 +92,7 @@ type SortKey =
   | "code"
   | "applicant"
   | "institution"
+  | "board"
   | "institutionType"
   | "placement"
   | "percentage"
@@ -81,6 +106,7 @@ const SORT_VALUE: Record<SortKey, (s: PublicSubmissionRow) => string | number> =
   code: (s) => s.reference_code.toLowerCase(),
   applicant: (s) => studentName(s).toLowerCase(),
   institution: (s) => institutionLabel(s).toLowerCase(),
+  board: (s) => (s.boards?.name ?? s.other_board_name ?? "").toLowerCase(),
   institutionType: (s) => institutionTypeLabel(s),
   placement: (s) => placementLabelFor(s).toLowerCase(),
   percentage: (s) => s.percentage ?? -1,
@@ -109,15 +135,46 @@ export function SubmissionsClient({
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState<number>(PAGE_SIZE);
 
+  // One lowercase search string per row, built from the same values the
+  // table displays (via the same label helpers), so anything you can see in a
+  // row is something you can search for — institution and board included,
+  // typed-in "Other" ones too. Email and roll no. aren't columns but were
+  // always searchable, so they stay.
+  const searchable = React.useMemo(
+    () =>
+      submissions.map((s) => ({
+        s,
+        text: [
+          s.reference_code,
+          studentName(s),
+          s.middle_name,
+          institutionLabel(s),
+          boardLabel(s),
+          placementLabelFor(s),
+          institutionTypeLabel(s),
+          s.percentage !== null ? `${s.percentage}%` : null,
+          s.grade,
+          formatDateTime(s.created_at),
+          s.status,
+          s.reviewed_by,
+          s.reviewed_at ? formatDateTime(s.reviewed_at) : null,
+          s.email,
+          s.roll_no,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
+      })),
+    [submissions],
+  );
+
+  // Every word must appear somewhere in the row (in any column, any order),
+  // so "vinit shah" or "std 9 gseb" narrow down instead of matching nothing.
   const filtered = React.useMemo(() => {
-    const q = term.trim().toLowerCase();
-    if (!q) return submissions;
-    return submissions.filter((s) =>
-      [s.first_name, s.middle_name, s.last_name, s.reference_code, s.email, s.roll_no]
-        .filter(Boolean)
-        .some((v) => v!.toLowerCase().includes(q)),
-    );
-  }, [submissions, term]);
+    const tokens = term.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return submissions;
+    return searchable.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ s }) => s);
+  }, [submissions, searchable, term]);
 
   const sorted = React.useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -173,7 +230,7 @@ export function SubmissionsClient({
           <Input
             value={term}
             onChange={(e) => setTerm(e.target.value)}
-            placeholder="Search name, code, email…"
+            placeholder="Search any column…"
             className="pl-9"
             aria-label="Search submissions"
           />
@@ -186,22 +243,25 @@ export function SubmissionsClient({
          *  minimum), pushing every column after it off screen. Fixed layout
          *  makes the widths below load-bearing, so every long value now
          *  needs to truncate within its cell instead of stretching it.
-         *  min-w-[900px] keeps those percentages meaningful instead of
+         *  min-w-[1000px] keeps those percentages meaningful instead of
          *  crushing all 10 columns into a phone-width table — TableWrap's
          *  overflow-auto (the app's usual mobile pattern for wide tables)
          *  takes over and scrolls sideways below that width, same as every
          *  other data table in the app. */}
-        <Table className="min-w-[900px] table-fixed">
+        <Table className="min-w-[1000px] table-fixed">
           <TableHeader>
             <TableRow>
-              <LocalSortHeader sortKey="code" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[8%]">
+              <LocalSortHeader sortKey="code" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[7%]">
                 Code
               </LocalSortHeader>
-              <LocalSortHeader sortKey="applicant" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[13%]">
+              <LocalSortHeader sortKey="applicant" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[12%]">
                 Applicant
               </LocalSortHeader>
-              <LocalSortHeader sortKey="institution" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[17%]">
+              <LocalSortHeader sortKey="institution" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[16%]">
                 Institution
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="board" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[9%]">
+                Board
               </LocalSortHeader>
               <LocalSortHeader sortKey="placement" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[10%]">
                 Std / Course
@@ -211,7 +271,7 @@ export function SubmissionsClient({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="h-9 w-[7%]"
+                className="h-9 w-[6%]"
               >
                 Type
               </LocalSortHeader>
@@ -220,7 +280,7 @@ export function SubmissionsClient({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="h-9 w-[6%]"
+                className="h-9 w-[5%]"
               >
                 %
               </LocalSortHeader>
@@ -236,7 +296,7 @@ export function SubmissionsClient({
               >
                 Submitted
               </LocalSortHeader>
-              <LocalSortHeader sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[9%]">
+              <LocalSortHeader sortKey="status" current={sortKey} dir={sortDir} onSort={toggleSort} className="h-9 w-[8%]">
                 Status
               </LocalSortHeader>
               <LocalSortHeader
@@ -244,7 +304,7 @@ export function SubmissionsClient({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                className="h-9 w-[15%]"
+                className="h-9 w-[12%]"
               >
                 Reviewed by
               </LocalSortHeader>
@@ -253,7 +313,7 @@ export function SubmissionsClient({
           <TableBody>
             {sorted.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={10} className="border-b-0">
+                <TableCell colSpan={11} className="border-b-0">
                   <EmptyState
                     icon={Inbox}
                     title="Nothing here"
@@ -264,11 +324,11 @@ export function SubmissionsClient({
             ) : (
               paged.map((s) => (
                 <TableRow key={s.id} className="cursor-pointer" onClick={() => setActive(s)}>
-                  <TableCell className="truncate py-1.5 font-mono text-[12px] text-muted-foreground">
+                  <TableCell className="truncate py-1 font-mono text-[12px] text-muted-foreground">
                     {s.reference_code}
                   </TableCell>
-                  <TableCell className="max-w-0 py-1.5">
-                    <span className="block truncate font-medium" title={studentName(s)}>
+                  <TableCell className="max-w-0 py-1">
+                    <span className="block truncate font-medium leading-snug" title={studentName(s)}>
                       {studentName(s)}
                     </span>
                     {s.middle_name && (
@@ -277,7 +337,7 @@ export function SubmissionsClient({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-0 py-1.5 text-muted-foreground">
+                  <TableCell className="max-w-0 py-1 text-muted-foreground">
                     <span className="block truncate" title={institutionLabel(s)}>
                       {institutionLabel(s)}
                     </span>
@@ -287,21 +347,33 @@ export function SubmissionsClient({
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="max-w-0 py-1.5">
+                  <TableCell className="max-w-0 py-1 text-muted-foreground">
+                    <span className="block truncate" title={boardLabel(s)}>
+                      {boardLabel(s)}
+                    </span>
+                    {s.other_board_name && !s.board_id && (
+                      <Badge variant="warning" className="mt-0.5">
+                        Other
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="max-w-0 py-1">
                     <Badge variant="secondary" className="block max-w-full truncate" title={placementLabelFor(s)}>
                       {placementLabelFor(s)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="py-1.5 text-muted-foreground">{institutionTypeLabel(s)}</TableCell>
-                  <TableCell className="tabular py-1.5 text-muted-foreground">
+                  <TableCell className="py-1 text-muted-foreground">{institutionTypeLabel(s)}</TableCell>
+                  <TableCell className="tabular py-1 text-muted-foreground">
                     {s.percentage !== null ? `${s.percentage}%` : "—"}
                   </TableCell>
-                  <TableCell className="truncate py-1.5 text-muted-foreground">{s.grade || "—"}</TableCell>
-                  <TableCell className="py-1.5 text-muted-foreground">{formatDateTime(s.created_at)}</TableCell>
-                  <TableCell className="py-1.5">
+                  <TableCell className="truncate py-1 text-muted-foreground">{s.grade || "—"}</TableCell>
+                  <TableCell className="py-1 text-muted-foreground">
+                    <DateTimeLines value={s.created_at} />
+                  </TableCell>
+                  <TableCell className="py-1">
                     <Badge variant={statusBadgeVariant(s.status)}>{s.status}</Badge>
                   </TableCell>
-                  <TableCell className="max-w-0 py-1.5 text-muted-foreground">
+                  <TableCell className="max-w-0 py-1 text-muted-foreground">
                     {s.reviewed_by ? (
                       <>
                         <span className="block truncate" title={s.reviewed_by}>
@@ -345,7 +417,7 @@ export function SubmissionsClient({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PAGE_SIZE_OPTIONS.map((n) => (
+                {ROW_OPTIONS.map((n) => (
                   <SelectItem key={n} value={String(n)}>
                     {n}
                   </SelectItem>

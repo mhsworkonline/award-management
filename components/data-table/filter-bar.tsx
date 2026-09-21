@@ -182,7 +182,7 @@ export function FilterBar({
               variant="ghost"
               size="sm"
               className="w-full"
-              onClick={() => clearParams(["academic_year_id", "board_id", "q", "size"])}
+              onClick={() => clearParams(["academic_year_id", "board_id", "q", "size", "view", "include_awarded"])}
             >
               Reset advanced filters
             </Button>
@@ -191,7 +191,9 @@ export function FilterBar({
       )}
 
       {(activeAdvanced.length > 0 || term || boardId !== "all") && (
-        <Button variant="ghost" size="sm" onClick={() => clearParams(["size"])}>
+        // "view"/"include_awarded" are tab state (Awards page), not filters —
+        // clearing filters shouldn't bounce you to a different tab.
+        <Button variant="ghost" size="sm" onClick={() => clearParams(["size", "view", "include_awarded"])}>
           <X /> Clear all
         </Button>
       )}

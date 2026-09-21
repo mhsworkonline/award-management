@@ -21,36 +21,59 @@ import {
   TableWrap,
 } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
-import { FilterBar } from "@/components/data-table/filter-bar";
+import { FilterBar, type FilterKey } from "@/components/data-table/filter-bar";
+import { Pagination } from "@/components/data-table/pagination";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { AwardSheet } from "./award-sheet";
 import { AllocateSheet } from "./allocate-sheet";
 import { SuggestedPerformers } from "./suggested-performers";
 import { deleteAward } from "@/lib/actions/awards";
+import type { RecordOption } from "@/lib/actions/search";
+import { useQueryParams } from "@/hooks/use-query-params";
+import { placementLabel } from "@/lib/placement";
 import { parentRelation } from "@/lib/utils";
 import { usePermissions } from "@/components/providers/permissions-provider";
 import type { AwardRow } from "@/lib/data/awards";
 import type { listTopPerformers } from "@/lib/data/academic-records";
-import type { Lookups } from "@/lib/types";
+import type { AcademicRecordRow, Lookups } from "@/lib/types";
+
+type Candidates = { rows: AcademicRecordRow[]; total: number; page: number; size: number };
 
 export function AwardsClient({
+  view,
   rows,
   performers,
+  candidates,
+  includeAwarded,
   lookups,
   defaultYearId,
 }: {
+  view: "awarded" | "candidates";
   rows: AwardRow[];
   performers: Awaited<ReturnType<typeof listTopPerformers>>;
+  candidates: Candidates | null;
+  includeAwarded: boolean;
   lookups: Lookups;
   defaultYearId: string | null;
 }) {
   const router = useRouter();
+  const { setParams } = useQueryParams();
   const { can } = usePermissions();
   const canCreate = can("awards", "create");
   const canUpdate = can("awards", "update");
   const canDelete = can("awards", "delete");
   const canManageGifts = canCreate || canUpdate || canDelete;
   const [assignOpen, setAssignOpen] = React.useState(false);
+  // Set when "Assign award" is clicked on a student's own row — the sheet then
+  // opens with that student already chosen.
+  const [assignFor, setAssignFor] = React.useState<RecordOption | null>(null);
+
+  const advancedFilters: FilterKey[] =
+    view === "candidates" && !includeAwarded
+      ? ["institution_id", "standard_id", "stream_id"]
+      : ["institution_id", "standard_id", "stream_id", "award_category_id"];
   const [allocating, setAllocating] = React.useState<AwardRow | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<AwardRow | null>(null);
 
@@ -70,20 +93,146 @@ export function AwardsClient({
         }
       />
 
+      <Tabs
+        value={view}
+        onValueChange={(v) => setParams({ view: v === "awarded" ? null : v, include_awarded: null })}
+      >
+        <TabsList>
+          <TabsTrigger value="awarded">Awarded</TabsTrigger>
+          <TabsTrigger value="candidates">Not yet awarded</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <FilterBar
         lookups={lookups}
-        advanced={["institution_id", "standard_id", "stream_id", "award_category_id"]}
-        searchPlaceholder="Search awarded student…"
+        advanced={advancedFilters}
+        searchPlaceholder={view === "awarded" ? "Search awarded student…" : "Search student name or roll no…"}
       >
-        {withoutGift > 0 && (
+        {view === "awarded" && withoutGift > 0 && (
           <Badge variant="warning">
             {withoutGift} award{withoutGift === 1 ? "" : "s"} without a gift
           </Badge>
         )}
       </FilterBar>
 
-      <SuggestedPerformers performers={performers} lookups={lookups} />
+      {view === "candidates" && candidates && (
+        <>
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-muted-foreground">
+            <Checkbox
+              checked={includeAwarded}
+              onCheckedChange={(c) => setParams({ include_awarded: c === true ? "1" : null })}
+            />
+            Also show students who already have an award
+          </label>
 
+          <TableWrap className="max-h-[calc(100vh-340px)]">
+            {/* table-fixed needs min-w so the percentages stay meaningful and
+             *  TableWrap scrolls sideways on a phone instead of crushing them. */}
+            <Table className="min-w-[860px] table-fixed">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[22%]">Student</TableHead>
+                  <TableHead className="w-[22%]">Institution</TableHead>
+                  <TableHead className="w-[14%]">Std / Course</TableHead>
+                  <TableHead className="w-[8%]">%</TableHead>
+                  <TableHead className="w-[8%]">Grade</TableHead>
+                  <TableHead className="w-[14%]">Awards</TableHead>
+                  <TableHead className="w-[12%]">
+                    <span className="sr-only">Assign</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {candidates.rows.length === 0 ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={7} className="border-b-0">
+                      <EmptyState
+                        icon={Award}
+                        title={includeAwarded ? "No students match" : "Nobody left without an award"}
+                        description={
+                          includeAwarded
+                            ? "No students have a record for this year with these filters."
+                            : "Every student matching these filters already has an award — or none have a record for this year yet."
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  candidates.rows.map((row) => {
+                    const student = row.students;
+                    const awardNames = (row.student_awards ?? []).map((a) => a.award_categories?.name ?? "Award");
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell className="max-w-0">
+                          <span className="block truncate font-medium" title={student ? `${student.first_name} ${student.last_name}` : ""}>
+                            {student ? `${student.first_name} ${student.last_name}` : "—"}
+                          </span>
+                          {student?.middle_name && (
+                            <span className="block truncate text-[12px] text-muted-foreground">
+                              {parentRelation(student.salutation)} {student.middle_name}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-0 text-muted-foreground">
+                          <span className="block truncate" title={row.institutions?.name ?? ""}>
+                            {row.institutions?.name ?? "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="max-w-0">
+                          <Badge variant="secondary" className="block max-w-full truncate" title={placementLabel(row)}>
+                            {placementLabel(row)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="tabular text-muted-foreground">
+                          {row.percentage !== null ? `${row.percentage}%` : "—"}
+                        </TableCell>
+                        <TableCell className="truncate text-muted-foreground">{row.grade || "—"}</TableCell>
+                        <TableCell>
+                          {awardNames.length === 0 ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <span className="flex flex-wrap gap-1">
+                              {awardNames.map((n, i) => (
+                                <Badge key={i}>{n}</Badge>
+                              ))}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {canCreate && student && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setAssignFor({
+                                  academic_record_id: row.id,
+                                  student_name: `${student.first_name} ${student.last_name}`,
+                                  father_name: student.middle_name,
+                                  student_salutation: student.salutation,
+                                  institution_name: row.institutions?.name ?? "—",
+                                  placement: placementLabel(row),
+                                })
+                              }
+                            >
+                              <Award /> Assign award
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </TableWrap>
+
+          <Pagination page={candidates.page} pageSize={candidates.size} total={candidates.total} />
+        </>
+      )}
+
+      {view === "awarded" && <SuggestedPerformers performers={performers} lookups={lookups} />}
+
+      {view === "awarded" && (
       <TableWrap className="max-h-[calc(100vh-300px)]">
         <Table>
           <TableHeader>
@@ -211,12 +360,19 @@ export function AwardsClient({
           </TableBody>
         </Table>
       </TableWrap>
+      )}
 
       <AwardSheet
-        open={assignOpen}
-        onOpenChange={setAssignOpen}
+        open={assignOpen || Boolean(assignFor)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAssignOpen(false);
+            setAssignFor(null);
+          }
+        }}
         lookups={lookups}
         defaultYearId={defaultYearId}
+        preselected={assignFor}
       />
 
       <AllocateSheet

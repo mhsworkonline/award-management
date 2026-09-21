@@ -24,6 +24,7 @@ export function BrandingSection({ organization }: { organization: Organization }
   const router = useRouter();
   const { can } = usePermissions();
   const canUpdate = can("settings", "update");
+  const canDelete = can("settings", "delete");
   const [appName, setAppName] = React.useState(organization.app_name);
   const [logoUrl, setLogoUrl] = React.useState<string | null>(
     organization.logo_path
@@ -172,7 +173,7 @@ export function BrandingSection({ organization }: { organization: Organization }
                   {uploading ? <Loader2 className="animate-spin" /> : <Upload />}
                   {logoUrl ? "Replace logo" : "Upload logo"}
                 </Button>
-                {logoUrl && (
+                {logoUrl && canDelete && (
                   <Button type="button" variant="ghost" size="sm" disabled={removing} onClick={() => void handleRemoveLogo()}>
                     {removing ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive" />}
                     Remove

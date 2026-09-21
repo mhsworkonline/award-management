@@ -120,6 +120,9 @@ export function SubmissionReviewSheet({
   const router = useRouter();
   const { can } = usePermissions();
   const canUpdateSubmission = can("submissions", "update");
+  // Deleting an attachment removes the stored file itself — needs its own
+  // Delete grant, not just Update.
+  const canDeleteSubmission = can("submissions", "delete");
   // Approving converts the submission into a student + its first academic
   // record in one action, so it needs both of those Create grants too.
   const canApproveSubmission = canUpdateSubmission && can("students", "create") && can("academic_records", "create");
@@ -428,6 +431,17 @@ export function SubmissionReviewSheet({
       return false;
     }
     return true;
+  }
+
+  /** Standalone "Save changes" — no status change. For an Approved
+   *  submission this is how a correction reaches the student/academic
+   *  record it created (updateSubmission syncs them), so it says so. */
+  async function onSave(values: Values) {
+    const saved = await saveDraft(values);
+    if (!saved) return;
+    toast.success(isApproved ? "Saved — the student's roster record was updated too" : "Changes saved");
+    router.refresh();
+    onOpenChange(false);
   }
 
   /** Every decision — Approve, Reject, Mark doubtful — saves whatever's
@@ -856,7 +870,7 @@ export function SubmissionReviewSheet({
                               {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
                             </Button>
                           )}
-                          {canUpdateSubmission && (
+                          {canDeleteSubmission && (
                             <Button
                               type="button"
                               variant="ghost"
@@ -946,7 +960,10 @@ export function SubmissionReviewSheet({
               )}
             </SheetBody>
 
-            {!isApproved && (canUpdateSubmission || canApproveSubmission) && (
+            {/* Approved submissions still get the footer — just with Save
+             *  only: their fields stay editable (corrections sync into the
+             *  student/academic record), but there's no status to move to. */}
+            {(canUpdateSubmission || canApproveSubmission) && (
               <SheetFooter className="flex-wrap justify-between">
                 {decisionKind ? (
                   <div className="flex gap-2">
@@ -973,25 +990,25 @@ export function SubmissionReviewSheet({
                 ) : (
                   <>
                     <div className="flex gap-2">
-                      {canUpdateSubmission && submission.status !== "rejected" && (
+                      {!isApproved && canUpdateSubmission && submission.status !== "rejected" && (
                         <Button type="button" variant="outline" onClick={() => setDecisionKind("reject")}>
                           <X /> Reject
                         </Button>
                       )}
-                      {canUpdateSubmission && submission.status !== "doubtful" && (
+                      {!isApproved && canUpdateSubmission && submission.status !== "doubtful" && (
                         <Button type="button" variant="outline" onClick={() => setDecisionKind("doubtful")}>
                           <AlertTriangle /> Mark doubtful
                         </Button>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="ml-auto flex gap-2">
                       {canUpdateSubmission && (
-                        <Button type="button" variant="outline" onClick={handleSubmit(saveDraft)} disabled={saving}>
+                        <Button type="button" variant="outline" onClick={handleSubmit(onSave)} disabled={saving}>
                           {saving && <Loader2 className="animate-spin" />}
                           Save changes
                         </Button>
                       )}
-                      {canApproveSubmission && (
+                      {!isApproved && canApproveSubmission && (
                         <Button
                           type="button"
                           onClick={() => setDecisionKind("approve")}

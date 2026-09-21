@@ -34,11 +34,15 @@ export function AwardSheet({
   onOpenChange,
   lookups,
   defaultYearId,
+  preselected = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   lookups: Lookups;
   defaultYearId: string | null;
+  /** Opened from a student's own row on the "Not yet awarded" list — the
+   *  student is already chosen, so only the category is left to pick. */
+  preselected?: RecordOption | null;
 }) {
   const router = useRouter();
   const [yearId, setYearId] = React.useState(defaultYearId ?? "");
@@ -58,9 +62,9 @@ export function AwardSheet({
     setCriteria("");
     setTerm("");
     setResults([]);
-    setSelected(null);
+    setSelected(preselected);
     setError(null);
-  }, [open, defaultYearId, lookups.awardCategories]);
+  }, [open, defaultYearId, lookups.awardCategories, preselected]);
 
   React.useEffect(() => {
     if (!term.trim() || !yearId) {
@@ -96,7 +100,13 @@ export function AwardSheet({
     toast.success(`${selected.student_name} assigned ${categoryName(lookups, categoryId)}`);
     router.refresh();
 
-    // Keep the sheet open — awards are entered in runs, category by category.
+    // Opened from one student's row: that student is done, close. Opened
+    // from the header button: keep it open — awards are entered in runs,
+    // category by category.
+    if (preselected) {
+      onOpenChange(false);
+      return;
+    }
     setSelected(null);
     setTerm("");
     setResults([]);

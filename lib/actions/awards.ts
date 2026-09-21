@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/supabase/server";
+import { requirePermission, requireUser } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
-import { friendly, message } from "@/lib/actions/crud";
+import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
 import { giftAllocationSchema, studentAwardSchema } from "@/lib/validators";
 import type { ActionResult } from "@/lib/types";
 import { T, FN } from "@/lib/tables";
@@ -76,15 +76,17 @@ export async function saveAward(raw: unknown): Promise<ActionResult<{ id: string
 
 export async function deleteAward(id: string): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("awards", "delete");
     const { data: before } = await supabase.from(T.studentAwards).select("*").eq("id", id).single();
 
-    const { error } = await supabase
+    const { data: removed, error } = await supabase
       .from(T.studentAwards)
       .delete()
       .eq("id", id)
-      .eq("org_id", ORG_ID);
+      .eq("org_id", ORG_ID)
+      .select("id");
     if (error) return { ok: false, error: friendly(error.message) };
+    if (!removed?.length) return { ok: false, error: NOTHING_DELETED };
 
     await writeAudit(supabase, {
       entity: "student_awards",
@@ -149,19 +151,21 @@ export async function allocateGift(raw: unknown): Promise<ActionResult<{ id: str
 /** Deleting an allocation restores stock via trigger. */
 export async function deallocateGift(id: string): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requireUser();
+    const { supabase, actor } = await requirePermission("awards", "delete");
     const { data: before } = await supabase
       .from(T.giftAllocations)
       .select("*")
       .eq("id", id)
       .single();
 
-    const { error } = await supabase
+    const { data: removed, error } = await supabase
       .from(T.giftAllocations)
       .delete()
       .eq("id", id)
-      .eq("org_id", ORG_ID);
+      .eq("org_id", ORG_ID)
+      .select("id");
     if (error) return { ok: false, error: friendly(error.message) };
+    if (!removed?.length) return { ok: false, error: NOTHING_DELETED };
 
     await writeAudit(supabase, {
       entity: "gift_allocations",

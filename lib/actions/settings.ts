@@ -16,7 +16,7 @@ import {
   standardSchema,
   streamSchema,
 } from "@/lib/validators";
-import type { ActionResult } from "@/lib/types";
+import type { ActionResult, ModuleName } from "@/lib/types";
 
 /** Table name → schema. Adding a new config entity means one line here plus a UI tab. */
 const REGISTRY = {
@@ -68,10 +68,26 @@ export async function deleteConfig(
   return deleteEntity({
     table: CONFIG_TABLES[entity],
     entity,
+    module: CONFIG_MODULE[entity],
     id,
     revalidate: REVALIDATE[entity],
   });
 }
+
+/** Which module's Delete permission each config entity falls under — mirrors
+ *  the table→module mapping the RLS policies use (0022). Streams have no
+ *  RLS gating of their own, so they follow the rest of Settings. */
+const CONFIG_MODULE: Record<ConfigTable, ModuleName> = {
+  academic_years: "settings",
+  boards: "settings",
+  mediums: "settings",
+  courses: "settings",
+  standards: "settings",
+  streams: "settings",
+  award_categories: "settings",
+  gift_items: "gifts",
+  institutions: "institutions",
+};
 
 /** Exactly one academic year is the active default. */
 export async function setActiveYear(id: string): Promise<ActionResult<null>> {
