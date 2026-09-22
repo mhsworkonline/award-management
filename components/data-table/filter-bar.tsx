@@ -57,6 +57,12 @@ export function FilterBar({
 }) {
   const { searchParams, setParams, clearParams } = useQueryParams();
   const [term, setTerm] = React.useState(searchParams.get("q") ?? "");
+  // Advanced filters apply on an explicit "Search" click, not per-click —
+  // picking several (institution, then standard, then stream…) used to
+  // re-fetch the whole page after every single one. `draft` holds the
+  // in-progress picks; nothing in `searchParams` changes until Search is hit.
+  const [open, setOpen] = React.useState(false);
+  const [draft, setDraft] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
     setTerm(searchParams.get("q") ?? "");
@@ -76,8 +82,22 @@ export function FilterBar({
   // still lists it there.
   const boardId = searchParams.get("board_id") ?? "all";
   const advancedKeys = advanced.filter((key) => key !== "board_id");
+  const advancedKeysSignature = advancedKeys.join(",");
   const activeAdvanced = advancedKeys.filter((key) => searchParams.get(key));
   const options = optionsFor(lookups, boardId);
+  // Draft is seeded from whatever's actually applied every time the popover
+  // opens (or the caller's set of advanced filters changes), so it can never
+  // show a stale pick left over from a previous open.
+  React.useEffect(() => {
+    if (!open) return;
+    const next: Record<string, string> = {};
+    for (const key of advancedKeys) next[key] = searchParams.get(key) ?? "all";
+    setDraft(next);
+    // advancedKeys is a fresh array every render — advancedKeysSignature is
+    // its stable, comparable form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, advancedKeysSignature, searchParams]);
+  const draftDirty = advancedKeys.some((key) => (draft[key] ?? "all") !== (searchParams.get(key) ?? "all"));
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -142,7 +162,7 @@ export function FilterBar({
       )}
 
       {advancedKeys.length > 0 && (
-        <Popover>
+        <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="default">
               <Filter />
@@ -160,8 +180,8 @@ export function FilterBar({
             {advancedKeys.map((key) => (
               <Field key={key} label={LABELS[key]}>
                 <Select
-                  value={searchParams.get(key) ?? "all"}
-                  onValueChange={(v) => setParams({ [key]: v })}
+                  value={draft[key] ?? "all"}
+                  onValueChange={(v) => setDraft((d) => ({ ...d, [key]: v }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={`All ${LABELS[key].toLowerCase()}`} />
@@ -178,14 +198,33 @@ export function FilterBar({
               </Field>
             ))}
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full"
-              onClick={() => clearParams(["academic_year_id", "board_id", "q", "size", "view", "include_awarded"])}
-            >
-              Reset advanced filters
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="flex-1"
+                onClick={() => {
+                  clearParams(["academic_year_id", "board_id", "q", "size", "view", "include_awarded"]);
+                  setDraft({});
+                  setOpen(false);
+                }}
+              >
+                Reset
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="flex-1"
+                disabled={!draftDirty}
+                onClick={() => {
+                  setParams(draft);
+                  setOpen(false);
+                }}
+              >
+                <Search className="h-3.5 w-3.5" /> Search
+              </Button>
+            </div>
           </PopoverContent>
         </Popover>
       )}

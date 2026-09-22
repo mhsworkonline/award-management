@@ -58,6 +58,7 @@ type Raw = {
 export async function listAwards(filters: {
   academic_year_id?: string;
   institution_id?: string;
+  institution_type?: string;
   board_id?: string;
   standard_id?: string;
   stream_id?: string;
@@ -96,6 +97,7 @@ export async function listAwards(filters: {
   }
   if (filters.award_category_id) query = query.eq("award_category_id", filters.award_category_id);
   if (filters.institution_id) query = query.eq("academic_records.institution_id", filters.institution_id);
+  if (filters.institution_type) query = query.eq("academic_records.institutions.type", filters.institution_type);
   if (filters.board_id) query = query.eq("academic_records.institutions.board_id", filters.board_id);
   if (filters.standard_id) query = query.eq("academic_records.standard_id", filters.standard_id);
   if (filters.stream_id) query = query.eq("academic_records.stream_id", filters.stream_id);

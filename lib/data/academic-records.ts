@@ -16,14 +16,22 @@ const SELECT = `
   student_awards:am_student_awards ( id, subject_or_criteria, award_categories:am_award_categories ( id, name ) )
 `;
 
-// Only own-table columns are sortable server-side — ordering through a joined
-// table is unreliable across PostgREST versions, and these four cover the
-// actual use cases (roster order, ranking, recency).
-const SORTABLE: Record<string, string> = {
-  roll_no: "roll_no",
-  percentage: "percentage",
-  rank: "rank",
-  created_at: "created_at",
+// Own-table columns sort directly; `student`/`institution` sort through the
+// embedded resource via PostgREST's foreignTable ordering — `foreignTable`
+// must be the SELECT alias ("students"/"institutions"), not the physical
+// `am_*` table name, same convention the `.eq("institutions.type", …)`
+// filters above already use. Not sortable server-side: Std/Course (a school
+// record's Standard and a college record's Course are different columns on
+// different tables — there's no single column to order by across both) and
+// Awards (a count over a related table, not a plain column).
+const SORTABLE: Record<string, { column: string; foreignTable?: string }> = {
+  roll_no: { column: "roll_no" },
+  percentage: { column: "percentage" },
+  grade: { column: "grade" },
+  rank: { column: "rank" },
+  created_at: { column: "created_at" },
+  student: { column: "first_name", foreignTable: "students" },
+  institution: { column: "name", foreignTable: "institutions" },
 };
 
 /** The roster — one row per student-year enrollment. This is what the Students
@@ -83,10 +91,10 @@ export async function listAcademicRecords(
     query = query.in("id", ids);
   }
 
-  const sort = SORTABLE[filters.sort ?? ""] ?? "created_at";
+  const sort = SORTABLE[filters.sort ?? ""] ?? SORTABLE.created_at;
   const from = (page - 1) * size;
   const { data, count, error } = await query
-    .order(sort, { ascending, nullsFirst: false })
+    .order(sort.column, { ascending, nullsFirst: false, foreignTable: sort.foreignTable })
     .range(from, from + size - 1);
 
   if (error) throw new Error(error.message);

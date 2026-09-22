@@ -14,11 +14,12 @@ export default async function AwardsPage({
   const lookups = await getLookups();
   const yearId = searchParams.academic_year_id ?? activeYearId(lookups) ?? undefined;
 
-  // Two views over the same filters: "awarded" (the awards themselves — the
-  // original page) and "candidates" (every student with a record this year,
-  // each with an Assign award button — by default only those with no award
-  // yet). Only the active view's data is fetched.
-  const view = searchParams.view === "candidates" ? "candidates" : "awarded";
+  // Two views over the same filters: "candidates" (every student with a
+  // record this year, each with an Assign award button — by default only
+  // those with no award yet — the default tab, since deciding who still
+  // needs an award is the more common task) and "awarded" (the awards
+  // themselves). Only the active view's data is fetched.
+  const view = searchParams.view === "awarded" ? "awarded" : "candidates";
   const includeAwarded = searchParams.include_awarded === "1";
 
   if (view === "candidates") {
@@ -47,6 +48,7 @@ export default async function AwardsPage({
     listAwards({
       academic_year_id: yearId,
       institution_id: searchParams.institution_id,
+      institution_type: searchParams.institution_type,
       board_id: searchParams.board_id,
       standard_id: searchParams.standard_id,
       stream_id: searchParams.stream_id,

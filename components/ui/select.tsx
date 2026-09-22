@@ -77,7 +77,13 @@ const SelectContent = React.forwardRef<
       <SelectPrimitive.Viewport
         className={cn(
           "p-1",
-          position === "popper" && "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
+          // Width-only. `h-[var(--radix-select-trigger-height)]` (shadcn's
+          // stock default) sets the viewport's height to the *trigger's* own
+          // height — a ~36px button — which clips the option list down to a
+          // sliver. That's the actual cause of dropdowns looking like they're
+          // "overlapping"/breaking the page: everything past the first
+          // option or two renders outside its own clipped viewport.
+          position === "popper" && "w-full min-w-[var(--radix-select-trigger-width)]",
         )}
       >
         {children}

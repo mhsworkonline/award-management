@@ -22,7 +22,9 @@ import {
 } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { FilterBar, type FilterKey } from "@/components/data-table/filter-bar";
+import { LocalSortHeader } from "@/components/data-table/local-sort-header";
 import { Pagination } from "@/components/data-table/pagination";
+import { SortHeader } from "@/components/data-table/sort-header";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
@@ -40,6 +42,17 @@ import type { listTopPerformers } from "@/lib/data/academic-records";
 import type { AcademicRecordRow, Lookups } from "@/lib/types";
 
 type Candidates = { rows: AcademicRecordRow[]; total: number; page: number; size: number };
+
+type AwardSortKey = "student" | "institution" | "placement" | "category" | "subject" | "gift";
+
+const AWARD_SORT_VALUE: Record<AwardSortKey, (r: AwardRow) => string | number> = {
+  student: (r) => r.student_name.toLowerCase(),
+  institution: (r) => r.institution_name.toLowerCase(),
+  placement: (r) => r.placement.toLowerCase(),
+  category: (r) => r.category_name.toLowerCase(),
+  subject: (r) => (r.subject_or_criteria ?? "").toLowerCase(),
+  gift: (r) => (r.allocations[0]?.gift_name ?? "").toLowerCase(),
+};
 
 export function AwardsClient({
   view,
@@ -72,12 +85,34 @@ export function AwardsClient({
 
   const advancedFilters: FilterKey[] =
     view === "candidates" && !includeAwarded
-      ? ["institution_id", "standard_id", "stream_id"]
-      : ["institution_id", "standard_id", "stream_id", "award_category_id"];
+      ? ["institution_id", "institution_type", "standard_id", "stream_id"]
+      : ["institution_id", "institution_type", "standard_id", "stream_id", "award_category_id"];
   const [allocating, setAllocating] = React.useState<AwardRow | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<AwardRow | null>(null);
 
   const withoutGift = rows.filter((r) => r.allocations.length === 0).length;
+
+  // The Awarded table isn't paginated — `rows` is the complete, already-
+  // filtered result — so every column sorts client-side, same pattern as
+  // Submissions. (The candidates table below is server-paginated instead,
+  // so its sortable columns use SortHeader/the URL, not this.)
+  const [awardSortKey, setAwardSortKey] = React.useState<AwardSortKey>("student");
+  const [awardSortDir, setAwardSortDir] = React.useState<"asc" | "desc">("asc");
+  function toggleAwardSort(key: AwardSortKey) {
+    if (key === awardSortKey) setAwardSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setAwardSortKey(key);
+      setAwardSortDir("asc");
+    }
+  }
+  const sortedRows = React.useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const av = AWARD_SORT_VALUE[awardSortKey](a);
+      const bv = AWARD_SORT_VALUE[awardSortKey](b);
+      const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+      return awardSortDir === "asc" ? cmp : -cmp;
+    });
+  }, [rows, awardSortKey, awardSortDir]);
 
   return (
     <>
@@ -95,11 +130,11 @@ export function AwardsClient({
 
       <Tabs
         value={view}
-        onValueChange={(v) => setParams({ view: v === "awarded" ? null : v, include_awarded: null })}
+        onValueChange={(v) => setParams({ view: v === "candidates" ? null : v, include_awarded: null })}
       >
         <TabsList>
-          <TabsTrigger value="awarded">Awarded</TabsTrigger>
           <TabsTrigger value="candidates">Not yet awarded</TabsTrigger>
+          <TabsTrigger value="awarded">Awarded</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -131,11 +166,24 @@ export function AwardsClient({
             <Table className="min-w-[860px] table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[22%]">Student</TableHead>
-                  <TableHead className="w-[22%]">Institution</TableHead>
+                  <TableHead className="w-[22%]">
+                    <SortHeader column="student">Student</SortHeader>
+                  </TableHead>
+                  <TableHead className="w-[22%]">
+                    <SortHeader column="institution">Institution</SortHeader>
+                  </TableHead>
+                  {/* Not sortable: a school record's Standard and a college
+                   *  record's Course live in different columns on different
+                   *  tables — there's no single column to order the mix by. */}
                   <TableHead className="w-[14%]">Std / Course</TableHead>
-                  <TableHead className="w-[8%]">%</TableHead>
-                  <TableHead className="w-[8%]">Grade</TableHead>
+                  <TableHead className="w-[8%]">
+                    <SortHeader column="percentage">%</SortHeader>
+                  </TableHead>
+                  <TableHead className="w-[8%]">
+                    <SortHeader column="grade">Grade</SortHeader>
+                  </TableHead>
+                  {/* Not sortable: a count over a related table, not a column
+                   *  on this one. */}
                   <TableHead className="w-[14%]">Awards</TableHead>
                   <TableHead className="w-[12%]">
                     <span className="sr-only">Assign</span>
@@ -237,12 +285,36 @@ export function AwardsClient({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[20%]">Student</TableHead>
-              <TableHead className="w-[19%]">Institution</TableHead>
-              <TableHead className="w-[12%]">Std / Course</TableHead>
-              <TableHead className="w-[12%]">Award</TableHead>
-              <TableHead className="w-[13%]">Subject / criteria</TableHead>
-              <TableHead className="w-[20%]">Gift</TableHead>
+              <TableHead className="w-[20%]">
+                <LocalSortHeader sortKey="student" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
+                  Student
+                </LocalSortHeader>
+              </TableHead>
+              <TableHead className="w-[19%]">
+                <LocalSortHeader sortKey="institution" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
+                  Institution
+                </LocalSortHeader>
+              </TableHead>
+              <TableHead className="w-[12%]">
+                <LocalSortHeader sortKey="placement" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
+                  Std / Course
+                </LocalSortHeader>
+              </TableHead>
+              <TableHead className="w-[12%]">
+                <LocalSortHeader sortKey="category" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
+                  Award
+                </LocalSortHeader>
+              </TableHead>
+              <TableHead className="w-[13%]">
+                <LocalSortHeader sortKey="subject" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
+                  Subject / criteria
+                </LocalSortHeader>
+              </TableHead>
+              <TableHead className="w-[20%]">
+                <LocalSortHeader sortKey="gift" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
+                  Gift
+                </LocalSortHeader>
+              </TableHead>
               <TableHead className="w-[4%] text-right">
                 <span className="sr-only">Actions</span>
               </TableHead>
@@ -250,7 +322,7 @@ export function AwardsClient({
           </TableHeader>
 
           <TableBody>
-            {rows.length === 0 ? (
+            {sortedRows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={7} className="border-b-0">
                   <EmptyState
@@ -268,7 +340,7 @@ export function AwardsClient({
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row) => (
+              sortedRows.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell>
                     <span className="font-medium">{row.student_name}</span>
