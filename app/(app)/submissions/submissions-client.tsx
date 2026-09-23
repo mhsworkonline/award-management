@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Inbox, Search, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Filter, Inbox, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -326,13 +326,27 @@ export function SubmissionsClient({
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder="Search any column…"
-            className="pl-9"
+            className="pl-9 pr-8"
             aria-label="Search submissions"
           />
+          {term && (
+            <button
+              type="button"
+              onClick={() => setTerm("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-accent"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+        <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+          <Filter className="h-3.5 w-3.5" />
+          Filters
+        </span>
         <Select value={institutionType} onValueChange={(v) => changeInstitutionType(v as "all" | "school" | "college")}>
           <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="Institution Type" />
