@@ -1,11 +1,35 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requirePermission } from "@/lib/supabase/server";
+import { requirePermission, createClient } from "@/lib/supabase/server";
+import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
 import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
-import { T } from "@/lib/tables";
-import type { ActionResult } from "@/lib/types";
+import { FN, T } from "@/lib/tables";
+import type { ActionResult, PublicSubmissionRow } from "@/lib/types";
+
+/** Clicking a confirmation opens the *exact* Review Application sheet
+ *  /submissions already uses (see am_get_submission_by_record, 0043) — a
+ *  confirmation always traces back to the approved submission that created
+ *  its academic record, and that sheet already knows how to edit an
+ *  approved submission safely (pushing the correction into the linked
+ *  student/academic record — see updateSubmission). There's at most one:
+ *  academic_record_id is only ever set once, at approval. */
+export async function getConfirmationSubmission(
+  academicRecordId: string,
+): Promise<ActionResult<PublicSubmissionRow | null>> {
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc(FN.getSubmissionByRecord, {
+      p_org_id: ORG_ID,
+      p_academic_record_id: academicRecordId,
+    });
+    if (error) return { ok: false, error: friendly(error.message) };
+    return { ok: true, data: (data as PublicSubmissionRow | null) ?? null };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
 
 /** Staff clearing a confirmation/correction once it's been read and acted
  *  on. Gated on Submissions:Delete — same module the whole /confirmations

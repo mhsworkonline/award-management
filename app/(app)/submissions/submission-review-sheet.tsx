@@ -391,6 +391,9 @@ export function SubmissionReviewSheet({
       first_name: submission.first_name,
       middle_name: submission.middle_name,
       last_name: submission.last_name,
+      // Once approved, this submission already created its own student —
+      // exclude it so the check isn't just finding itself.
+      excludeId: submission.student_id ?? undefined,
     }).then((r) => setDuplicates(r.ok ? r.data : []));
 
     getSubmissionHistory(submission.id).then((r) => setHistory(r.ok ? r.data : []));
@@ -536,7 +539,9 @@ export function SubmissionReviewSheet({
                     <AlertTriangle className="h-4 w-4" /> Possible existing student
                   </p>
                   <p className="mt-1 text-[12px] text-muted-foreground">
-                    Approving will match into: {duplicates.join(", ")}
+                    {isApproved
+                      ? `This name also matches an existing student: ${duplicates.join(", ")}`
+                      : `Approving will match into: ${duplicates.join(", ")}`}
                   </p>
                 </div>
               )}

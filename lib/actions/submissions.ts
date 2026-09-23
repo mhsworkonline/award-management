@@ -43,6 +43,10 @@ export async function checkSubmissionDuplicates(input: {
   first_name: string;
   middle_name?: string | null;
   last_name: string;
+  // The student this very submission already created, once approved — pass
+  // it so the check doesn't flag a submission's own student as a "possible
+  // duplicate" of itself every time an approved submission is reopened.
+  excludeId?: string;
 }) {
   try {
     await requirePermission("submissions", "read");

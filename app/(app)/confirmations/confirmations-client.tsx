@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, MessageSquareText, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,20 +18,43 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
-import { deleteDataConfirmation } from "@/lib/actions/confirmations";
+import { SubmissionReviewSheet } from "../submissions/submission-review-sheet";
+import { deleteDataConfirmation, getConfirmationSubmission } from "@/lib/actions/confirmations";
 import { formatDateTime } from "@/lib/utils";
 import { usePermissions } from "@/components/providers/permissions-provider";
 import type { ConfirmationRow } from "@/lib/data/confirmations";
+import type { Lookups, PublicSubmissionRow } from "@/lib/types";
 
-/** Simple, read-mostly list — what a student sent in via /confirm, for
- *  staff to read and act on by hand. Nothing here writes to the roster;
- *  see 0040_am_data_confirmations.sql for why that's deliberate. */
-export function ConfirmationsClient({ rows }: { rows: ConfirmationRow[] }) {
+/** What a student sent in via /confirm, for staff to read and act on.
+ *  Clicking a row opens the exact same Review Application sheet
+ *  /submissions uses (see getConfirmationSubmission) — every confirmation
+ *  traces back to the approved submission that created its student/
+ *  academic record, and that sheet already edits an approved submission
+ *  safely (syncing the correction into the live roster — see
+ *  updateSubmission), so this reuses it as-is rather than a separate view. */
+export function ConfirmationsClient({ rows, lookups }: { rows: ConfirmationRow[]; lookups: Lookups }) {
   const router = useRouter();
   const { can } = usePermissions();
   const canDelete = can("submissions", "delete");
   const [term, setTerm] = React.useState("");
   const [pendingDelete, setPendingDelete] = React.useState<ConfirmationRow | null>(null);
+
+  const [loadingId, setLoadingId] = React.useState<string | null>(null);
+  const [active, setActive] = React.useState<PublicSubmissionRow | null>(null);
+
+  async function openRow(r: ConfirmationRow) {
+    setLoadingId(r.id);
+    const result = await getConfirmationSubmission(r.academic_record_id);
+    setLoadingId(null);
+
+    if (!result.ok || !result.data) {
+      toast.error("Could not open this application", {
+        description: result.ok ? "The original submission may have been removed." : result.error,
+      });
+      return;
+    }
+    setActive(result.data);
+  }
 
   const filtered = React.useMemo(() => {
     const q = term.trim().toLowerCase();
@@ -50,7 +74,7 @@ export function ConfirmationsClient({ rows }: { rows: ConfirmationRow[] }) {
     <>
       <PageHeader
         title="Confirmations"
-        description="What students told us when confirming their details at /confirm."
+        description="What students told us when confirming their details at /confirm — click one to open and edit their application directly."
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -96,7 +120,11 @@ export function ConfirmationsClient({ rows }: { rows: ConfirmationRow[] }) {
               </TableRow>
             ) : (
               filtered.map((r) => (
-                <TableRow key={r.id}>
+                <TableRow
+                  key={r.id}
+                  className={`cursor-pointer ${loadingId === r.id ? "opacity-60" : ""}`}
+                  onClick={() => void openRow(r)}
+                >
                   <TableCell className="max-w-0">
                     <span className="block truncate font-medium" title={r.student_name}>
                       {r.student_name}
@@ -128,7 +156,10 @@ export function ConfirmationsClient({ rows }: { rows: ConfirmationRow[] }) {
                         variant="ghost"
                         size="icon-sm"
                         aria-label="Delete"
-                        onClick={() => setPendingDelete(r)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingDelete(r);
+                        }}
                       >
                         <Trash2 className="text-destructive" />
                       </Button>
@@ -140,6 +171,12 @@ export function ConfirmationsClient({ rows }: { rows: ConfirmationRow[] }) {
           </TableBody>
         </Table>
       </TableWrap>
+
+      <SubmissionReviewSheet
+        submission={active}
+        lookups={lookups}
+        onOpenChange={(open) => !open && setActive(null)}
+      />
 
       <ConfirmDialog
         open={Boolean(pendingDelete)}
