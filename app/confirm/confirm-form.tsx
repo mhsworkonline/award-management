@@ -154,7 +154,15 @@ export function ConfirmForm({ form, branding }: { form: ResolvedConfirmForm; bra
       <Header branding={branding} form={form} />
       <CardContent className="space-y-5 p-5 sm:p-6">
         {!result ? (
-          <form onSubmit={onLookup} className="space-y-4">
+          // pb-[45vh] below the fields (mobile only) — this form is just two
+          // short fields, so the page is barely taller than the viewport;
+          // with nothing to scroll, the browser can't bring a focused field
+          // above the on-screen keyboard (worse once the phone number
+          // field's own autofill suggestion strip eats into that space
+          // too), leaving it hidden behind both. The extra padding gives it
+          // room to actually scroll there. Not needed once a screen's tall
+          // enough to have a real keyboard docked below it instead.
+          <form onSubmit={onLookup} className="space-y-4 pb-[45vh] sm:pb-0">
             <p className="text-[13px] leading-relaxed text-muted-foreground">{L.pageIntro}</p>
 
             <Field label={L.referenceNumber} htmlFor="reference_number" required>

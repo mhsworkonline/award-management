@@ -26,12 +26,14 @@ async function fetchLogoDataUri(logoUrl: string): Promise<string | null> {
   }
 }
 
-/** The banner behind /apply and /apply/[slug]'s opengraph-image routes —
- *  this is what shows up as the link preview thumbnail in WhatsApp. Kept
- *  deliberately simple (logo + name only): the form title and academic
- *  year are already carried by the page's og:title/description text, so
- *  repeating them here just added small, redundant text. Colors are the
- *  app's own --primary (a deep rose/maroon) rather than a generic gradient. */
+/** The banner behind every public page's opengraph-image route — /apply,
+ *  /apply/[slug], /confirm and /confirm/[slug] all reuse this one renderer,
+ *  so any public link shares the same thumbnail treatment. This is what
+ *  shows up as the link preview in WhatsApp/iMessage/etc. Kept deliberately
+ *  simple (logo + name only): the page's own title and academic year are
+ *  already carried by its og:title/description text, so repeating them
+ *  here just added small, redundant text. Colors are the app's own
+ *  --primary (a deep rose/maroon) rather than a generic gradient. */
 export async function renderApplyOgImage({ appName, logoUrl }: OgImageInput) {
   const logoDataUri = logoUrl ? await fetchLogoDataUri(logoUrl) : null;
 
