@@ -39,7 +39,7 @@ type Values = {
 } & ApplicationFormFieldConfig;
 
 const FIELD_TOGGLES: { key: keyof ApplicationFormFieldConfig; label: string; hint?: string }[] = [
-  { key: "show_salutation", label: "Salutation (Mr. / Ms. / …)" },
+  { key: "show_salutation", label: "Salutation (Mr. / Miss / …)" },
   { key: "show_middle_name", label: "Middle (father's) name" },
   { key: "show_roll_no", label: "Roll / GR number" },
   { key: "show_notes", label: "Notes / additional info" },

@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Document,
+  Image,
   Page,
   StyleSheet,
   Text,
@@ -12,6 +13,8 @@ import type { ReportRow } from "@/lib/data/reports";
 
 const styles = StyleSheet.create({
   page: { paddingTop: 34, paddingBottom: 44, paddingHorizontal: 30, fontSize: 9, color: "#1c2029" },
+  headerRow: { flexDirection: "row", alignItems: "center" },
+  logo: { width: 38, height: 38, marginRight: 10, objectFit: "contain" },
   title: { fontSize: 15, fontWeight: 700 },
   subtitle: { fontSize: 9, color: "#5b6472", marginTop: 3 },
   headerBar: { borderBottomWidth: 1.5, borderBottomColor: "#1c2029", paddingBottom: 7, marginBottom: 11 },
@@ -62,7 +65,11 @@ export type DistributionListProps = {
   rows: ReportRow[];
   filterDescription: string;
   organizationName: string;
-  generatedAt: string;
+  /** Public URL of a raster (PNG/JPG/WEBP) logo, or null to omit it. */
+  logoUrl: string | null;
+  /** Replaces the default subtitle line when set; the org name above it is
+   *  always shown regardless. */
+  customTitle: string | null;
   /** Group by institution so each institution's list can be torn off separately. */
   groupByInstitution: boolean;
   showSignatureColumn: boolean;
@@ -72,7 +79,8 @@ export function DistributionListPdf({
   rows,
   filterDescription,
   organizationName,
-  generatedAt,
+  logoUrl,
+  customTitle,
   groupByInstitution,
   showSignatureColumn,
 }: DistributionListProps) {
@@ -82,17 +90,21 @@ export function DistributionListPdf({
 
   return (
     <Document
-      title="Award Distribution List"
+      title={customTitle || "Award Distribution List"}
       author={organizationName}
       subject={filterDescription}
     >
       <Page size="A4" orientation="landscape" style={styles.page} wrap>
         <View style={styles.headerBar} fixed>
-          <Text style={styles.title}>{organizationName}</Text>
-          <Text style={styles.subtitle}>Annual Merit Award — Prize Distribution List</Text>
+          <View style={styles.headerRow}>
+            {logoUrl && <Image src={logoUrl} style={styles.logo} />}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>{organizationName}</Text>
+              <Text style={styles.subtitle}>{customTitle || "Annual Merit Award — Prize Distribution List"}</Text>
+            </View>
+          </View>
           <View style={styles.meta}>
             <Text>{filterDescription}</Text>
-            <Text>Generated {generatedAt}</Text>
           </View>
         </View>
 

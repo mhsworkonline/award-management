@@ -51,7 +51,6 @@ export async function GET(request: Request) {
     sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: COLUMNS.length } };
 
     const meta = wb.addWorksheet("Filters");
-    meta.addRow(["Report generated", new Date().toLocaleString("en-IN")]);
     meta.addRow(["Filters applied", description]);
     meta.addRow(["Row count", rows.length]);
     meta.getColumn(1).font = { bold: true };

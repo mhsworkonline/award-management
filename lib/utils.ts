@@ -49,7 +49,7 @@ export function studentName(s: { salutation?: string | null; first_name: string;
  *  when the salutation doesn't indicate one (e.g. "Dr.", or unset). */
 export function parentRelation(salutation?: string | null) {
   if (salutation === "Mr.") return "s/o";
-  if (salutation === "Ms." || salutation === "Mrs." || salutation === "Miss") return "d/o";
+  if (salutation === "Mrs." || salutation === "Miss") return "d/o";
   return "c/o";
 }
 

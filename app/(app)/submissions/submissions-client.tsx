@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,10 +130,46 @@ export function SubmissionsClient({
   const { setParams } = useQueryParams();
   const [active, setActive] = React.useState<PublicSubmissionRow | null>(null);
   const [term, setTerm] = React.useState("");
+  const [institutionType, setInstitutionType] = React.useState<"all" | "school" | "college">("all");
+  const [institutionId, setInstitutionId] = React.useState("all");
+  const [standardId, setStandardId] = React.useState("all");
   const [sortKey, setSortKey] = React.useState<SortKey>("submitted");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState<number>(PAGE_SIZE);
+
+  // Institution options narrow to the chosen type, same convention FilterBar
+  // uses elsewhere — picking a type first, then an institution within it.
+  const institutionOptions = React.useMemo(
+    () => lookups.institutions.filter((i) => institutionType === "all" || i.type === institutionType),
+    [lookups.institutions, institutionType],
+  );
+
+  function changeInstitutionType(value: "all" | "school" | "college") {
+    setInstitutionType(value);
+    // Clear a selected institution that no longer matches the new type,
+    // rather than leaving a filter active that's no longer visible in the
+    // (now-narrowed) dropdown.
+    if (value !== "all" && institutionId !== "all") {
+      const stillValid = lookups.institutions.some((i) => i.id === institutionId && i.type === value);
+      if (!stillValid) setInstitutionId("all");
+    }
+  }
+
+  // Institution type/institution/standard narrow the working set before free
+  // text search runs on top of it — dropdown filters first (exact match),
+  // then the token search (partial match) within whatever that leaves.
+  const scoped = React.useMemo(() => {
+    return submissions.filter((s) => {
+      if (institutionType !== "all") {
+        const type = institutionTypeLabel(s) === "College" ? "college" : "school";
+        if (type !== institutionType) return false;
+      }
+      if (institutionId !== "all" && s.institution_id !== institutionId) return false;
+      if (standardId !== "all" && s.standard_id !== standardId) return false;
+      return true;
+    });
+  }, [submissions, institutionType, institutionId, standardId]);
 
   // One lowercase search string per row, built from the same values the
   // table displays (via the same label helpers), so anything you can see in a
@@ -142,7 +178,7 @@ export function SubmissionsClient({
   // always searchable, so they stay.
   const searchable = React.useMemo(
     () =>
-      submissions.map((s) => ({
+      scoped.map((s) => ({
         s,
         text: [
           s.reference_code,
@@ -165,16 +201,23 @@ export function SubmissionsClient({
           .join(" ")
           .toLowerCase(),
       })),
-    [submissions],
+    [scoped],
   );
 
   // Every word must appear somewhere in the row (in any column, any order),
   // so "vinit shah" or "std 9 gseb" narrow down instead of matching nothing.
   const filtered = React.useMemo(() => {
     const tokens = term.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) return submissions;
+    if (tokens.length === 0) return scoped;
     return searchable.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ s }) => s);
-  }, [submissions, searchable, term]);
+  }, [scoped, searchable, term]);
+
+  const hasActiveFilters = institutionType !== "all" || institutionId !== "all" || standardId !== "all";
+  function clearFilters() {
+    setInstitutionType("all");
+    setInstitutionId("all");
+    setStandardId("all");
+  }
 
   const sorted = React.useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -193,12 +236,13 @@ export function SubmissionsClient({
     }
   }
 
-  // A tab switch (new `submissions`), a search, or a re-sort can all put the
-  // previously-viewed page out of range — land back on page 1 rather than
-  // showing an empty page the user has to notice and back out of.
+  // A tab switch (new `submissions`), a search, a filter change, or a
+  // re-sort can all put the previously-viewed page out of range — land back
+  // on page 1 rather than showing an empty page the user has to notice and
+  // back out of.
   React.useEffect(() => {
     setPage(1);
-  }, [submissions, term, sortKey, sortDir]);
+  }, [submissions, term, institutionType, institutionId, standardId, sortKey, sortDir]);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const clampedPage = Math.min(page, pageCount);
@@ -235,6 +279,53 @@ export function SubmissionsClient({
             aria-label="Search submissions"
           />
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={institutionType} onValueChange={(v) => changeInstitutionType(v as "all" | "school" | "college")}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Institution type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value="school">School</SelectItem>
+            <SelectItem value="college">College</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={institutionId} onValueChange={setInstitutionId}>
+          <SelectTrigger className="w-[190px]">
+            <SelectValue placeholder="Institution" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All institutions</SelectItem>
+            {institutionOptions.map((i) => (
+              <SelectItem key={i.id} value={i.id}>
+                {i.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={standardId} onValueChange={setStandardId}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Standard" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All standards</SelectItem>
+            {lookups.standards.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {hasActiveFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
+            <X /> Clear filters
+          </Button>
+        )}
       </div>
 
       <TableWrap className="max-h-[calc(100vh-320px)]">
@@ -314,11 +405,19 @@ export function SubmissionsClient({
             {sorted.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={11} className="border-b-0">
-                  <EmptyState
-                    icon={Inbox}
-                    title="Nothing here"
-                    description="Public applications will appear here as students submit them at /apply."
-                  />
+                  {submissions.length > 0 ? (
+                    <EmptyState
+                      icon={Inbox}
+                      title="Nothing matches these filters"
+                      description="Try a different institution, standard or search term."
+                    />
+                  ) : (
+                    <EmptyState
+                      icon={Inbox}
+                      title="Nothing here"
+                      description="Public applications will appear here as students submit them at /apply."
+                    />
+                  )}
                 </TableCell>
               </TableRow>
             ) : (

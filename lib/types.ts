@@ -108,8 +108,10 @@ export type Person = {
 /** Persistent student identity — does not carry institution/year/standard.
  *  Those live on AcademicRecord, one per student per academic year.
  *  Mirrored into a Person row (person_id) — see Person above. */
-export type Salutation = "Mr." | "Ms." | "Mrs." | "Miss" | "Dr.";
-export const SALUTATIONS: Salutation[] = ["Mr.", "Ms.", "Mrs.", "Miss", "Dr."];
+// Kept in sync with SALUTATION_VALUES in lib/validators.ts — see its comment
+// for why "Ms." was dropped in favor of "Miss".
+export type Salutation = "Mr." | "Miss" | "Mrs." | "Dr.";
+export const SALUTATIONS: Salutation[] = ["Mr.", "Miss", "Mrs.", "Dr."];
 
 export type Student = {
   id: string;

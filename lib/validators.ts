@@ -13,7 +13,12 @@ const optionalText = z
   .optional()
   .transform((v) => (v ? v : null));
 
-export const SALUTATION_VALUES = ["Mr.", "Ms.", "Mrs.", "Miss", "Dr."] as const;
+// "Ms." was dropped in favor of "Miss" — students here range from pre-primary
+// to college, and "Miss" is the salutation Indian school/college certificates
+// use for a female student at any of those ages, where "Ms." reads as an
+// adult/professional title. See migration 0038 for the one-time data cleanup
+// that moved existing "Ms." rows over to "Miss".
+export const SALUTATION_VALUES = ["Mr.", "Miss", "Mrs.", "Dr."] as const;
 const optionalSalutation = z
   .union([z.enum(SALUTATION_VALUES), z.literal("")])
   .nullable()

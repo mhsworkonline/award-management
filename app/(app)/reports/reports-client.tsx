@@ -16,32 +16,81 @@ import {
 } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { FilterBar } from "@/components/data-table/filter-bar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQueryParams } from "@/hooks/use-query-params";
 import type { ReportRow } from "@/lib/data/reports";
+import type { StandardReport, SubmissionListRow } from "@/lib/data/submission-reports";
 import type { Lookups } from "@/lib/types";
+import { StandardsReport } from "./standards-report";
+import { SubmissionsReport } from "./submissions-report";
+import { PdfTitleLogoFields } from "./pdf-title-logo-fields";
+
+export type ReportsView = "roster" | "standards" | "submissions";
 
 export function ReportsClient({
+  view,
   rows,
   lookups,
   filterDescription,
   query,
+  yearId,
+  standardReport,
+  submissionRows,
+  hasLogo,
 }: {
+  view: ReportsView;
   rows: ReportRow[];
   lookups: Lookups;
   filterDescription: string;
   query: string;
+  yearId: string | null;
+  standardReport: StandardReport;
+  submissionRows: SubmissionListRow[];
+  hasLogo: boolean;
 }) {
-  const { searchParams } = useQueryParams();
+  const { searchParams, setParams } = useQueryParams();
   const [groupByInstitution, setGroupByInstitution] = React.useState(true);
   const [signatureColumn, setSignatureColumn] = React.useState(true);
+  const [title, setTitle] = React.useState("");
+  const [includeLogo, setIncludeLogo] = React.useState(true);
 
   const pdfHref = `/api/reports/pdf${query}${query ? "&" : "?"}group=${
     groupByInstitution ? "on" : "off"
-  }&signature=${signatureColumn ? "on" : "off"}`;
+  }&signature=${signatureColumn ? "on" : "off"}&logo=${includeLogo && hasLogo ? "on" : "off"}${
+    title.trim() ? `&title=${encodeURIComponent(title.trim())}` : ""
+  }`;
 
   const distributed = rows.filter((r) => r.distribution === "Distributed").length;
   const pending = rows.filter((r) => r.distribution === "Pending").length;
   const noGift = rows.filter((r) => r.distribution === "No gift allocated").length;
+
+  const tabs = (
+    <Tabs value={view} onValueChange={(v) => setParams({ view: v === "roster" ? null : v })}>
+      <TabsList>
+        <TabsTrigger value="roster">Roster</TabsTrigger>
+        <TabsTrigger value="standards">Applications by Standard</TabsTrigger>
+        <TabsTrigger value="submissions">Submissions List</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+
+  if (view === "standards") {
+    return (
+      <>
+        {tabs}
+        <StandardsReport report={standardReport} lookups={lookups} yearId={yearId} hasLogo={hasLogo} />
+      </>
+    );
+  }
+
+  if (view === "submissions") {
+    return (
+      <>
+        {tabs}
+        <SubmissionsReport rows={submissionRows} lookups={lookups} yearId={yearId} hasLogo={hasLogo} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -63,6 +112,8 @@ export function ReportsClient({
           </>
         }
       />
+
+      {tabs}
 
       <FilterBar
         lookups={lookups}
@@ -98,7 +149,7 @@ export function ReportsClient({
           <CardHeader>
             <CardTitle>PDF options</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2.5">
+          <CardContent className="space-y-3">
             <Toggle
               checked={groupByInstitution}
               onChange={setGroupByInstitution}
@@ -111,6 +162,15 @@ export function ReportsClient({
               label="Signature column"
               hint="Blank column for receipts at the venue"
             />
+            <div className="border-t pt-3">
+              <PdfTitleLogoFields
+                title={title}
+                onTitleChange={setTitle}
+                includeLogo={includeLogo}
+                onIncludeLogoChange={setIncludeLogo}
+                hasLogo={hasLogo}
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
