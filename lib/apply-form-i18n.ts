@@ -116,6 +116,11 @@ export const APPLY_MESSAGES = {
       `${name}: could not process this image — try a different file`,
       `${name}: આ ઈમેજ પર પ્રક્રિયા કરી શકાઈ નહીં — બીજી ફાઇલ પસંદ કરો`,
     ),
+  fileUploadFailed: (name: string) =>
+    bl(
+      `${name}: upload failed — check your connection and try again`,
+      `${name}: અપલોડ નિષ્ફળ — તમારું કનેક્શન તપાસો અને ફરી પ્રયાસ કરો`,
+    ),
   marksheetRequired: bl(
     "Upload your marksheet — required to verify your application",
     "તમારી માર્કશીટ અપલોડ કરો — તમારી અરજી ચકાસવા માટે જરૂરી",

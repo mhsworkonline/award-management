@@ -90,6 +90,14 @@ const MAX_FILE_BYTES = MAX_ATTACHMENT_BYTES;
 const MAX_FILES = MAX_ATTACHMENTS;
 const ALLOWED_TYPES = ALLOWED_ATTACHMENT_TYPES;
 
+/** An attachment that has already been uploaded to Storage — see addFiles. */
+type UploadedAttachment = {
+  path: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+};
+
 /** Single-column, mobile-first by construction — every field stacks full-width
  *  regardless of viewport; the two-up rows only appear from `sm:` up. */
 export function ApplyForm({
@@ -109,7 +117,11 @@ export function ApplyForm({
   const [instType, setInstType] = React.useState<"school" | "college" | "">("");
   const [referenceCode, setReferenceCode] = React.useState<string | null>(null);
   const [serverError, setServerError] = React.useState<string | null>(null);
-  const [files, setFiles] = React.useState<File[]>([]);
+  // Each entry is already uploaded to Storage — see addFiles below. Holding
+  // upload results (not raw File objects) is what lets the "required" check
+  // at submit time verify a file actually made it to Storage, not just that
+  // one was selected in the browser.
+  const [attachments, setAttachments] = React.useState<UploadedAttachment[]>([]);
   const [fileError, setFileError] = React.useState<string | null>(null);
   const [processingFile, setProcessingFile] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -257,43 +269,66 @@ export function ApplyForm({
     if (fileInputRef.current) fileInputRef.current.value = "";
     setFileError(null);
 
-    if (files.length + incoming.length > MAX_FILES) {
+    if (attachments.length + incoming.length > MAX_FILES) {
       setFileError(M.maxFiles(MAX_FILES));
       return;
     }
 
-    const processed: File[] = [];
+    setProcessingFile(true);
+    const supabase = createClient();
+    const uploaded: UploadedAttachment[] = [];
+
     for (const f of incoming) {
       if (!ALLOWED_TYPES.includes(f.type)) {
         setFileError(M.fileTypeNotAllowed(f.name));
+        setProcessingFile(false);
         return;
       }
       const isImage = f.type.startsWith("image/");
       const sourceCap = isImage ? MAX_SOURCE_IMAGE_BYTES : MAX_FILE_BYTES;
       if (f.size > sourceCap) {
         setFileError(M.fileTooLarge(f.name, Math.round(sourceCap / (1024 * 1024))));
-        return;
-      }
-      if (!isImage) {
-        processed.push(f);
-        continue;
-      }
-      setProcessingFile(true);
-      try {
-        processed.push(await compressMarksheetImage(f));
-      } catch {
         setProcessingFile(false);
-        setFileError(M.fileProcessFailed(f.name));
         return;
       }
-    }
-    setProcessingFile(false);
 
-    setFiles((prev) => [...prev, ...processed]);
+      let prepared = f;
+      if (isImage) {
+        try {
+          prepared = await compressMarksheetImage(f);
+        } catch {
+          setFileError(M.fileProcessFailed(f.name));
+          setProcessingFile(false);
+          return;
+        }
+      }
+
+      // Uploaded to Storage right away — same pattern the photo already
+      // uses (see photoPath above), not deferred until after the submission
+      // itself is created. A failed upload here (dropped connection, a
+      // Storage error) blocks submission on the spot, the same way a
+      // missing required field would, instead of letting the submission go
+      // through with nothing actually attached.
+      const safeName = prepared.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `pending/${crypto.randomUUID()}-${safeName}`;
+      const upload = await supabase.storage
+        .from(ATTACHMENTS_BUCKET)
+        .upload(path, prepared, { contentType: prepared.type });
+      if (upload.error) {
+        setFileError(M.fileUploadFailed(f.name));
+        setProcessingFile(false);
+        return;
+      }
+
+      uploaded.push({ path, fileName: prepared.name, mimeType: prepared.type, sizeBytes: prepared.size });
+    }
+
+    setProcessingFile(false);
+    setAttachments((prev) => [...prev, ...uploaded]);
   }
 
   function removeFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
     setFileError(null);
   }
 
@@ -363,31 +398,22 @@ export function ApplyForm({
     setPhotoError(null);
   }
 
-  async function uploadAttachments(submissionId: string) {
-    if (files.length === 0) return;
-    const supabase = createClient();
-
-    for (const file of files) {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `${submissionId}/${crypto.randomUUID()}-${safeName}`;
-
-      const upload = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file, {
-        contentType: file.type,
-      });
-      if (upload.error) {
-        toast.error(`Could not upload ${file.name}`, { description: upload.error.message });
-        continue;
-      }
-
+  // The file itself is already sitting in Storage by this point (uploaded in
+  // addFiles) — this just links each one to the now-created submission, a
+  // small DB insert with none of the failure surface a multi-megabyte file
+  // upload has, so it's kept as a light best-effort step after submission
+  // rather than something that can block it the way the upload itself does.
+  async function registerAttachments(submissionId: string) {
+    for (const a of attachments) {
       const registered = await registerAttachment({
         submissionId,
-        filePath: path,
-        fileName: file.name,
-        mimeType: file.type,
-        sizeBytes: file.size,
+        filePath: a.path,
+        fileName: a.fileName,
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes,
       });
       if (!registered.ok) {
-        toast.error(`Could not attach ${file.name}`, { description: registered.error });
+        toast.error(`Could not attach ${a.fileName}`, { description: registered.error });
       }
     }
   }
@@ -397,8 +423,11 @@ export function ApplyForm({
 
     // The marksheet is the only proof behind the percentage/grade claimed
     // above — required whenever this form even shows the field (staff can
-    // still turn attachments off per-form via field_config).
-    if (fieldConfig.show_attachments && files.length === 0) {
+    // still turn attachments off per-form via field_config). Checked against
+    // `attachments` — files already confirmed uploaded to Storage, not just
+    // selected — so a failed upload is caught here, before any submission
+    // exists, rather than leaving one behind with nothing attached.
+    if (fieldConfig.show_attachments && attachments.length === 0) {
       setFileError(M.marksheetRequired);
       return;
     }
@@ -456,9 +485,9 @@ export function ApplyForm({
       return;
     }
 
-    if (files.length > 0) {
+    if (attachments.length > 0) {
       setUploading(true);
-      await uploadAttachments(result.data.id);
+      await registerAttachments(result.data.id);
       setUploading(false);
     }
 
@@ -501,7 +530,7 @@ export function ApplyForm({
             onClick={() => {
               setReferenceCode(null);
               setInstType("");
-              setFiles([]);
+              setAttachments([]);
               removePhoto();
               reset(EMPTY);
             }}
@@ -1061,32 +1090,32 @@ export function ApplyForm({
                 hint={M.attachmentsHint(MAX_FILES)}
               >
                 <div className="space-y-2">
-                  {files.map((f, i) => (
+                  {attachments.map((a, i) => (
                     <div
-                      key={`${f.name}-${i}`}
+                      key={`${a.path}-${i}`}
                       className="flex items-center gap-2.5 rounded-md border bg-card px-3 py-2"
                     >
-                      {f.type.startsWith("image/") ? (
+                      {a.mimeType.startsWith("image/") ? (
                         <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                       ) : (
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="min-w-0 flex-1 truncate text-[13px]">{f.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-[13px]">{a.fileName}</span>
                       <span className="shrink-0 text-[11px] text-muted-foreground">
-                        {(f.size / 1024 / 1024).toFixed(1)}MB
+                        {(a.sizeBytes / 1024 / 1024).toFixed(1)}MB
                       </span>
                       <button
                         type="button"
                         onClick={() => removeFile(i)}
                         className="shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-                        aria-label={`Remove ${f.name}`}
+                        aria-label={`Remove ${a.fileName}`}
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
 
-                  {files.length < MAX_FILES && (
+                  {attachments.length < MAX_FILES && (
                     <label
                       className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/40 bg-card px-4 py-5 text-center text-[13px] font-medium text-primary transition-colors hover:border-primary hover:bg-primary/10 ${processingFile ? "pointer-events-none opacity-60" : ""}`}
                     >
