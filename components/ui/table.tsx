@@ -46,7 +46,11 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
     <tr
       ref={ref}
       className={cn(
-        "transition-colors hover:bg-muted/40 data-[state=selected]:bg-accent",
+        // Full-opacity muted, not /40 — against a near-white card background
+        // (--card is 100% lightness, --muted is 96%) the faint version was
+        // barely perceptible; this keeps hover visually distinct from the
+        // stronger --accent used for a genuinely selected row.
+        "transition-colors hover:bg-muted data-[state=selected]:bg-accent",
         className,
       )}
       {...props}

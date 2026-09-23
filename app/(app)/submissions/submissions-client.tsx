@@ -137,17 +137,19 @@ export function SubmissionsClient({
   const [active, setActive] = React.useState<PublicSubmissionRow | null>(null);
   const [term, setTerm] = React.useState("");
   const [institutionType, setInstitutionType] = React.useState<"all" | "school" | "college">("all");
-  const [institutionId, setInstitutionId] = React.useState("all");
-  // Empty set = "all standards" — a checkbox multi-select, not a single Select,
-  // so a reviewer can filter to e.g. Std 10 and Std 12 at once.
-  const [standardIds, setStandardIds] = React.useState<Set<string>>(new Set());
+  // Empty set = no filter. Holds either standard ids or course ids (they're
+  // disjoint UUID sets, so mixing them is safe) — which one depends on
+  // institutionType: School shows Standards (Playgroup–12th), College shows
+  // degrees/courses, and "all" shows both lists together.
+  const [placementIds, setPlacementIds] = React.useState<Set<string>>(new Set());
+
   const [sortKey, setSortKey] = React.useState<SortKey>("submitted");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState<number>(DEFAULT_PAGE_SIZE);
 
-  function toggleStandard(id: string, checked: boolean) {
-    setStandardIds((prev) => {
+  function togglePlacement(id: string, checked: boolean) {
+    setPlacementIds((prev) => {
       const next = new Set(prev);
       if (checked) next.add(id);
       else next.delete(id);
@@ -155,25 +157,21 @@ export function SubmissionsClient({
     });
   }
 
-  // Institution options narrow to the chosen type, same convention FilterBar
-  // uses elsewhere — picking a type first, then an institution within it.
-  const institutionOptions = React.useMemo(
-    () => lookups.institutions.filter((i) => institutionType === "all" || i.type === institutionType),
-    [lookups.institutions, institutionType],
-  );
-
   function changeInstitutionType(value: "all" | "school" | "college") {
     setInstitutionType(value);
-    // Clear a selected institution that no longer matches the new type,
-    // rather than leaving a filter active that's no longer visible in the
-    // (now-narrowed) dropdown.
-    if (value !== "all" && institutionId !== "all") {
-      const stillValid = lookups.institutions.some((i) => i.id === institutionId && i.type === value);
-      if (!stillValid) setInstitutionId("all");
+    // Switching to School/College narrows which list the popover shows —
+    // drop any selection that belongs to the list that's no longer visible,
+    // rather than leaving a filter active with no way to see or undo it.
+    if (value === "school") {
+      const valid = new Set(lookups.standards.map((s) => s.id));
+      setPlacementIds((prev) => new Set([...prev].filter((id) => valid.has(id))));
+    } else if (value === "college") {
+      const valid = new Set(lookups.courses.map((c) => c.id));
+      setPlacementIds((prev) => new Set([...prev].filter((id) => valid.has(id))));
     }
   }
 
-  // Institution type/institution/standard narrow the working set before free
+  // Institution type/standard-or-course narrow the working set before free
   // text search runs on top of it — dropdown filters first (exact match),
   // then the token search (partial match) within whatever that leaves.
   const scoped = React.useMemo(() => {
@@ -182,11 +180,14 @@ export function SubmissionsClient({
         const type = institutionTypeLabel(s) === "College" ? "college" : "school";
         if (type !== institutionType) return false;
       }
-      if (institutionId !== "all" && s.institution_id !== institutionId) return false;
-      if (standardIds.size > 0 && (!s.standard_id || !standardIds.has(s.standard_id))) return false;
+      if (placementIds.size > 0) {
+        const matchesStandard = Boolean(s.standard_id && placementIds.has(s.standard_id));
+        const matchesCourse = Boolean(s.course_id && placementIds.has(s.course_id));
+        if (!matchesStandard && !matchesCourse) return false;
+      }
       return true;
     });
-  }, [submissions, institutionType, institutionId, standardIds]);
+  }, [submissions, institutionType, placementIds]);
 
   // One lowercase search string per row, built from the same values the
   // table displays (via the same label helpers), so anything you can see in a
@@ -229,11 +230,10 @@ export function SubmissionsClient({
     return searchable.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ s }) => s);
   }, [scoped, searchable, term]);
 
-  const hasActiveFilters = institutionType !== "all" || institutionId !== "all" || standardIds.size > 0;
+  const hasActiveFilters = institutionType !== "all" || placementIds.size > 0;
   function clearFilters() {
     setInstitutionType("all");
-    setInstitutionId("all");
-    setStandardIds(new Set());
+    setPlacementIds(new Set());
   }
 
   const sorted = React.useMemo(() => {
@@ -259,7 +259,12 @@ export function SubmissionsClient({
   // back out of.
   React.useEffect(() => {
     setPage(1);
-  }, [submissions, term, institutionType, institutionId, standardIds, sortKey, sortDir]);
+  }, [submissions, term, institutionType, placementIds, sortKey, sortDir]);
+
+  // What the popover filters by depends on the chosen institution type —
+  // School shows Standards, College shows degrees/courses, "all" shows both.
+  const placementFilterLabel =
+    institutionType === "college" ? "Course" : institutionType === "school" ? "Standard" : "Standard / Course";
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const clampedPage = Math.min(page, pageCount);
@@ -300,27 +305,13 @@ export function SubmissionsClient({
 
       <div className="flex flex-wrap items-center gap-2">
         <Select value={institutionType} onValueChange={(v) => changeInstitutionType(v as "all" | "school" | "college")}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Institution type" />
+          <SelectTrigger className="w-[170px]">
+            <SelectValue placeholder="Institution Type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value="all">Institution Type</SelectItem>
             <SelectItem value="school">School</SelectItem>
             <SelectItem value="college">College</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={institutionId} onValueChange={setInstitutionId}>
-          <SelectTrigger className="w-[190px]">
-            <SelectValue placeholder="Institution" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All institutions</SelectItem>
-            {institutionOptions.map((i) => (
-              <SelectItem key={i.id} value={i.id}>
-                {i.name}
-              </SelectItem>
-            ))}
           </SelectContent>
         </Select>
 
@@ -331,38 +322,66 @@ export function SubmissionsClient({
               className="flex h-9 w-[170px] items-center justify-between whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
             >
               <span className="truncate text-left">
-                {standardIds.size === 0
-                  ? "Standard"
-                  : `${standardIds.size} standard${standardIds.size === 1 ? "" : "s"}`}
+                {placementIds.size === 0 ? placementFilterLabel : `${placementIds.size} selected`}
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-64" align="start">
-            <p className="mb-2 text-[13px] font-semibold">Standard</p>
+            <p className="mb-2 text-[13px] font-semibold">{placementFilterLabel}</p>
             <div className="scrollbar-thin max-h-64 space-y-0.5 overflow-y-auto">
-              {lookups.standards.map((s) => (
-                <label
-                  key={s.id}
-                  className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[13px] hover:bg-accent"
-                >
-                  <Checkbox
-                    checked={standardIds.has(s.id)}
-                    onCheckedChange={(v) => toggleStandard(s.id, v === true)}
-                  />
-                  {s.label}
-                </label>
-              ))}
+              {institutionType !== "college" && (
+                <>
+                  {institutionType === "all" && lookups.courses.length > 0 && (
+                    <p className="px-1.5 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Standards
+                    </p>
+                  )}
+                  {lookups.standards.map((s) => (
+                    <label
+                      key={s.id}
+                      className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[13px] hover:bg-accent"
+                    >
+                      <Checkbox
+                        checked={placementIds.has(s.id)}
+                        onCheckedChange={(v) => togglePlacement(s.id, v === true)}
+                      />
+                      {s.label}
+                    </label>
+                  ))}
+                </>
+              )}
+              {institutionType !== "school" && (
+                <>
+                  {institutionType === "all" && lookups.standards.length > 0 && (
+                    <p className="px-1.5 pb-0.5 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Courses
+                    </p>
+                  )}
+                  {lookups.courses.map((c) => (
+                    <label
+                      key={c.id}
+                      className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[13px] hover:bg-accent"
+                    >
+                      <Checkbox
+                        checked={placementIds.has(c.id)}
+                        onCheckedChange={(v) => togglePlacement(c.id, v === true)}
+                      />
+                      {c.name}
+                    </label>
+                  ))}
+                </>
+              )}
             </div>
-            {standardIds.size > 0 && (
+            {placementIds.size > 0 && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 className="mt-2 w-full"
-                onClick={() => setStandardIds(new Set())}
+                onClick={() => setPlacementIds(new Set())}
               >
-                Clear standards
+                Clear
               </Button>
             )}
           </PopoverContent>
@@ -375,7 +394,12 @@ export function SubmissionsClient({
         )}
       </div>
 
-      <TableWrap className="max-h-[calc(100vh-320px)]">
+      {/* 320px accounted for the page header + one tabs/search row above this
+       *  and the pagination bar below it; the Institution Type/Standard
+       *  filter row added a second row above the table, so the reserved
+       *  space grows to match — otherwise the table claims too much height
+       *  and pushes the pagination bar below the fold. */}
+      <TableWrap className="max-h-[calc(100vh-380px)]">
         {/* table-fixed: without it, a long institution name grows that column
          *  past its w-[%] hint (table-layout: auto only treats it as a
          *  minimum), pushing every column after it off screen. Fixed layout
