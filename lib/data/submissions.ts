@@ -31,32 +31,21 @@ export async function getPendingSubmissionCount() {
   return count ?? 0;
 }
 
-/** Per-status counts for the Submissions page's tab headers — five cheap
- *  head-only count queries rather than fetching and tallying rows. */
+/** Per-status counts for the Submissions page's tab headers — one aggregate
+ *  query (am_submission_counts) instead of five separate head-only count
+ *  requests. SECURITY INVOKER, so it still respects RLS exactly like the
+ *  five queries it replaces — a role without Submissions:Read gets zeros. */
 export async function getSubmissionCounts(): Promise<Record<SubmissionStatus | "all", number>> {
   const supabase = createClient();
-  const countFor = (status?: SubmissionStatus) => {
-    let query = supabase
-      .from(T.publicSubmissions)
-      .select("id", { count: "exact", head: true })
-      .eq("org_id", ORG_ID);
-    if (status) query = query.eq("status", status);
-    return query;
-  };
+  const { data, error } = await supabase.rpc(FN.submissionCounts, { p_org_id: ORG_ID });
+  if (error) throw new Error(error.message);
 
-  const [pending, approved, rejected, doubtful, all] = await Promise.all([
-    countFor("pending"),
-    countFor("approved"),
-    countFor("rejected"),
-    countFor("doubtful"),
-    countFor(),
-  ]);
-
+  const counts = data as Record<SubmissionStatus | "all", number> | null;
   return {
-    pending: pending.count ?? 0,
-    approved: approved.count ?? 0,
-    rejected: rejected.count ?? 0,
-    doubtful: doubtful.count ?? 0,
-    all: all.count ?? 0,
+    pending: counts?.pending ?? 0,
+    approved: counts?.approved ?? 0,
+    rejected: counts?.rejected ?? 0,
+    doubtful: counts?.doubtful ?? 0,
+    all: counts?.all ?? 0,
   };
 }

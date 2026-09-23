@@ -81,6 +81,8 @@ export const FN = {
   resolveShortLink: "am_resolve_short_link",
   listSubmissions: "am_list_submissions",
   getSubmissionLookups: "am_get_submission_lookups",
+  findStudentByName: "am_find_student_by_name",
+  submissionCounts: "am_submission_counts",
 } as const;
 
 /** Logical entity name → physical table, for the config CRUD surface. */

@@ -7,9 +7,8 @@ import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
 import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
 import { submissionEditSchema } from "@/lib/validators";
-import { normalizeName } from "@/lib/utils";
 import { findDuplicateStudents } from "@/lib/data/students";
-import { ATTACHMENTS_BUCKET, T } from "@/lib/tables";
+import { ATTACHMENTS_BUCKET, FN, T } from "@/lib/tables";
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
 import type { ActionResult, AuditLog, SubmissionStatus } from "@/lib/types";
 
@@ -203,8 +202,11 @@ export async function approveSubmission(
     const placementError = validatePlacement(sub);
     if (placementError) return { ok: false, error: placementError };
 
-    // Read every student, in pages - a single request is capped at 1000 rows,
-    // and a match missed past that would create a duplicate student.
+    // Find-or-create by exact normalized-name match — one indexed lookup
+    // (am_find_student_by_name, backed by the am_students_dupe_key
+    // expression index) instead of paging through every student in the org
+    // and comparing in JS. Same normalization, same match rule, just done
+    // where the index already lives.
     type StudentMatch = {
       id: string;
       salutation: string | null;
@@ -215,25 +217,21 @@ export async function approveSubmission(
       email: string | null;
       photo_path: string | null;
     };
-    const existingStudents: StudentMatch[] = [];
-    for (let from = 0; ; from += 1000) {
-      const { data: page, error: pageError } = await admin
-        .from(T.students)
-        .select("id, salutation, first_name, middle_name, last_name, lanedaar_name, email, photo_path")
-        .eq("org_id", ORG_ID)
-        .order("id")
-        .range(from, from + 999);
-      if (pageError) return { ok: false, error: friendly(pageError.message) };
-      existingStudents.push(...((page ?? []) as StudentMatch[]));
-      if (!page || page.length < 1000) break;
-    }
-
-    const key = `${normalizeName(sub.first_name)}|${normalizeName(sub.middle_name)}|${normalizeName(sub.last_name)}`;
-    const match = existingStudents.find(
-      (s) => `${normalizeName(s.first_name)}|${normalizeName(s.middle_name)}|${normalizeName(s.last_name)}` === key,
-    );
+    const { data: matchRows, error: matchError } = await admin.rpc(FN.findStudentByName, {
+      p_org_id: ORG_ID,
+      p_first_name: sub.first_name,
+      p_middle_name: sub.middle_name,
+      p_last_name: sub.last_name,
+    });
+    if (matchError) return { ok: false, error: friendly(matchError.message) };
+    const match = ((matchRows as StudentMatch[] | null) ?? [])[0];
 
     let studentId = match?.id as string | undefined;
+    // writeAudit() already swallows its own failures (see lib/audit.ts) so
+    // it's never load-bearing for the result — batched and awaited together
+    // at the end instead of one-at-a-time, so N sequential audit round
+    // trips cost the same as the slowest single one.
+    const auditWrites: Promise<unknown>[] = [];
 
     if (studentId) {
       // Backfill fields the existing record never had — never overwrite ones it does.
@@ -266,13 +264,15 @@ export async function approveSubmission(
       if (studentError) return { ok: false, error: friendly(studentError.message) };
       studentId = newStudent.id as string;
 
-      await writeAudit(supabase, {
-        entity: "students",
-        entityId: studentId,
-        action: "create",
-        actor,
-        diff: buildDiff(null, newStudent),
-      });
+      auditWrites.push(
+        writeAudit(supabase, {
+          entity: "students",
+          entityId: studentId,
+          action: "create",
+          actor,
+          diff: buildDiff(null, newStudent),
+        }),
+      );
     }
 
     const { data: record, error: recordError } = await admin
@@ -310,20 +310,23 @@ export async function approveSubmission(
       .eq("id", id);
     if (updateError) return { ok: false, error: friendly(updateError.message) };
 
-    await writeAudit(supabase, {
-      entity: "public_submissions",
-      entityId: id,
-      action: "update",
-      actor,
-      diff: { status: { from: sub.status, to: "approved" }, note: trimmedNote },
-    });
-    await writeAudit(supabase, {
-      entity: "academic_records",
-      entityId: record.id,
-      action: "create",
-      actor,
-      diff: { approved_from_submission: id, self_reported: true },
-    });
+    auditWrites.push(
+      writeAudit(supabase, {
+        entity: "public_submissions",
+        entityId: id,
+        action: "update",
+        actor,
+        diff: { status: { from: sub.status, to: "approved" }, note: trimmedNote },
+      }),
+      writeAudit(supabase, {
+        entity: "academic_records",
+        entityId: record.id,
+        action: "create",
+        actor,
+        diff: { approved_from_submission: id, self_reported: true },
+      }),
+    );
+    await Promise.all(auditWrites);
 
     revalidateAll();
     return { ok: true, data: { studentId, recordId: record.id } };
