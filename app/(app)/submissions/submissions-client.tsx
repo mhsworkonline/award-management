@@ -1,10 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight, Inbox, Search, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Inbox, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -25,7 +27,7 @@ import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import { LocalSortHeader } from "@/components/data-table/local-sort-header";
 import { SubmissionReviewSheet } from "./submission-review-sheet";
 import { useQueryParams } from "@/hooks/use-query-params";
-import { PAGE_SIZE, PAGE_SIZE_OPTIONS } from "@/lib/constants";
+import { PAGE_SIZE_OPTIONS } from "@/lib/constants";
 import { placementLabel } from "@/lib/placement";
 import { formatDateTime, parentRelation, studentName } from "@/lib/utils";
 import type { Lookups, PublicSubmissionRow, SubmissionStatus } from "@/lib/types";
@@ -33,6 +35,10 @@ import type { Lookups, PublicSubmissionRow, SubmissionStatus } from "@/lib/types
 // Everything is already loaded client-side (up to 500), so bigger pages cost
 // nothing — extra options beyond the app-wide 25/50/100 for this table only.
 const ROW_OPTIONS = [...PAGE_SIZE_OPTIONS, 200, 500];
+// This page's own default — bigger than the app-wide PAGE_SIZE (25) since a
+// reviewer working through submissions benefits from seeing more at once,
+// and (per the comment above) showing more costs nothing here.
+const DEFAULT_PAGE_SIZE = 100;
 
 /** Falls back to the applicant's free-typed institution/course when there's no
  *  matched row yet — placementLabel alone only knows about real standards/courses. */
@@ -132,11 +138,22 @@ export function SubmissionsClient({
   const [term, setTerm] = React.useState("");
   const [institutionType, setInstitutionType] = React.useState<"all" | "school" | "college">("all");
   const [institutionId, setInstitutionId] = React.useState("all");
-  const [standardId, setStandardId] = React.useState("all");
+  // Empty set = "all standards" — a checkbox multi-select, not a single Select,
+  // so a reviewer can filter to e.g. Std 10 and Std 12 at once.
+  const [standardIds, setStandardIds] = React.useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = React.useState<SortKey>("submitted");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [page, setPage] = React.useState(1);
-  const [pageSize, setPageSize] = React.useState<number>(PAGE_SIZE);
+  const [pageSize, setPageSize] = React.useState<number>(DEFAULT_PAGE_SIZE);
+
+  function toggleStandard(id: string, checked: boolean) {
+    setStandardIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
 
   // Institution options narrow to the chosen type, same convention FilterBar
   // uses elsewhere — picking a type first, then an institution within it.
@@ -166,10 +183,10 @@ export function SubmissionsClient({
         if (type !== institutionType) return false;
       }
       if (institutionId !== "all" && s.institution_id !== institutionId) return false;
-      if (standardId !== "all" && s.standard_id !== standardId) return false;
+      if (standardIds.size > 0 && (!s.standard_id || !standardIds.has(s.standard_id))) return false;
       return true;
     });
-  }, [submissions, institutionType, institutionId, standardId]);
+  }, [submissions, institutionType, institutionId, standardIds]);
 
   // One lowercase search string per row, built from the same values the
   // table displays (via the same label helpers), so anything you can see in a
@@ -212,11 +229,11 @@ export function SubmissionsClient({
     return searchable.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ s }) => s);
   }, [scoped, searchable, term]);
 
-  const hasActiveFilters = institutionType !== "all" || institutionId !== "all" || standardId !== "all";
+  const hasActiveFilters = institutionType !== "all" || institutionId !== "all" || standardIds.size > 0;
   function clearFilters() {
     setInstitutionType("all");
     setInstitutionId("all");
-    setStandardId("all");
+    setStandardIds(new Set());
   }
 
   const sorted = React.useMemo(() => {
@@ -242,7 +259,7 @@ export function SubmissionsClient({
   // back out of.
   React.useEffect(() => {
     setPage(1);
-  }, [submissions, term, institutionType, institutionId, standardId, sortKey, sortDir]);
+  }, [submissions, term, institutionType, institutionId, standardIds, sortKey, sortDir]);
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const clampedPage = Math.min(page, pageCount);
@@ -307,19 +324,49 @@ export function SubmissionsClient({
           </SelectContent>
         </Select>
 
-        <Select value={standardId} onValueChange={setStandardId}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Standard" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All standards</SelectItem>
-            {lookups.standards.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex h-9 w-[170px] items-center justify-between whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+            >
+              <span className="truncate text-left">
+                {standardIds.size === 0
+                  ? "Standard"
+                  : `${standardIds.size} standard${standardIds.size === 1 ? "" : "s"}`}
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64" align="start">
+            <p className="mb-2 text-[13px] font-semibold">Standard</p>
+            <div className="scrollbar-thin max-h-64 space-y-0.5 overflow-y-auto">
+              {lookups.standards.map((s) => (
+                <label
+                  key={s.id}
+                  className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[13px] hover:bg-accent"
+                >
+                  <Checkbox
+                    checked={standardIds.has(s.id)}
+                    onCheckedChange={(v) => toggleStandard(s.id, v === true)}
+                  />
+                  {s.label}
+                </label>
+              ))}
+            </div>
+            {standardIds.size > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-2 w-full"
+                onClick={() => setStandardIds(new Set())}
+              >
+                Clear standards
+              </Button>
+            )}
+          </PopoverContent>
+        </Popover>
 
         {hasActiveFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
