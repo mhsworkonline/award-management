@@ -62,7 +62,7 @@ import { formatDateTime } from "@/lib/utils";
 import { usePermissions } from "@/components/providers/permissions-provider";
 import { SALUTATIONS } from "@/lib/types";
 import { statusBadgeVariant } from "./submissions-client";
-import type { AuditLog, Board, Course, Lookups, PublicSubmissionRow } from "@/lib/types";
+import type { AuditLog, Board, Course, Lookups, PublicSubmissionRow, SubmissionStatus } from "@/lib/types";
 
 type DecisionKind = "approve" | "reject" | "doubtful";
 
@@ -112,10 +112,16 @@ export function SubmissionReviewSheet({
   submission,
   lookups,
   onOpenChange,
+  onDecided,
 }: {
   submission: PublicSubmissionRow | null;
   lookups: Lookups;
   onOpenChange: (open: boolean) => void;
+  /** Called the instant a decision succeeds, before router.refresh() (a real
+   *  server round trip) has any chance to come back — lets the table update
+   *  itself immediately from data already sitting in the browser instead of
+   *  the row visibly sitting stale for however long that refresh takes. */
+  onDecided?: (id: string, fromStatus: SubmissionStatus, toStatus: SubmissionStatus) => void;
 }) {
   const router = useRouter();
   const { can } = usePermissions();
@@ -475,13 +481,35 @@ export function SubmissionReviewSheet({
     toast.success(
       kind === "approve" ? "Approved — added to the roster" : kind === "reject" ? "Submission rejected" : "Marked doubtful",
     );
+    const toStatus: SubmissionStatus = kind === "approve" ? "approved" : kind === "reject" ? "rejected" : "doubtful";
+    onDecided?.(submission.id, submission.status, toStatus);
     router.refresh();
     onOpenChange(false);
   }
 
+  // Alt+A — same as clicking Approve: reveals the required note field
+  // rather than skipping it, so a reviewer moving fast still leaves a
+  // reason on record. Only fires from the default footer (no decision
+  // already in progress) and only when Approve itself would be clickable —
+  // same gating as the button. Once the note field is up, Ctrl/Cmd+Enter
+  // confirms it — the same "submit a slide-over form" shortcut used
+  // elsewhere in the app (see student-sheet.tsx), extended to this sheet's
+  // two-step decide flow.
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.altKey && e.key.toLowerCase() === "a" && !decisionKind && canApprove) {
+      e.preventDefault();
+      setDecisionKind("approve");
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && decisionKind && decisionNote.trim() && !deciding) {
+      e.preventDefault();
+      void handleSubmit((values) => onDecide(decisionKind, values))();
+    }
+  }
+
   return (
     <Sheet open={Boolean(submission)} onOpenChange={onOpenChange}>
-      <SheetContent side="center">
+      <SheetContent side="center" onKeyDown={onKeyDown}>
         {submission && (
           <form className="flex h-full flex-col">
             <SheetHeader className="relative">
@@ -1014,7 +1042,7 @@ export function SubmissionReviewSheet({
                           type="button"
                           onClick={() => setDecisionKind("approve")}
                           disabled={!canApprove}
-                          title={!canApprove ? "Resolve the custom institution/course first" : undefined}
+                          title={!canApprove ? "Resolve the custom institution/course first" : "Alt+A"}
                         >
                           <Check /> Approve
                         </Button>

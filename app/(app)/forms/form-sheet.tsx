@@ -27,9 +27,10 @@ import {
 import { Field } from "@/components/form/field";
 import { saveApplicationForm } from "@/lib/actions/application-forms";
 import { DEFAULT_FIELD_CONFIG } from "@/lib/types";
-import type { ApplicationFormFieldConfig, ApplicationFormRow, Lookups } from "@/lib/types";
+import type { ApplicationFormFieldConfig, ApplicationFormRow, FormType, Lookups } from "@/lib/types";
 
 type Values = {
+  form_type: FormType;
   title: string;
   title_gu: string;
   description: string;
@@ -37,6 +38,15 @@ type Values = {
   slug: string;
   academic_year_id: string;
 } & ApplicationFormFieldConfig;
+
+const TYPE_OPTIONS: { value: FormType; label: string; hint: string }[] = [
+  { value: "apply", label: "Application form", hint: "Students apply for an award through it — the /apply page." },
+  {
+    value: "confirm",
+    label: "Confirm your details",
+    hint: "Already-approved students check their data is correct — the /confirm page.",
+  },
+];
 
 const FIELD_TOGGLES: { key: keyof ApplicationFormFieldConfig; label: string; hint?: string }[] = [
   { key: "show_salutation", label: "Salutation (Mr. / Miss / …)" },
@@ -79,6 +89,7 @@ export function FormSheet({
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     defaultValues: {
+      form_type: "apply",
       title: "",
       title_gu: "",
       description: "",
@@ -90,6 +101,8 @@ export function FormSheet({
   });
 
   const title = watch("title");
+  const formType = watch("form_type");
+  const isConfirm = formType === "confirm";
 
   React.useEffect(() => {
     if (!open) return;
@@ -98,6 +111,7 @@ export function FormSheet({
     reset(
       form
         ? {
+            form_type: form.form_type,
             title: form.title,
             title_gu: form.title_gu ?? "",
             description: form.description ?? "",
@@ -108,6 +122,7 @@ export function FormSheet({
             ...form.field_config,
           }
         : {
+            form_type: "apply",
             title: "",
             title_gu: "",
             description: "",
@@ -130,6 +145,11 @@ export function FormSheet({
     const result = await saveApplicationForm({
       id: form?.id,
       ...rest,
+      // A confirm-type form has no use for these — blank them out rather
+      // than send along whatever the fields happened to hold (they're
+      // hidden, not cleared, when the type switches in the UI).
+      description: rest.form_type === "confirm" ? "" : rest.description,
+      description_gu: rest.form_type === "confirm" ? "" : rest.description_gu,
       field_config: { show_salutation, show_middle_name, show_roll_no, show_notes, show_attachments },
     });
     if (!result.ok) {
@@ -146,13 +166,41 @@ export function FormSheet({
       <SheetContent className="sm:max-w-md">
         <form onSubmit={handleSubmit(onSubmit)} className="flex h-full flex-col">
           <SheetHeader>
-            <SheetTitle>{isEdit ? "Edit form" : "New application form"}</SheetTitle>
+            <SheetTitle>
+              {isEdit ? `Edit ${isConfirm ? "confirm" : "application"} form` : "New form"}
+            </SheetTitle>
             <SheetDescription>
               A distinct, toggleable public link. Scoped to one academic year.
             </SheetDescription>
           </SheetHeader>
 
           <SheetBody className="space-y-5">
+            {!isEdit && (
+              <Field label="Type" required>
+                <div className="space-y-2">
+                  {TYPE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex cursor-pointer items-start gap-2.5 rounded-md border p-3 text-[13px] transition-colors ${
+                        formType === opt.value ? "border-primary bg-primary/5" : "hover:bg-accent"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        className="mt-0.5 h-3.5 w-3.5 accent-[hsl(var(--primary))]"
+                        checked={formType === opt.value}
+                        onChange={() => setValue("form_type", opt.value)}
+                      />
+                      <span>
+                        <span className="block font-medium">{opt.label}</span>
+                        <span className="block text-[12px] text-muted-foreground">{opt.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </Field>
+            )}
+
             <Field label="Title" htmlFor="title" required error={errors.title?.message}>
               <Input
                 id="title"
@@ -167,29 +215,33 @@ export function FormSheet({
               <Input id="title_gu" autoComplete="off" {...register("title_gu")} />
             </Field>
 
-            <Field
-              label="Description shown to applicants"
-              htmlFor="description"
-              hint="Optional — shown under the title on the public form. Left blank, nothing shows."
-            >
-              <Textarea
-                id="description"
-                rows={3}
-                placeholder="e.g. Fill in your details below — your institution will verify this before it's finalized."
-                {...register("description")}
-              />
-            </Field>
+            {!isConfirm && (
+              <>
+                <Field
+                  label="Description shown to applicants"
+                  htmlFor="description"
+                  hint="Optional — shown under the title on the public form. Left blank, nothing shows."
+                >
+                  <Textarea
+                    id="description"
+                    rows={3}
+                    placeholder="e.g. Fill in your details below — your institution will verify this before it's finalized."
+                    {...register("description")}
+                  />
+                </Field>
 
-            <Field label="Description (Gujarati)" htmlFor="description_gu" hint="Optional — shown under the English description.">
-              <Textarea id="description_gu" rows={3} {...register("description_gu")} />
-            </Field>
+                <Field label="Description (Gujarati)" htmlFor="description_gu" hint="Optional — shown under the English description.">
+                  <Textarea id="description_gu" rows={3} {...register("description_gu")} />
+                </Field>
+              </>
+            )}
 
             <Field
               label="Link slug"
               htmlFor="slug"
               required
               error={errors.slug?.message}
-              hint={`/apply/${watch("slug") || "…"}`}
+              hint={`/${isConfirm ? "confirm" : "apply"}/${watch("slug") || "…"}`}
             >
               <Input
                 id="slug"
@@ -222,20 +274,22 @@ export function FormSheet({
               <input type="hidden" {...register("academic_year_id", { required: "Required" })} />
             </Field>
 
-            <Field label="Fields shown on this form" hint="Name, email, contact number, photograph, institution, board/medium, standard/course and percentage-or-grade are always required — these are optional.">
-              <div className="space-y-2 rounded-md border p-3">
-                {FIELD_TOGGLES.map((f) => (
-                  <label key={f.key} className="flex cursor-pointer select-none items-center gap-2.5 text-[13px]">
-                    <input
-                      type="checkbox"
-                      className="h-3.5 w-3.5 rounded border-input accent-[hsl(var(--primary))]"
-                      {...register(f.key)}
-                    />
-                    {f.label}
-                  </label>
-                ))}
-              </div>
-            </Field>
+            {!isConfirm && (
+              <Field label="Fields shown on this form" hint="Name, email, contact number, photograph, institution, board/medium, standard/course and percentage-or-grade are always required — these are optional.">
+                <div className="space-y-2 rounded-md border p-3">
+                  {FIELD_TOGGLES.map((f) => (
+                    <label key={f.key} className="flex cursor-pointer select-none items-center gap-2.5 text-[13px]">
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 rounded border-input accent-[hsl(var(--primary))]"
+                        {...register(f.key)}
+                      />
+                      {f.label}
+                    </label>
+                  ))}
+                </div>
+              </Field>
+            )}
 
             {serverError && (
               <p className="rounded-md bg-destructive/10 px-3 py-2 text-[13px] font-medium text-destructive">

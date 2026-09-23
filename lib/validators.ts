@@ -36,8 +36,9 @@ const requiredContactNo = z
 // The public form only ever collects a mobile number, so unlike
 // requiredContactNo above (used where staff may need to enter other
 // formats — a landline, a number with an extension) this is strict:
-// exactly 10 digits, no spaces/dashes/letters.
-const indianMobileNo = z
+// exactly 10 digits, no spaces/dashes/letters. Exported for /confirm's
+// schema below, which authenticates against this same shape of number.
+export const indianMobileNo = z
   .string()
   .trim()
   .regex(/^\d{10}$/, "Enter a valid 10-digit mobile number");
@@ -498,6 +499,10 @@ export const applicationFormSchema = z.object({
   academic_year_id: uuid,
   is_enabled: z.boolean().default(true),
   field_config: applicationFormFieldConfigSchema.default({}),
+  // Only meaningful on create — saveApplicationForm ignores it on update
+  // (a form's type never changes after creation) rather than trusting
+  // whatever the edit form happens to submit for it.
+  form_type: z.enum(["apply", "confirm"]).default("apply"),
 });
 export type ApplicationFormInput = z.input<typeof applicationFormSchema>;
 
@@ -574,4 +579,32 @@ export const updateUserRoleSchema = z.object({
 export const resetUserPasswordSchema = z.object({
   id: uuid,
   password: z.string().min(8, "Password must be at least 8 characters").max(72),
+});
+
+// ---------------------------------------------------------------- /confirm
+
+/** The public /confirm page's "S{yy}-" + number field — accepts "1", "01"
+ *  or "001" as the same thing (parseInt strips the leading zeros, then
+ *  back to a string) so a student isn't blocked by not knowing whether
+ *  their code was zero-padded. */
+const referenceNumber = z
+  .string()
+  .trim()
+  .regex(/^\d+$/, "Enter the number from your code")
+  .transform((v) => String(parseInt(v, 10)));
+
+export const confirmLookupSchema = z.object({
+  reference_number: referenceNumber,
+  contact_no: indianMobileNo,
+});
+
+export const confirmSubmitSchema = z.object({
+  reference_number: referenceNumber,
+  contact_no: indianMobileNo,
+  note: z
+    .string()
+    .trim()
+    .max(1000, "Keep it under 1000 characters")
+    .optional()
+    .transform((v) => (v ? v : null)),
 });

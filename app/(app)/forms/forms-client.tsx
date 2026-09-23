@@ -43,8 +43,9 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
 
   React.useEffect(() => setOrigin(window.location.origin), []);
 
-  function copyLink(slug: string) {
-    navigator.clipboard?.writeText(`${origin}/apply/${slug}`).then(
+  function copyLink(form: ApplicationFormRow) {
+    const path = form.form_type === "confirm" ? "confirm" : "apply";
+    navigator.clipboard?.writeText(`${origin}/${path}/${form.slug}`).then(
       () => toast.success("Link copied"),
       () => {},
     );
@@ -64,7 +65,7 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
     <>
       <PageHeader
         title="Forms"
-        description="Public application links students can submit through — each one is independently trackable and can be turned off."
+        description="Public links students use — application forms and confirm-your-details pages. Each one is independently trackable and can be turned off."
         actions={
           canCreate && (
             <Button
@@ -83,11 +84,12 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[24%]">Title</TableHead>
-              <TableHead className="w-[20%]">Link</TableHead>
-              <TableHead className="w-[15%]">Academic year</TableHead>
-              <TableHead className="w-[12%] text-right">Submissions</TableHead>
-              <TableHead className="w-[13%]">Created</TableHead>
+              <TableHead className="w-[20%]">Title</TableHead>
+              <TableHead className="w-[10%]">Type</TableHead>
+              <TableHead className="w-[18%]">Link</TableHead>
+              <TableHead className="w-[13%]">Academic year</TableHead>
+              <TableHead className="w-[11%] text-right">Submissions</TableHead>
+              <TableHead className="w-[12%]">Created</TableHead>
               <TableHead className="w-[10%]">Status</TableHead>
               <TableHead className="w-[6%] text-right">
                 <span className="sr-only">Actions</span>
@@ -97,11 +99,11 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
           <TableBody>
             {forms.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7} className="border-b-0">
+                <TableCell colSpan={8} className="border-b-0">
                   <EmptyState
                     icon={FileEdit}
                     title="No forms yet"
-                    description="Create a public application link students can submit through."
+                    description="Create a public link — an application form students can submit through, or a confirm-your-details page."
                     action={
                       canCreate && (
                         <Button
@@ -118,17 +120,23 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
                 </TableCell>
               </TableRow>
             ) : (
-              forms.map((f) => (
+              forms.map((f) => {
+                const isConfirm = f.form_type === "confirm";
+                const path = isConfirm ? "confirm" : "apply";
+                return (
                 <TableRow key={f.id}>
                   <TableCell className="font-medium">{f.title}</TableCell>
                   <TableCell>
+                    <Badge variant={isConfirm ? "secondary" : "outline"}>{isConfirm ? "Confirm" : "Apply"}</Badge>
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center gap-1.5">
-                      <code className="truncate text-[12px] text-muted-foreground">/apply/{f.slug}</code>
-                      <Button variant="ghost" size="icon-sm" onClick={() => copyLink(f.slug)} aria-label="Copy link">
+                      <code className="truncate text-[12px] text-muted-foreground">/{path}/{f.slug}</code>
+                      <Button variant="ghost" size="icon-sm" onClick={() => copyLink(f)} aria-label="Copy link">
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon-sm" asChild aria-label="Open link">
-                        <Link href={`/apply/${f.slug}`} target="_blank" rel="noreferrer">
+                        <Link href={`/${path}/${f.slug}`} target="_blank" rel="noreferrer">
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
                       </Button>
@@ -136,7 +144,10 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
                   </TableCell>
                   <TableCell className="text-muted-foreground">{f.academic_years?.label ?? "—"}</TableCell>
                   <TableCell className="tabular text-right">
-                    <Link href={`/submissions?status=all`} className="font-medium text-primary hover:underline">
+                    <Link
+                      href={isConfirm ? "/confirmations" : "/submissions?status=all"}
+                      className="font-medium text-primary hover:underline"
+                    >
                       {f.submission_count ?? 0}
                     </Link>
                   </TableCell>
@@ -183,7 +194,8 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
                     )}
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>

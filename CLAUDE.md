@@ -173,4 +173,5 @@ configuration needed unless a custom domain gets attached later (`NEXT_PUBLIC_SI
 ## Keyboard
 
 `/` or `Ctrl/Cmd+K` focus search · `n` new student (on `/students`) · `Ctrl/Cmd+Enter` submit a
-slide-over form
+slide-over form · `Alt+A` approve (in the Submissions review sheet — reveals the required note
+field rather than skipping it, then `Ctrl/Cmd+Enter` confirms once the note's filled in)

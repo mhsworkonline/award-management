@@ -12,6 +12,7 @@ import type { ActionResult } from "@/lib/types";
 function revalidateAll() {
   revalidatePath("/forms");
   revalidatePath("/apply");
+  revalidatePath("/confirm");
 }
 
 export async function saveApplicationForm(raw: unknown): Promise<ActionResult<{ id: string }>> {
@@ -24,12 +25,15 @@ export async function saveApplicationForm(raw: unknown): Promise<ActionResult<{ 
     };
   }
 
-  const { id, ...values } = parsed.data;
+  const { id, form_type, ...values } = parsed.data;
 
   try {
     const { supabase, actor } = await requireUser();
 
     if (id) {
+      // form_type is create-only — a form's type never changes after
+      // creation, so an edit never touches it regardless of what the form
+      // submitted (see the schema's comment on form_type).
       const { data: before } = await supabase.from(T.applicationForms).select("*").eq("id", id).single();
       const { data, error } = await supabase
         .from(T.applicationForms)
@@ -57,7 +61,7 @@ export async function saveApplicationForm(raw: unknown): Promise<ActionResult<{ 
 
     const { data, error } = await supabase
       .from(T.applicationForms)
-      .insert({ ...values, org_id: ORG_ID, created_by: actor })
+      .insert({ ...values, form_type, org_id: ORG_ID, created_by: actor })
       .select()
       .single();
     if (error) {

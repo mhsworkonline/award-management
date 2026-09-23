@@ -33,6 +33,7 @@ export const T = {
   applicationForms: "am_application_forms",
   submissionAttachments: "am_submission_attachments",
   shortLinks: "am_short_links",
+  dataConfirmations: "am_data_confirmations",
 } as const;
 
 /** Storage bucket for public-application attachments — private, anon can only
@@ -83,6 +84,10 @@ export const FN = {
   getSubmissionLookups: "am_get_submission_lookups",
   findStudentByName: "am_find_student_by_name",
   submissionCounts: "am_submission_counts",
+  resolveConfirmForm: "am_resolve_confirm_form",
+  confirmLookup: "am_confirm_lookup",
+  submitDataConfirmation: "am_submit_data_confirmation",
+  listDataConfirmations: "am_list_data_confirmations",
 } as const;
 
 /** Logical entity name → physical table, for the config CRUD surface. */

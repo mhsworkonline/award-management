@@ -73,10 +73,24 @@ export async function listAcademicRecords(
   if (filters.q) {
     const term = filters.q.replace(/[%,]/g, " ").trim();
     if (term) {
-      query = query.or(
-        `first_name.ilike.%${term}%,middle_name.ilike.%${term}%,last_name.ilike.%${term}%,roll_no.ilike.%${term}%`,
-        { referencedTable: T.students },
-      );
+      // roll_no lives on am_academic_records itself, not am_students, so it
+      // can't join the name conditions inside one `.or()` scoped to the
+      // students embed (referencedTable applies to the whole or-string) —
+      // that was throwing "column am_students_1.roll_no does not exist".
+      // Resolved the same way the award_category_id filter below already
+      // does it: look up matching student ids first, then filter this
+      // query's own table by roll_no OR student_id in that list.
+      const matchedStudents = await supabase
+        .from(T.students)
+        .select("id")
+        .eq("org_id", ORG_ID)
+        .or(`first_name.ilike.%${term}%,middle_name.ilike.%${term}%,last_name.ilike.%${term}%`);
+      const studentIds = (matchedStudents.data ?? []).map((s) => s.id);
+
+      query =
+        studentIds.length > 0
+          ? query.or(`roll_no.ilike.%${term}%,student_id.in.(${studentIds.join(",")})`)
+          : query.ilike("roll_no", `%${term}%`);
     }
   }
 

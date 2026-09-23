@@ -135,6 +135,35 @@ export function SubmissionsClient({
 }) {
   const { setParams } = useQueryParams();
   const [active, setActive] = React.useState<PublicSubmissionRow | null>(null);
+  // Local, immediately-patchable copies of the server props — router.refresh()
+  // is a real server round trip (re-run the RPC, re-render, ship the RSC
+  // payload back), which has a latency floor no query speedup removes. Since
+  // the whole list is already sitting in the browser, a decision patches
+  // these directly (see handleDecided) so the table and tab counts update
+  // the instant the action resolves; the refresh still runs in the
+  // background afterward to reconcile anything this doesn't know about
+  // (reviewed_by's exact value, other reviewers' concurrent changes).
+  const [localSubmissions, setLocalSubmissions] = React.useState(submissions);
+  const [localCounts, setLocalCounts] = React.useState(counts);
+  React.useEffect(() => setLocalSubmissions(submissions), [submissions]);
+  React.useEffect(() => setLocalCounts(counts), [counts]);
+
+  function handleDecided(id: string, fromStatus: SubmissionStatus, toStatus: SubmissionStatus) {
+    setLocalSubmissions((prev) =>
+      // A status tab only ever shows rows matching it — a decision that
+      // moves a row out of the tab you're viewing removes it from view;
+      // "All" keeps every row, so it just updates the badge in place.
+      status !== "all" && toStatus !== status
+        ? prev.filter((s) => s.id !== id)
+        : prev.map((s) => (s.id === id ? { ...s, status: toStatus } : s)),
+    );
+    setLocalCounts((prev) => ({
+      ...prev,
+      [fromStatus]: Math.max(0, prev[fromStatus] - 1),
+      [toStatus]: prev[toStatus] + 1,
+    }));
+  }
+
   const [term, setTerm] = React.useState("");
   const [institutionType, setInstitutionType] = React.useState<"all" | "school" | "college">("all");
   // Empty set = no filter. Holds either standard ids or course ids (they're
@@ -175,7 +204,7 @@ export function SubmissionsClient({
   // text search runs on top of it — dropdown filters first (exact match),
   // then the token search (partial match) within whatever that leaves.
   const scoped = React.useMemo(() => {
-    return submissions.filter((s) => {
+    return localSubmissions.filter((s) => {
       if (institutionType !== "all") {
         const type = institutionTypeLabel(s) === "College" ? "college" : "school";
         if (type !== institutionType) return false;
@@ -187,7 +216,7 @@ export function SubmissionsClient({
       }
       return true;
     });
-  }, [submissions, institutionType, placementIds]);
+  }, [localSubmissions, institutionType, placementIds]);
 
   // One lowercase search string per row, built from the same values the
   // table displays (via the same label helpers), so anything you can see in a
@@ -259,7 +288,7 @@ export function SubmissionsClient({
   // back out of.
   React.useEffect(() => {
     setPage(1);
-  }, [submissions, term, institutionType, placementIds, sortKey, sortDir]);
+  }, [localSubmissions, term, institutionType, placementIds, sortKey, sortDir]);
 
   // What the popover filters by depends on the chosen institution type —
   // School shows Standards, College shows degrees/courses, "all" shows both.
@@ -283,11 +312,11 @@ export function SubmissionsClient({
       <div className="flex flex-wrap items-center gap-3">
         <Tabs value={status} onValueChange={(v) => setParams({ status: v }, { keepAllValue: true })}>
           <TabsList>
-            <TabsTrigger value="pending">Pending ({counts.pending})</TabsTrigger>
-            <TabsTrigger value="approved">Approved ({counts.approved})</TabsTrigger>
-            <TabsTrigger value="rejected">Rejected ({counts.rejected})</TabsTrigger>
-            <TabsTrigger value="doubtful">Doubtful ({counts.doubtful})</TabsTrigger>
-            <TabsTrigger value="all">All ({counts.all})</TabsTrigger>
+            <TabsTrigger value="pending">Pending ({localCounts.pending})</TabsTrigger>
+            <TabsTrigger value="approved">Approved ({localCounts.approved})</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected ({localCounts.rejected})</TabsTrigger>
+            <TabsTrigger value="doubtful">Doubtful ({localCounts.doubtful})</TabsTrigger>
+            <TabsTrigger value="all">All ({localCounts.all})</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -476,7 +505,7 @@ export function SubmissionsClient({
             {sorted.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={11} className="border-b-0">
-                  {submissions.length > 0 ? (
+                  {localSubmissions.length > 0 ? (
                     <EmptyState
                       icon={Inbox}
                       title="Nothing matches these filters"
@@ -622,7 +651,12 @@ export function SubmissionsClient({
         </div>
       </div>
 
-      <SubmissionReviewSheet submission={active} lookups={lookups} onOpenChange={(open) => !open && setActive(null)} />
+      <SubmissionReviewSheet
+        submission={active}
+        lookups={lookups}
+        onOpenChange={(open) => !open && setActive(null)}
+        onDecided={handleDecided}
+      />
     </>
   );
 }

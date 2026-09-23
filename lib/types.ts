@@ -347,6 +347,8 @@ export const DEFAULT_FIELD_CONFIG: ApplicationFormFieldConfig = {
   show_attachments: true,
 };
 
+export type FormType = "apply" | "confirm";
+
 export type ApplicationForm = {
   id: string;
   org_id: string;
@@ -358,6 +360,7 @@ export type ApplicationForm = {
   field_config: ApplicationFormFieldConfig;
   academic_year_id: string;
   is_enabled: boolean;
+  form_type: FormType;
   created_by: string | null;
   created_at: string;
 };
@@ -394,6 +397,61 @@ export type Organization = {
 export type PublicBranding = {
   app_name: string;
   logo_url: string | null;
+};
+
+// ---------------------------------------------------------------- confirm-your-details
+/** What am_resolve_confirm_form returns to the (unauthenticated) /confirm
+ *  page — a form_type='confirm' row of am_application_forms, same
+ *  resolution rule ResolvedForm/am_resolve_application_form already uses
+ *  for /apply (see 0041's comment). The "S{yy}-" reference-code prefix
+ *  isn't stored anywhere — it's derived from academicYear.label the same
+ *  way am_submit_public_application mints the codes in the first place
+ *  (see confirm-form.tsx). */
+export type ResolvedConfirmForm = {
+  id: string;
+  slug: string;
+  title: string;
+  titleGu: string | null;
+  is_enabled: boolean;
+  academicYear: { id: string; label: string };
+};
+
+/** What am_confirm_lookup returns on a match — just enough of the academic
+ *  record + student to show for confirmation, nothing else. Null (not an
+ *  error) on no match, from either a wrong code or a wrong phone number. */
+export type ConfirmLookupResult = {
+  academic_record_id: string;
+  salutation: string | null;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  email: string | null;
+  contact_no: string | null;
+  institution_name: string | null;
+  institution_type: "school" | "college" | null;
+  academic_year_label: string | null;
+  standard_label: string | null;
+  stream_name: string | null;
+  course_name: string | null;
+  course_structure_type: CourseStructure | null;
+  period_no: number | null;
+  percentage: number | null;
+  grade: string | null;
+  roll_no: string | null;
+};
+
+/** One row per confirm/correction submission — staff-facing list at
+ *  /confirmations. Never a direct edit to the roster; a note here is
+ *  something a reviewer reads and acts on by hand. */
+export type DataConfirmation = {
+  id: string;
+  org_id: string;
+  academic_record_id: string;
+  reference_code: string;
+  contact_no: string;
+  has_changes: boolean;
+  note: string | null;
+  created_at: string;
 };
 
 // ---------------------------------------------------------------- roles & permissions
