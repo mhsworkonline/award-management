@@ -44,7 +44,7 @@ const NAV_GROUPS = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: null },
       { href: "/submissions", label: "Submissions", icon: Inbox, module: "submissions" },
-      { href: "/confirmations", label: "Confirmations", icon: UserCheck, module: "submissions" },
+      { href: "/confirmations", label: "Confirmations", icon: UserCheck, module: "confirmations" },
       { href: "/forms", label: "Forms", icon: FileEdit, module: "forms" },
       { href: "/students", label: "Students", icon: Users, module: "students" },
       { href: "/institutions", label: "Institutions", icon: School, module: "institutions" },

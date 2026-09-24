@@ -32,13 +32,12 @@ export async function getConfirmationSubmission(
 }
 
 /** Staff clearing a confirmation/correction once it's been read and acted
- *  on. Gated on Submissions:Delete — same module the whole /confirmations
- *  surface piggybacks on (see 0040's comment for why there's no dedicated
- *  module). `.select("id")` re-confirms a row was actually removed —
- *  RLS deletes zero rows without an error when it blocks one. */
+ *  on. Gated on Confirmations:Delete. `.select("id")` re-confirms a row was
+ *  actually removed — RLS deletes zero rows without an error when it blocks
+ *  one. */
 export async function deleteDataConfirmation(id: string): Promise<ActionResult<null>> {
   try {
-    const { supabase, actor } = await requirePermission("submissions", "delete");
+    const { supabase, actor } = await requirePermission("confirmations", "delete");
 
     const { data: before } = await supabase.from(T.dataConfirmations).select("*").eq("id", id).maybeSingle();
     if (!before) return { ok: false, error: "Not found" };

@@ -35,7 +35,10 @@ import type { Lookups, PublicSubmissionRow } from "@/lib/types";
 export function ConfirmationsClient({ rows, lookups }: { rows: ConfirmationRow[]; lookups: Lookups }) {
   const router = useRouter();
   const { can } = usePermissions();
-  const canDelete = can("submissions", "delete");
+  const canDelete = can("confirmations", "delete");
+  // The sheet a row opens is the full application, so it needs Submissions:
+  // Read on top of Confirmations — without it the row is just read-only text.
+  const canOpen = can("submissions", "read");
   const [term, setTerm] = React.useState("");
   const [pendingDelete, setPendingDelete] = React.useState<ConfirmationRow | null>(null);
 
@@ -74,7 +77,11 @@ export function ConfirmationsClient({ rows, lookups }: { rows: ConfirmationRow[]
     <>
       <PageHeader
         title="Confirmations"
-        description="What students told us when confirming their details at /confirm — click one to open and edit their application directly."
+        description={
+          canOpen
+            ? "What students told us when confirming their details at /confirm — click one to open and edit their application directly."
+            : "What students told us when confirming their details at /confirm."
+        }
       />
 
       <div className="flex flex-wrap items-center gap-2">
@@ -122,8 +129,8 @@ export function ConfirmationsClient({ rows, lookups }: { rows: ConfirmationRow[]
               filtered.map((r) => (
                 <TableRow
                   key={r.id}
-                  className={`cursor-pointer ${loadingId === r.id ? "opacity-60" : ""}`}
-                  onClick={() => void openRow(r)}
+                  className={`${canOpen ? "cursor-pointer" : ""} ${loadingId === r.id ? "opacity-60" : ""}`}
+                  onClick={canOpen ? () => void openRow(r) : undefined}
                 >
                   <TableCell className="max-w-0">
                     <span className="block truncate font-medium" title={r.student_name}>

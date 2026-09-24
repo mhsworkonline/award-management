@@ -469,6 +469,7 @@ export const MODULES = [
   { value: "gifts", label: "Gift Inventory" },
   { value: "distribution", label: "Distribution" },
   { value: "submissions", label: "Submissions" },
+  { value: "confirmations", label: "Confirmations" },
   { value: "forms", label: "Forms" },
   { value: "reports", label: "Reports" },
   { value: "settings", label: "Settings" },
