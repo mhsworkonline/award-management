@@ -1,9 +1,10 @@
 "use server";
 
-import { createHash } from "node:crypto";
 import { cache } from "react";
-import { headers } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { ipHash } from "@/lib/ip-hash";
+import { createClient, requirePermission } from "@/lib/supabase/server";
+import { writeAudit } from "@/lib/audit";
 import { ORG_ID } from "@/lib/constants";
 import { buildPublicApplicationSchema } from "@/lib/validators";
 import { FN, T } from "@/lib/tables";
@@ -43,18 +44,6 @@ export async function getPublicFormOptions(): Promise<ActionResult<PublicFormOpt
   }
 }
 
-/** A rough per-device fingerprint for rate limiting, not an identity — the raw
- *  IP is never stored, only a salted hash of it. */
-function ipHash() {
-  try {
-    const h = headers();
-    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "unknown";
-    return createHash("sha256").update(`am-apply-salt:${ip}`).digest("hex").slice(0, 32);
-  } catch {
-    return null;
-  }
-}
-
 /** Unauthenticated submit for the public /apply form. Writes go exclusively
  *  through am_submit_public_application (SECURITY DEFINER) — there is no RLS
  *  policy letting anon insert into am_public_submissions directly. Returns the
@@ -62,6 +51,43 @@ function ipHash() {
 export async function submitPublicApplication(
   formId: string,
   raw: unknown,
+): Promise<ActionResult<{ id: string; referenceCode: string }>> {
+  return submitApplication(formId, raw, false);
+}
+
+/** Staff entering an application on a student's behalf from the private
+ *  /forms/[id]/add page — same form, same validation, same Pending
+ *  submission, but works even when the form is closed to the public. */
+export async function submitStaffApplication(
+  formId: string,
+  raw: unknown,
+): Promise<ActionResult<{ id: string; referenceCode: string }>> {
+  let actor: string;
+  try {
+    ({ actor } = await requirePermission("submissions", "create"));
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+
+  const result = await submitApplication(formId, raw, true);
+  if (result.ok) {
+    await writeAudit(createClient(), {
+      entity: "public_submissions",
+      entityId: result.data.id,
+      action: "create",
+      actor,
+      diff: { added_by_staff: true, reference_code: result.data.referenceCode },
+    });
+    revalidatePath("/submissions");
+    revalidatePath("/forms");
+  }
+  return result;
+}
+
+async function submitApplication(
+  formId: string,
+  raw: unknown,
+  staff: boolean,
 ): Promise<ActionResult<{ id: string; referenceCode: string }>> {
   // Which Standards require a Stream (Std 11/12) isn't static — looked up
   // fresh so the schema's "Select your stream" check attaches to the
@@ -116,8 +142,9 @@ export async function submitPublicApplication(
       p_percentage: parsed.data.percentage,
       p_grade: parsed.data.grade,
       p_notes: parsed.data.notes,
-      p_ip_hash: ipHash(),
+      p_ip_hash: staff ? null : ipHash(),
       p_photo_path: parsed.data.photo_path,
+      p_staff: staff,
     });
 
     if (error) return { ok: false, error: friendlyPublicError(error.message) };

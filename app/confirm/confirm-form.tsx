@@ -1,7 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { AlertCircle, Check, CheckCircle2, Loader2, MessageSquareText, RotateCcw, Search, Trophy } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  Loader2,
+  MessageSquareText,
+  RotateCcw,
+  Search,
+  Trophy,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,16 +22,6 @@ import { Field } from "@/components/form/field";
 import { lookupConfirmRecord, submitDataConfirmation } from "@/lib/actions/data-confirmation";
 import { CONFIRM_LABELS as L, CONFIRM_MESSAGES as M, CONFIRM_MESSAGES_BLOCK as C } from "@/lib/confirm-form-i18n";
 import type { ConfirmLookupResult, PublicBranding, ResolvedConfirmForm } from "@/lib/types";
-
-/** The "S{yy}-" prefix a reference code was minted with — same derivation
- *  the server side uses (lib/actions/data-confirmation.ts prefixFor),
- *  duplicated here only for instant display; the actual lookup/submit
- *  calls always re-derive it server-side, never trusting this one. */
-function prefixFor(yearLabel: string) {
-  const match = yearLabel.match(/\d{4}/);
-  const short = match ? match[0].slice(-2) : String(new Date().getFullYear()).slice(-2);
-  return `S${short}-`;
-}
 
 /** Same nested-hero-banner header apply-form.tsx uses (Trophy watermark,
  *  logo-or-fallback, app name) so both public pages read as one family —
@@ -62,52 +63,62 @@ function Item({ label, value }: { label: string; value: string | null | undefine
   );
 }
 
+function fullName(r: ConfirmLookupResult) {
+  return [r.salutation, r.first_name, r.middle_name, r.last_name].filter(Boolean).join(" ");
+}
+
 export function ConfirmForm({ form, branding }: { form: ResolvedConfirmForm; branding: PublicBranding }) {
-  const prefix = prefixFor(form.academicYear.label);
-  const [referenceNumber, setReferenceNumber] = React.useState("");
   const [contactNo, setContactNo] = React.useState("");
   const [looking, setLooking] = React.useState(false);
   const [lookupError, setLookupError] = React.useState<string | null>(null);
   const [notFound, setNotFound] = React.useState(false);
-  const [result, setResult] = React.useState<ConfirmLookupResult | null>(null);
+  // Every student registered under the typed number — usually one, but
+  // siblings often share a parent's number.
+  const [results, setResults] = React.useState<ConfirmLookupResult[] | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [doneIds, setDoneIds] = React.useState<Set<string>>(new Set());
 
   const [note, setNote] = React.useState("");
   const [sending, setSending] = React.useState<"confirm" | "correction" | null>(null);
   const [sentKind, setSentKind] = React.useState<"confirm" | "correction" | null>(null);
+
+  const multiple = (results?.length ?? 0) > 1;
+  const selected = results
+    ? results.length === 1
+      ? results[0]
+      : (results.find((r) => r.academic_record_id === selectedId) ?? null)
+    : null;
 
   async function onLookup(e: React.FormEvent) {
     e.preventDefault();
     setLookupError(null);
     setNotFound(false);
 
-    if (!/^\d+$/.test(referenceNumber.trim())) {
-      setLookupError(M.referenceNumberInvalid);
-      return;
-    }
     if (!/^\d{10}$/.test(contactNo.trim())) {
       setLookupError(M.contactNoInvalid);
       return;
     }
 
     setLooking(true);
-    const res = await lookupConfirmRecord({ reference_number: referenceNumber, contact_no: contactNo }, form.slug);
+    const res = await lookupConfirmRecord({ contact_no: contactNo }, form.slug);
     setLooking(false);
 
     if (!res.ok) {
       setLookupError(res.error);
       return;
     }
-    if (!res.data) {
+    if (res.data.length === 0) {
       setNotFound(true);
       return;
     }
-    setResult(res.data);
+    setResults(res.data);
   }
 
   async function send(hasChanges: boolean) {
+    if (!selected) return;
     setSending(hasChanges ? "correction" : "confirm");
     const res = await submitDataConfirmation(
-      { reference_number: referenceNumber, contact_no: contactNo, note },
+      { academic_record_id: selected.academic_record_id, contact_no: contactNo, note },
       hasChanges,
       form.slug,
     );
@@ -117,13 +128,24 @@ export function ConfirmForm({ form, branding }: { form: ResolvedConfirmForm; bra
       toast.error(res.error);
       return;
     }
-    setSentKind(hasChanges ? "correction" : "confirm");
+
+    if (multiple) {
+      // Back to the list with this one ticked off, so the next sibling is one
+      // tap away instead of a fresh lookup.
+      setDoneIds((prev) => new Set(prev).add(selected.academic_record_id));
+      setSelectedId(null);
+      setNote("");
+      toast.success(hasChanges ? C.correctionEn : C.confirmedEn);
+    } else {
+      setSentKind(hasChanges ? "correction" : "confirm");
+    }
   }
 
   function checkAnother() {
-    setReferenceNumber("");
     setContactNo("");
-    setResult(null);
+    setResults(null);
+    setSelectedId(null);
+    setDoneIds(new Set());
     setNotFound(false);
     setLookupError(null);
     setNote("");
@@ -153,9 +175,9 @@ export function ConfirmForm({ form, branding }: { form: ResolvedConfirmForm; bra
     <Card className="overflow-hidden">
       <Header branding={branding} form={form} />
       <CardContent className="space-y-5 p-5 sm:p-6">
-        {!result ? (
-          // pb-[45vh] below the fields (mobile only) — this form is just two
-          // short fields, so the page is barely taller than the viewport;
+        {!results ? (
+          // pb-[45vh] below the fields (mobile only) — this form is just one
+          // short field, so the page is barely taller than the viewport;
           // with nothing to scroll, the browser can't bring a focused field
           // above the on-screen keyboard (worse once the phone number
           // field's own autofill suggestion strip eats into that space
@@ -165,26 +187,10 @@ export function ConfirmForm({ form, branding }: { form: ResolvedConfirmForm; bra
           <form onSubmit={onLookup} className="space-y-4 pb-[45vh] sm:pb-0">
             <p className="text-[13px] leading-relaxed text-muted-foreground">{L.pageIntro}</p>
 
-            <Field label={L.referenceNumber} htmlFor="reference_number" required>
-              <div className="flex items-center gap-2">
-                <span className="flex h-9 shrink-0 items-center rounded-md border border-input bg-muted/50 px-3 font-mono text-[13px] font-medium text-muted-foreground">
-                  {prefix}
-                </span>
-                <Input
-                  id="reference_number"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="241"
-                  value={referenceNumber}
-                  onChange={(e) => setReferenceNumber(e.target.value.replace(/\D/g, ""))}
-                  className="font-mono"
-                />
-              </div>
-            </Field>
-
             <Field label={L.contactNo} htmlFor="contact_no" required>
               <Input
                 id="contact_no"
+                type="tel"
                 inputMode="numeric"
                 autoComplete="tel"
                 maxLength={10}
@@ -206,21 +212,76 @@ export function ConfirmForm({ form, branding }: { form: ResolvedConfirmForm; bra
               {looking ? M.lookingUp : L.lookupSubmit}
             </Button>
           </form>
+        ) : !selected ? (
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <p className="text-[15px] font-semibold">{M.studentsFound(results.length)}</p>
+              <p className="text-[13px] text-muted-foreground">{L.chooseStudent}</p>
+            </div>
+
+            <ul className="space-y-2.5">
+              {results.map((r) => {
+                const isDone = doneIds.has(r.academic_record_id);
+                return (
+                  <li key={r.academic_record_id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(r.academic_record_id);
+                        setNote("");
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg border bg-card px-4 py-3.5 text-left transition-colors hover:border-primary/50 hover:bg-primary/[0.04]"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[15px] font-semibold">{fullName(r)}</span>
+                        <span className="block truncate text-[13px] text-muted-foreground">
+                          {[r.institution_name, placementFor(r)].filter((v) => v && v !== "—").join(" · ") || "—"}
+                        </span>
+                      </span>
+                      {isDone ? (
+                        <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-success">
+                          <CheckCircle2 className="h-4 w-4" /> {L.done}
+                        </span>
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <button
+              type="button"
+              onClick={checkAnother}
+              className="w-full text-center text-[13px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+            >
+              {M.checkAnother}
+            </button>
+          </div>
         ) : (
           <div className="space-y-5">
+            {multiple && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedId(null);
+                  setNote("");
+                }}
+                className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" /> {L.backToList}
+              </button>
+            )}
+
             <dl className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <Item
-                label={L.name}
-                value={[result.salutation, result.first_name, result.middle_name, result.last_name]
-                  .filter(Boolean)
-                  .join(" ")}
-              />
-              <Item label={L.institution} value={result.institution_name} />
-              <Item label={L.standardOrCourse} value={placementFor(result)} />
-              <Item label={L.percentage} value={result.percentage !== null ? `${result.percentage}%` : null} />
-              <Item label={L.grade} value={result.grade} />
-              <Item label={L.contactOnFile} value={result.contact_no} />
-              <Item label={L.email} value={result.email} />
+              <Item label={L.name} value={fullName(selected)} />
+              <Item label={L.institution} value={selected.institution_name} />
+              <Item label={L.standardOrCourse} value={placementFor(selected)} />
+              <Item label={L.percentage} value={selected.percentage !== null ? `${selected.percentage}%` : null} />
+              <Item label={L.grade} value={selected.grade} />
+              <Item label={L.contactOnFile} value={selected.contact_no} />
+              <Item label={L.email} value={selected.email} />
             </dl>
 
             <Field label={L.correctionLabel} htmlFor="note" hint={L.correctionHint}>
@@ -255,13 +316,15 @@ export function ConfirmForm({ form, branding }: { form: ResolvedConfirmForm; bra
               </Button>
             </div>
 
-            <button
-              type="button"
-              onClick={checkAnother}
-              className="w-full text-center text-[13px] font-medium text-muted-foreground hover:text-foreground hover:underline"
-            >
-              {M.checkAnother}
-            </button>
+            {!multiple && (
+              <button
+                type="button"
+                onClick={checkAnother}
+                className="w-full text-center text-[13px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {M.checkAnother}
+              </button>
+            )}
           </div>
         )}
       </CardContent>

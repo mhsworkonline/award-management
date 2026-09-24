@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Copy, ExternalLink, FileEdit, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, FileEdit, Lock, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,7 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
   const canCreate = can("forms", "create");
   const canUpdate = can("forms", "update");
   const canDelete = can("forms", "delete");
+  const canAddStudent = can("submissions", "create");
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ApplicationFormRow | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<ApplicationFormRow | null>(null);
@@ -141,6 +142,14 @@ export function FormsClient({ forms, lookups }: { forms: ApplicationFormRow[]; l
                         </Link>
                       </Button>
                     </div>
+                    {!isConfirm && canAddStudent && (
+                      <Link
+                        href={`/forms/${f.id}/add`}
+                        className="mt-1 inline-flex items-center gap-1 text-[12px] font-medium text-primary hover:underline"
+                      >
+                        <Lock className="h-3 w-3" /> Add student (private)
+                      </Link>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{f.academic_years?.label ?? "—"}</TableCell>
                   <TableCell className="tabular text-right">

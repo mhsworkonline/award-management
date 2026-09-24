@@ -6,6 +6,7 @@ import { ORG_ID } from "@/lib/constants";
 import { confirmLookupSchema, confirmSubmitSchema } from "@/lib/validators";
 import { FN } from "@/lib/tables";
 import { message } from "@/lib/actions/crud";
+import { ipHash } from "@/lib/ip-hash";
 import type { ActionResult, ConfirmLookupResult, ResolvedConfirmForm } from "@/lib/types";
 
 /** Unauthenticated — resolves which form_type='confirm' row of
@@ -29,25 +30,15 @@ export const resolveConfirmForm = cache(async (slug?: string): Promise<ActionRes
   }
 });
 
-/** The "S{yy}-" prefix a reference code was minted with for a given academic
- *  year label — same derivation am_submit_public_application uses (0031),
- *  just done in TS since the resolved form already carries the year label. */
-function prefixFor(yearLabel: string) {
-  const match = yearLabel.match(/\d{4}/);
-  const short = match ? match[0].slice(-2) : String(new Date().getFullYear()).slice(-2);
-  return `S${short}-`;
-}
-
-/** Unauthenticated — looks up one approved application by reference number
- *  + registered mobile number, both required to match (see am_confirm_lookup).
- *  Returns null data (not an error) when nothing matches, so the page can't
- *  tell a visitor whether it was the number or the phone that was wrong.
- *  `slug` re-resolves the same confirm form the page rendered, rather than
- *  trusting a client-supplied prefix, for whichever year that form is for. */
+/** Unauthenticated — lists every approved student of the form's academic year
+ *  registered under this mobile number (see am_confirm_lookup_by_mobile);
+ *  siblings sharing a parent's number all come back. An empty list (not an
+ *  error) means no match. `slug` re-resolves the same confirm form the page
+ *  rendered, rather than trusting a client-supplied year. */
 export async function lookupConfirmRecord(
   raw: unknown,
   slug?: string,
-): Promise<ActionResult<ConfirmLookupResult | null>> {
+): Promise<ActionResult<ConfirmLookupResult[]>> {
   const parsed = confirmLookupSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -60,24 +51,27 @@ export async function lookupConfirmRecord(
   try {
     const supabase = createClient();
     const form = await resolveConfirmForm(slug);
-    if (!form.ok || !form.data) return { ok: true, data: null };
+    if (!form.ok || !form.data || !form.data.is_enabled) {
+      return { ok: false, error: "Confirmations aren't open right now." };
+    }
 
     const { data, error } = await supabase.rpc(FN.confirmLookup, {
       p_org_id: ORG_ID,
-      p_reference_code: `${prefixFor(form.data.academicYear.label)}${parsed.data.reference_number}`,
+      p_year_id: form.data.academicYear.id,
       p_contact_no: parsed.data.contact_no,
+      p_ip_hash: ipHash(),
     });
     if (error) return { ok: false, error: friendlyPublicError(error.message) };
-    return { ok: true, data: (data as ConfirmLookupResult | null) ?? null };
+    return { ok: true, data: (data as ConfirmLookupResult[] | null) ?? [] };
   } catch (e) {
     return { ok: false, error: message(e) };
   }
 }
 
-/** Unauthenticated — records a confirmation or correction. Re-verifies the
- *  code+phone match itself (am_submit_data_confirmation calls
- *  am_confirm_lookup internally) rather than trusting the lookup the page
- *  already did, the same "never trust the client already checked" posture
+/** Unauthenticated — records a confirmation or correction for one student.
+ *  am_submit_data_confirmation re-verifies that the record belongs to this
+ *  year and mobile number rather than trusting the lookup the page already
+ *  did, the same "never trust the client already checked" posture
  *  submitPublicApplication takes. */
 export async function submitDataConfirmation(
   raw: unknown,
@@ -102,7 +96,8 @@ export async function submitDataConfirmation(
 
     const { data, error } = await supabase.rpc(FN.submitDataConfirmation, {
       p_org_id: ORG_ID,
-      p_reference_code: `${prefixFor(form.data.academicYear.label)}${parsed.data.reference_number}`,
+      p_year_id: form.data.academicYear.id,
+      p_academic_record_id: parsed.data.academic_record_id,
       p_contact_no: parsed.data.contact_no,
       p_note: parsed.data.note,
       p_has_changes: hasChanges,

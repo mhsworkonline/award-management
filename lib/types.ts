@@ -416,9 +416,10 @@ export type ResolvedConfirmForm = {
   academicYear: { id: string; label: string };
 };
 
-/** What am_confirm_lookup returns on a match — just enough of the academic
- *  record + student to show for confirmation, nothing else. Null (not an
- *  error) on no match, from either a wrong code or a wrong phone number. */
+/** One student returned by am_confirm_lookup_by_mobile — just enough of the
+ *  academic record + student to show for confirmation, nothing else. The
+ *  lookup returns an array of these (empty on no match); the email arrives
+ *  already partially masked. */
 export type ConfirmLookupResult = {
   academic_record_id: string;
   salutation: string | null;
@@ -437,7 +438,6 @@ export type ConfirmLookupResult = {
   period_no: number | null;
   percentage: number | null;
   grade: string | null;
-  roll_no: string | null;
 };
 
 /** One row per confirm/correction submission — staff-facing list at

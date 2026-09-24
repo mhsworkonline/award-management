@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/select";
 import { Field, FieldGrid } from "@/components/form/field";
 import { PercentInput } from "@/components/form/percent-input";
-import { registerAttachment, submitPublicApplication } from "@/lib/actions/public-application";
+import Link from "next/link";
+import { registerAttachment, submitPublicApplication, submitStaffApplication } from "@/lib/actions/public-application";
 import { OTHER_OPTION_VALUE as OTHER } from "@/lib/validators";
 import { createClient } from "@/lib/supabase/client";
 import { ATTACHMENTS_BUCKET, STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
@@ -104,10 +105,15 @@ export function ApplyForm({
   form,
   options,
   branding,
+  staff = false,
 }: {
   form: NonNullable<ResolvedForm>;
   options: PublicFormOptions;
   branding: PublicBranding;
+  /** Staff entering on a student's behalf from the private /forms/[id]/add
+   *  page — submits through the permission-gated action (works even while
+   *  the form is closed to the public) and shows staff-facing wording. */
+  staff?: boolean;
 }) {
   const fieldConfig = form.fieldConfig;
   const nameFieldCount = 2 + (fieldConfig.show_salutation ? 1 : 0) + (fieldConfig.show_middle_name ? 1 : 0);
@@ -437,7 +443,8 @@ export function ApplyForm({
       return;
     }
 
-    const result = await submitPublicApplication(form.id, {
+    const submit = staff ? submitStaffApplication : submitPublicApplication;
+    const result = await submit(form.id, {
       salutation: values.salutation || undefined,
       first_name: values.first_name,
       middle_name: values.middle_name || undefined,
@@ -520,23 +527,40 @@ export function ApplyForm({
             <Copy className="h-5 w-5 text-primary/70" />
           </button>
 
-          <p className="text-xl font-semibold">{M.applicationReceived}</p>
-          <p className="max-w-sm text-[15px] text-muted-foreground">{APPLY_CONFIRMATION.en}</p>
-          <p className="max-w-sm text-[13px] text-muted-foreground/75">{APPLY_CONFIRMATION.gu}</p>
+          {staff ? (
+            <>
+              <p className="text-xl font-semibold">Application added</p>
+              <p className="max-w-sm text-[15px] text-muted-foreground">
+                It&apos;s in Submissions as Pending, ready to review and approve.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xl font-semibold">{M.applicationReceived}</p>
+              <p className="max-w-sm text-[15px] text-muted-foreground">{APPLY_CONFIRMATION.en}</p>
+              <p className="max-w-sm text-[13px] text-muted-foreground/75">{APPLY_CONFIRMATION.gu}</p>
+            </>
+          )}
 
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={() => {
-              setReferenceCode(null);
-              setInstType("");
-              setAttachments([]);
-              removePhoto();
-              reset(EMPTY);
-            }}
-          >
-            {M.submitAnother}
-          </Button>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant={staff ? "default" : "outline"}
+              onClick={() => {
+                setReferenceCode(null);
+                setInstType("");
+                setAttachments([]);
+                removePhoto();
+                reset(EMPTY);
+              }}
+            >
+              {staff ? "Add another student" : M.submitAnother}
+            </Button>
+            {staff && (
+              <Button variant="outline" asChild>
+                <Link href="/submissions">Go to Submissions</Link>
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     );

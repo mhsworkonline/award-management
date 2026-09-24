@@ -86,7 +86,7 @@ export const FN = {
   findStudentByName: "am_find_student_by_name",
   submissionCounts: "am_submission_counts",
   resolveConfirmForm: "am_resolve_confirm_form",
-  confirmLookup: "am_confirm_lookup",
+  confirmLookup: "am_confirm_lookup_by_mobile",
   submitDataConfirmation: "am_submit_data_confirmation",
   listDataConfirmations: "am_list_data_confirmations",
 } as const;

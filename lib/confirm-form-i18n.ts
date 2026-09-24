@@ -13,10 +13,12 @@ function bl(en: string, gu: string) {
 export const CONFIRM_LABELS = {
   pageTitle: bl("Confirm your details", "તમારી વિગતો ચકાસો"),
   pageIntro: bl(
-    "Enter the number from your code and your registered mobile number to see your details on file.",
-    "તમારા કોડનો નંબર અને તમારો નોંધાયેલ મોબાઇલ નંબર દાખલ કરી તમારી નોંધાયેલ વિગતો જુઓ.",
+    "Enter your registered mobile number to see the details we have on file.",
+    "અમારી પાસે નોંધાયેલ વિગતો જોવા તમારો નોંધાયેલ મોબાઇલ નંબર દાખલ કરો.",
   ),
-  referenceNumber: bl("Your number", "તમારો નંબર"),
+  chooseStudent: bl("Tap a name to check their details.", "વિગતો ચકાસવા નામ પર ટેપ કરો."),
+  backToList: bl("Back to list", "યાદી પર પાછા જાઓ"),
+  done: bl("Done", "થઈ ગયું"),
   contactNo: bl("Registered mobile number", "નોંધાયેલ મોબાઇલ નંબર"),
   lookupSubmit: bl("Show my details", "મારી વિગતો બતાવો"),
   name: bl("Name", "નામ"),
@@ -24,7 +26,6 @@ export const CONFIRM_LABELS = {
   standardOrCourse: bl("Standard / Course", "ધોરણ / અભ્યાસક્રમ"),
   percentage: bl("Percentage", "ટકાવારી"),
   grade: bl("Grade", "ગ્રેડ"),
-  rollNo: bl("Roll / GR no", "રોલ / જીઆર નંબર"),
   email: bl("Email", "ઈમેલ"),
   contactOnFile: bl("Mobile number", "મોબાઇલ નંબર"),
   correctionLabel: bl("Anything need correcting?", "કંઈ સુધારવાની જરૂર છે?"),
@@ -52,15 +53,16 @@ export const CONFIRM_MESSAGES_BLOCK = {
 
 export const CONFIRM_MESSAGES = {
   required: bl("Required", "જરૂરી"),
-  referenceNumberInvalid: bl("Enter the number from your code", "તમારા કોડનો નંબર દાખલ કરો"),
   contactNoInvalid: bl("Enter a valid 10-digit mobile number", "માન્ય ૧૦-અંકનો મોબાઇલ નંબર દાખલ કરો"),
   notFound: bl(
-    "We couldn't find a match — check your number and mobile number and try again.",
-    "કોઈ મેળ મળ્યો નહીં — તમારો નંબર અને મોબાઇલ નંબર તપાસી ફરી પ્રયાસ કરો.",
+    "We couldn't find this number. It may be registered under a different number — please contact us.",
+    "આ નંબર મળ્યો નહીં. તે અલગ નંબર પર નોંધાયેલ હોઈ શકે છે — કૃપા કરીને અમારો સંપર્ક કરો.",
   ),
+  studentsFound: (n: number) =>
+    bl(`${n} students found for this number`, `આ નંબર પર ${n} વિદ્યાર્થી મળ્યા`),
   lookingUp: bl("Checking…", "તપાસ થઈ રહી છે…"),
   sending: bl("Sending…", "મોકલાઈ રહ્યું છે…"),
-  checkAnother: bl("Check another record", "બીજો રેકોર્ડ તપાસો"),
+  checkAnother: bl("Check another number", "બીજો નંબર તપાસો"),
   notOpen: bl(
     "Confirmations aren't open right now. Please check back later.",
     "હાલમાં ચકાસણી ખુલ્લી નથી. કૃપા કરીને પછીથી તપાસો.",

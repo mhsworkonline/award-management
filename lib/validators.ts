@@ -583,23 +583,13 @@ export const resetUserPasswordSchema = z.object({
 
 // ---------------------------------------------------------------- /confirm
 
-/** The public /confirm page's "S{yy}-" + number field — accepts "1", "01"
- *  or "001" as the same thing (parseInt strips the leading zeros, then
- *  back to a string) so a student isn't blocked by not knowing whether
- *  their code was zero-padded. */
-const referenceNumber = z
-  .string()
-  .trim()
-  .regex(/^\d+$/, "Enter the number from your code")
-  .transform((v) => String(parseInt(v, 10)));
-
+/** The public /confirm page is looked up by registered mobile number alone. */
 export const confirmLookupSchema = z.object({
-  reference_number: referenceNumber,
   contact_no: indianMobileNo,
 });
 
 export const confirmSubmitSchema = z.object({
-  reference_number: referenceNumber,
+  academic_record_id: z.string().uuid(),
   contact_no: indianMobileNo,
   note: z
     .string()
