@@ -183,7 +183,7 @@ type ApprovedSubmissionRaw = {
   institutions: { name: string; type: string } | null;
   boards: { name: string } | null;
   mediums: { name: string } | null;
-  standards: { label: string; level: number } | null;
+  standards: { id: string; label: string; level: number } | null;
   streams: { name: string } | null;
   courses: { name: string; structure_type: "year" | "semester" } | null;
 };
@@ -203,7 +203,7 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
        institutions:am_institutions ( name, type ),
        boards:am_boards ( name ),
        mediums:am_mediums ( name ),
-       standards:am_standards ( label, level ),
+       standards:am_standards ( id, label, level ),
        streams:am_streams ( name ),
        courses:am_courses ( name, structure_type )`,
     )
@@ -272,8 +272,9 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
 
     return {
       code: s.reference_code,
+      // No salutation on purpose: "Mr." vs "Miss" made the names start at
+      // uneven widths and read as noise in an alphabetical list.
       applicant: studentFullName({
-        salutation: s.salutation,
         first_name: s.first_name,
         middle_name: s.middle_name,
         last_name: s.last_name,
@@ -294,6 +295,8 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
       sort_name: [s.first_name, s.last_name, s.middle_name].filter(Boolean).join(" "),
       sort_percentage: s.percentage,
       institution_id: s.institution_id,
+      standard_id: s.standards?.id ?? null,
+      standard_level: s.standards?.level ?? null,
       // Same rule as the Submissions table's Type column.
       institution_type: s.institutions
         ? s.institutions.type === "college"

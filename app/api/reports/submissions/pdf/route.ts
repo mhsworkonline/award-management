@@ -5,8 +5,10 @@ import {
   SUBMISSION_LIST_COLUMNS,
   filterByInstitutionTypes,
   filterByInstitutions,
+  filterByStandards,
   parseInstitutionFilter,
   parseInstitutionTypes,
+  parseStandardFilter,
   parseSubmissionSort,
   type SubmissionColumnKey,
 } from "@/lib/data/submission-report-columns";
@@ -35,6 +37,7 @@ export async function GET(request: Request) {
     const sort = parseSubmissionSort(url.searchParams.get("sort"));
     const institutionKeys = parseInstitutionFilter(url.searchParams.get("institutions"));
     const institutionTypes = parseInstitutionTypes(url.searchParams.get("types"));
+    const standardIds = parseStandardFilter(url.searchParams.get("standards"));
     const includeLogo = url.searchParams.get("logo") === "on";
     const customTitle = url.searchParams.get("title")?.trim() || null;
 
@@ -44,7 +47,10 @@ export async function GET(request: Request) {
       resolveReportBranding(supabase, includeLogo),
     ]);
 
-    const rows = filterByInstitutions(filterByInstitutionTypes(allRows, institutionTypes), institutionKeys);
+    const rows = filterByStandards(
+      filterByInstitutions(filterByInstitutionTypes(allRows, institutionTypes), institutionKeys),
+      standardIds,
+    );
 
     const buffer = await renderSubmissionsListPdf({
       rows,

@@ -35,6 +35,9 @@ export type SubmissionListRow = {
    *  see institutionKey(). */
   institution_id: string | null;
   institution_type: InstitutionTypeKey;
+  /** Null for colleges and for applicants with no matched Standard. */
+  standard_id: string | null;
+  standard_level: number | null;
 };
 
 /** The subset of SubmissionListRow keys that are actual selectable columns —
@@ -42,7 +45,7 @@ export type SubmissionListRow = {
  *  are not exportable. */
 export type SubmissionColumnKey = Exclude<
   keyof SubmissionListRow,
-  "group_label" | "group_sort" | "sort_name" | "sort_percentage" | "institution_id" | "institution_type"
+  "group_label" | "group_sort" | "sort_name" | "sort_percentage" | "institution_id" | "institution_type" | "standard_id" | "standard_level"
 >;
 
 export const INSTITUTION_TYPE_OPTIONS = [
@@ -68,6 +71,32 @@ export function filterByInstitutionTypes(
   types: ReadonlySet<InstitutionTypeKey>,
 ): SubmissionListRow[] {
   return types.size === 0 ? rows : rows.filter((r) => types.has(r.institution_type));
+}
+
+/** Distinct Standards present in `rows`, in level order (Play Group first),
+ *  for the Standard checklist. Labels come from group_label, which is the
+ *  Standard's label whenever standard_id is set. */
+export function standardOptions(rows: SubmissionListRow[]): { id: string; label: string; level: number }[] {
+  const map = new Map<string, { id: string; label: string; level: number }>();
+  for (const r of rows) {
+    if (r.standard_id && r.standard_level !== null) {
+      map.set(r.standard_id, { id: r.standard_id, label: r.group_label, level: r.standard_level });
+    }
+  }
+  return [...map.values()].sort((a, b) => a.level - b.level);
+}
+
+/** An empty selection means "all Standards". */
+export function filterByStandards(rows: SubmissionListRow[], ids: ReadonlySet<string>): SubmissionListRow[] {
+  return ids.size === 0 ? rows : rows.filter((r) => r.standard_id !== null && ids.has(r.standard_id));
+}
+
+export function parseStandardFilter(raw: string | null | undefined): Set<string> {
+  return new Set((raw ?? "").split(",").filter(Boolean));
+}
+
+export function serializeStandardFilter(ids: ReadonlySet<string>): string {
+  return [...ids].join(",");
 }
 
 /** Human-readable form for the Excel "Filters" sheet. */

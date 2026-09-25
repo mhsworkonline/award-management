@@ -23,11 +23,14 @@ import {
   SUBMISSION_SORT_OPTIONS,
   filterByInstitutionTypes,
   filterByInstitutions,
+  filterByStandards,
   groupSubmissionRows,
   institutionOptions,
   parseSubmissionSort,
   serializeInstitutionFilter,
   serializeInstitutionTypes,
+  serializeStandardFilter,
+  standardOptions,
   type InstitutionTypeKey,
   type SubmissionColumnKey,
   type SubmissionListRow,
@@ -68,7 +71,28 @@ export function SubmissionsReport({
     () => new Set([...institutionKeys].filter((k) => institutions.some((i) => i.key === k))),
     [institutionKeys, institutions],
   );
-  const rows = React.useMemo(() => filterByInstitutions(typeRows, activeKeys), [typeRows, activeKeys]);
+  // Standards only make sense for schools, so the picker (and its filter)
+  // exists only while School is the one type selected.
+  const schoolOnly = types.size === 1 && types.has("school");
+  const [standardIds, setStandardIds] = React.useState<Set<string>>(() => new Set());
+  const standards = React.useMemo(() => standardOptions(typeRows), [typeRows]);
+  const activeStandards = React.useMemo(
+    () => (schoolOnly ? new Set([...standardIds].filter((id) => standards.some((s) => s.id === id))) : new Set<string>()),
+    [schoolOnly, standardIds, standards],
+  );
+  const rows = React.useMemo(
+    () => filterByStandards(filterByInstitutions(typeRows, activeKeys), activeStandards),
+    [typeRows, activeKeys, activeStandards],
+  );
+
+  function toggleStandard(id: string, value: boolean) {
+    setStandardIds((prev) => {
+      const next = new Set(prev);
+      if (value) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
 
   function toggleInstitution(key: string, value: boolean) {
     setInstitutionKeys((prev) => {
@@ -97,7 +121,8 @@ export function SubmissionsReport({
   const columnsParam = activeColumns.map((c) => c.key).join(",");
   const institutionParam =
     (types.size > 0 ? `&types=${serializeInstitutionTypes(types)}` : "") +
-    (activeKeys.size > 0 ? `&institutions=${encodeURIComponent(serializeInstitutionFilter(activeKeys))}` : "");
+    (activeKeys.size > 0 ? `&institutions=${encodeURIComponent(serializeInstitutionFilter(activeKeys))}` : "") +
+    (activeStandards.size > 0 ? `&standards=${serializeStandardFilter(activeStandards)}` : "");
   const excelQuery = yearId
     ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sort}${institutionParam}`
     : "";
@@ -241,6 +266,51 @@ export function SubmissionsReport({
                     </PopoverContent>
                   </Popover>
                 </div>
+                {schoolOnly && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[13px] font-medium">Standards to include</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                        >
+                          <span className="truncate text-left">
+                            {activeStandards.size === 0 ? "All standards" : `${activeStandards.size} selected`}
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-64" align="start">
+                        <div className="scrollbar-thin max-h-64 space-y-0.5 overflow-y-auto">
+                          {standards.map((s) => (
+                            <label
+                              key={s.id}
+                              className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[13px] hover:bg-accent"
+                            >
+                              <Checkbox
+                                checked={activeStandards.has(s.id)}
+                                onCheckedChange={(v) => toggleStandard(s.id, v === true)}
+                              />
+                              <span className="truncate">{s.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {activeStandards.size > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="mt-2 w-full"
+                            onClick={() => setStandardIds(new Set())}
+                          >
+                            Clear — include all
+                          </Button>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[13px] font-medium">Sort students within each Standard / course by</span>
                   <Select value={sort} onValueChange={(v) => setSort(parseSubmissionSort(v))}>

@@ -8,10 +8,13 @@ import {
   describeInstitutionTypes,
   filterByInstitutionTypes,
   filterByInstitutions,
+  filterByStandards,
   groupSubmissionRows,
   institutionOptions,
   parseInstitutionFilter,
   parseInstitutionTypes,
+  parseStandardFilter,
+  standardOptions,
   parseSubmissionSort,
   type SubmissionColumnKey,
 } from "@/lib/data/submission-report-columns";
@@ -38,12 +41,16 @@ export async function GET(request: Request) {
     const sort = parseSubmissionSort(url.searchParams.get("sort"));
     const institutionKeys = parseInstitutionFilter(url.searchParams.get("institutions"));
     const institutionTypes = parseInstitutionTypes(url.searchParams.get("types"));
+    const standardIds = parseStandardFilter(url.searchParams.get("standards"));
 
     const [allRows, year] = await Promise.all([
       getApprovedSubmissionsList(academicYearId),
       supabase.from(T.academicYears).select("label").eq("id", academicYearId).maybeSingle(),
     ]);
-    const rows = filterByInstitutions(filterByInstitutionTypes(allRows, institutionTypes), institutionKeys);
+    const rows = filterByStandards(
+      filterByInstitutions(filterByInstitutionTypes(allRows, institutionTypes), institutionKeys),
+      standardIds,
+    );
 
     const labels = new Map(SUBMISSION_LIST_COLUMNS.map((c) => [c.key, c.label]));
 
@@ -77,6 +84,14 @@ export async function GET(request: Request) {
     meta.addRow(["Academic year", year.data?.label ?? "—"]);
     meta.addRow(["Scope", "Approved applications only"]);
     meta.addRow(["Institution types", describeInstitutionTypes(institutionTypes)]);
+    meta.addRow([
+      "Standards",
+      standardIds.size === 0
+        ? "All"
+        : standardOptions(rows)
+            .map((o) => o.label)
+            .join(", "),
+    ]);
     meta.addRow([
       "Institutions",
       institutionKeys.size === 0

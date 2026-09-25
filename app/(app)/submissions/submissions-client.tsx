@@ -74,6 +74,12 @@ function DateTimeLines({ value }: { value: string }) {
 }
 /** Same "college if there's a course, school otherwise" fallback the review
  *  sheet uses for an unresolved "Other" institution that has no `.type` yet. */
+/** Filter identity for an institution: its id, or — for one the applicant
+ *  typed in ("Other") — its lowercased name, since those have no id. */
+function institutionKey(s: PublicSubmissionRow): string {
+  return s.institution_id ?? `other:${institutionLabel(s).toLowerCase()}`;
+}
+
 function institutionTypeLabel(s: PublicSubmissionRow): "School" | "College" {
   if (s.institutions) return s.institutions.type === "college" ? "College" : "School";
   return s.course_id || s.other_course_name ? "College" : "School";
@@ -171,6 +177,9 @@ export function SubmissionsClient({
   // institutionType: School shows Standards (Playgroup–12th), College shows
   // degrees/courses, and "all" shows both lists together.
   const [placementIds, setPlacementIds] = React.useState<Set<string>>(new Set());
+  // Empty set = no filter. Keys come from institutionKey().
+  const [institutionKeys, setInstitutionKeys] = React.useState<Set<string>>(new Set());
+  const [institutionSearch, setInstitutionSearch] = React.useState("");
 
   const [sortKey, setSortKey] = React.useState<SortKey>("submitted");
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
@@ -185,6 +194,34 @@ export function SubmissionsClient({
       return next;
     });
   }
+
+  function toggleInstitution(key: string, checked: boolean) {
+    setInstitutionKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
+
+  // Institutions to pick from: the ones present in the rows currently loaded
+  // (i.e. this tab), narrowed by the institution type — so every option
+  // actually returns something. Selections that fall out of this list (a tab
+  // switch, a type change) stop applying instead of silently hiding rows.
+  const institutionOptions = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of localSubmissions) {
+      if (institutionType !== "all" && (institutionTypeLabel(s) === "College" ? "college" : "school") !== institutionType) continue;
+      map.set(institutionKey(s), institutionLabel(s));
+    }
+    return [...map.entries()]
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [localSubmissions, institutionType]);
+  const activeInstitutionKeys = React.useMemo(
+    () => new Set([...institutionKeys].filter((k) => institutionOptions.some((o) => o.key === k))),
+    [institutionKeys, institutionOptions],
+  );
 
   function changeInstitutionType(value: "all" | "school" | "college") {
     setInstitutionType(value);
@@ -214,9 +251,10 @@ export function SubmissionsClient({
         const matchesCourse = Boolean(s.course_id && placementIds.has(s.course_id));
         if (!matchesStandard && !matchesCourse) return false;
       }
+      if (activeInstitutionKeys.size > 0 && !activeInstitutionKeys.has(institutionKey(s))) return false;
       return true;
     });
-  }, [localSubmissions, institutionType, placementIds]);
+  }, [localSubmissions, institutionType, placementIds, activeInstitutionKeys]);
 
   // One lowercase search string per row, built from the same values the
   // table displays (via the same label helpers), so anything you can see in a
@@ -259,10 +297,11 @@ export function SubmissionsClient({
     return searchable.filter(({ text }) => tokens.every((t) => text.includes(t))).map(({ s }) => s);
   }, [scoped, searchable, term]);
 
-  const hasActiveFilters = institutionType !== "all" || placementIds.size > 0;
+  const hasActiveFilters = institutionType !== "all" || placementIds.size > 0 || activeInstitutionKeys.size > 0;
   function clearFilters() {
     setInstitutionType("all");
     setPlacementIds(new Set());
+    setInstitutionKeys(new Set());
   }
 
   const sorted = React.useMemo(() => {
@@ -288,7 +327,7 @@ export function SubmissionsClient({
   // back out of.
   React.useEffect(() => {
     setPage(1);
-  }, [localSubmissions, term, institutionType, placementIds, sortKey, sortDir]);
+  }, [localSubmissions, term, institutionType, placementIds, activeInstitutionKeys, sortKey, sortDir]);
 
   // What the popover filters by depends on the chosen institution type —
   // School shows Standards, College shows degrees/courses, "all" shows both.
@@ -423,6 +462,62 @@ export function SubmissionsClient({
                 size="sm"
                 className="mt-2 w-full"
                 onClick={() => setPlacementIds(new Set())}
+              >
+                Clear
+              </Button>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        <Popover onOpenChange={(open) => !open && setInstitutionSearch("")}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex h-9 w-[170px] items-center justify-between whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+            >
+              <span className="truncate text-left">
+                {activeInstitutionKeys.size === 0 ? "Institution" : `${activeInstitutionKeys.size} selected`}
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72" align="start">
+            <p className="mb-2 text-[13px] font-semibold">Institution</p>
+            <Input
+              value={institutionSearch}
+              onChange={(e) => setInstitutionSearch(e.target.value)}
+              placeholder="Search institutions…"
+              className="mb-2 h-8"
+              aria-label="Search institutions"
+            />
+            <div className="scrollbar-thin max-h-64 space-y-0.5 overflow-y-auto">
+              {institutionOptions
+                .filter((o) => o.name.toLowerCase().includes(institutionSearch.trim().toLowerCase()))
+                .map((o) => (
+                  <label
+                    key={o.key}
+                    className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[13px] hover:bg-accent"
+                  >
+                    <Checkbox
+                      checked={activeInstitutionKeys.has(o.key)}
+                      onCheckedChange={(v) => toggleInstitution(o.key, v === true)}
+                    />
+                    <span className="truncate" title={o.name}>
+                      {o.name}
+                    </span>
+                  </label>
+                ))}
+              {institutionOptions.length === 0 && (
+                <p className="px-1.5 py-2 text-[13px] text-muted-foreground">No institutions in this view.</p>
+              )}
+            </div>
+            {activeInstitutionKeys.size > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-2 w-full"
+                onClick={() => setInstitutionKeys(new Set())}
               >
                 Clear
               </Button>
