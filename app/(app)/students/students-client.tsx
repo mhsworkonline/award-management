@@ -51,6 +51,7 @@ export function StudentsClient({
   size,
   lookups,
   defaultYearId,
+  yearDefault,
   exportQuery,
 }: {
   rows: AcademicRecordRow[];
@@ -59,6 +60,7 @@ export function StudentsClient({
   size: number;
   lookups: Lookups;
   defaultYearId: string | null;
+  yearDefault: string | null;
   exportQuery: string;
 }) {
   const router = useRouter();
@@ -107,6 +109,7 @@ export function StudentsClient({
 
       <FilterBar
         lookups={lookups}
+        yearDefault={yearDefault}
         advanced={[
           "institution_id",
           "institution_type",
@@ -120,20 +123,35 @@ export function StudentsClient({
       />
 
       <TableWrap className="max-h-[calc(100vh-300px)]">
-        <Table>
+        <Table className="min-w-[1000px]">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[21%]">Student</TableHead>
-              <TableHead className="w-[15%]">Father</TableHead>
-              <TableHead className="w-[19%]">Institution</TableHead>
-              <TableHead className="w-[11%]">Std / Course</TableHead>
+              <TableHead className="w-[19%]">
+                <SortHeader column="student" isDefault>
+                  Student
+                </SortHeader>
+              </TableHead>
+              <TableHead className="w-[13%]">
+                <SortHeader column="father">Father</SortHeader>
+              </TableHead>
+              <TableHead className="w-[17%]">
+                <SortHeader column="institution">Institution</SortHeader>
+              </TableHead>
+              <TableHead className="w-[10%]">
+                <SortHeader column="placement">Std / Course</SortHeader>
+              </TableHead>
               <TableHead className="w-[8%]">
+                <SortHeader column="year">Year</SortHeader>
+              </TableHead>
+              <TableHead className="w-[7%]">
                 <SortHeader column="roll_no">Roll no</SortHeader>
               </TableHead>
-              <TableHead className="w-[8%]">
+              <TableHead className="w-[7%]">
                 <SortHeader column="percentage">%</SortHeader>
               </TableHead>
-              <TableHead className="w-[14%]">Awards</TableHead>
+              <TableHead className="w-[15%]">
+                <SortHeader column="awards">Awards</SortHeader>
+              </TableHead>
               <TableHead className="w-[4%] text-right">
                 <span className="sr-only">Actions</span>
               </TableHead>
@@ -143,7 +161,7 @@ export function StudentsClient({
           <TableBody>
             {rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={8} className="border-b-0">
+                <TableCell colSpan={9} className="border-b-0">
                   <EmptyState
                     icon={Users}
                     title="No students found"
@@ -183,6 +201,9 @@ export function StudentsClient({
                   </TableCell>
                   <TableCell onClick={() => setDetail(record)}>
                     <Badge variant="secondary">{placementLabel(record)}</Badge>
+                  </TableCell>
+                  <TableCell onClick={() => setDetail(record)} className="text-muted-foreground">
+                    {record.academic_years?.label ?? "—"}
                   </TableCell>
                   <TableCell onClick={() => setDetail(record)} className="tabular text-muted-foreground">
                     {record.roll_no || "—"}

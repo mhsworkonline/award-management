@@ -5,7 +5,14 @@ import { getApprovedSubmissionsList } from "@/lib/data/submission-reports";
 import {
   DEFAULT_SUBMISSION_LIST_COLUMNS,
   SUBMISSION_LIST_COLUMNS,
+  describeInstitutionTypes,
+  filterByInstitutionTypes,
+  filterByInstitutions,
   groupSubmissionRows,
+  institutionOptions,
+  parseInstitutionFilter,
+  parseInstitutionTypes,
+  parseSubmissionSort,
   type SubmissionColumnKey,
 } from "@/lib/data/submission-report-columns";
 import { T } from "@/lib/tables";
@@ -28,11 +35,15 @@ export async function GET(request: Request) {
     const academicYearId = url.searchParams.get("academic_year_id");
     if (!academicYearId) return new Response("Missing academic_year_id", { status: 400 });
     const columns = parseColumns(url);
+    const sort = parseSubmissionSort(url.searchParams.get("sort"));
+    const institutionKeys = parseInstitutionFilter(url.searchParams.get("institutions"));
+    const institutionTypes = parseInstitutionTypes(url.searchParams.get("types"));
 
-    const [rows, year] = await Promise.all([
+    const [allRows, year] = await Promise.all([
       getApprovedSubmissionsList(academicYearId),
       supabase.from(T.academicYears).select("label").eq("id", academicYearId).maybeSingle(),
     ]);
+    const rows = filterByInstitutions(filterByInstitutionTypes(allRows, institutionTypes), institutionKeys);
 
     const labels = new Map(SUBMISSION_LIST_COLUMNS.map((c) => [c.key, c.label]));
 
@@ -49,7 +60,7 @@ export async function GET(request: Request) {
     // One section per Standard/course — a bold, filled divider row ahead of
     // each group's students, same grouping as the preview table and the PDF.
     const GROUP_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F3F7" } };
-    for (const group of groupSubmissionRows(rows)) {
+    for (const group of groupSubmissionRows(rows, sort)) {
       const groupRow = sheet.addRow([`${group.label} (${group.rows.length})`]);
       const lastColumn = Math.max(columns.length, 1);
       sheet.mergeCells(groupRow.number, 1, groupRow.number, lastColumn);
@@ -65,6 +76,15 @@ export async function GET(request: Request) {
     const meta = wb.addWorksheet("Filters");
     meta.addRow(["Academic year", year.data?.label ?? "—"]);
     meta.addRow(["Scope", "Approved applications only"]);
+    meta.addRow(["Institution types", describeInstitutionTypes(institutionTypes)]);
+    meta.addRow([
+      "Institutions",
+      institutionKeys.size === 0
+        ? "All"
+        : institutionOptions(rows)
+            .map((o) => o.name)
+            .join(", "),
+    ]);
     meta.addRow(["Row count", rows.length]);
     meta.getColumn(1).font = { bold: true };
     meta.getColumn(1).width = 20;

@@ -16,10 +16,12 @@ export default async function StudentsPage({
   const lookups = await getLookups();
 
   const filters = parseFilters(searchParams);
-  if (!filters.academic_year_id) {
-    const active = activeYearId(lookups);
-    if (active) filters.academic_year_id = active;
-  }
+  // No year in the URL → the active year, except while searching: a search
+  // should find the student wherever they are, so it spans every year unless
+  // one is picked. An explicit "All years" arrives as `academic_year_id=all`
+  // (parseFilters drops it), which must not fall back to the active year.
+  const yearDefault = searchParams.academic_year_id || filters.q ? null : activeYearId(lookups);
+  if (!filters.academic_year_id && yearDefault) filters.academic_year_id = yearDefault;
 
   const { rows, total, page, size } = await listAcademicRecords(filters);
 
@@ -38,6 +40,7 @@ export default async function StudentsPage({
       size={size}
       lookups={lookups}
       defaultYearId={filters.academic_year_id ?? activeYearId(lookups)}
+      yearDefault={yearDefault}
       exportQuery={exportParams.toString() ? `?${exportParams.toString()}` : ""}
     />
   );

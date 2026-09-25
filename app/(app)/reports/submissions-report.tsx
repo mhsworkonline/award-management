@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FileDown, FileText, ListChecks, Printer } from "lucide-react";
+import { ChevronDown, FileDown, FileText, ListChecks, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,17 +18,30 @@ import {
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import {
   DEFAULT_SUBMISSION_LIST_COLUMNS,
+  DEFAULT_SUBMISSION_SORT,
   SUBMISSION_LIST_COLUMNS,
+  SUBMISSION_SORT_OPTIONS,
+  filterByInstitutionTypes,
+  filterByInstitutions,
   groupSubmissionRows,
+  institutionOptions,
+  parseSubmissionSort,
+  serializeInstitutionFilter,
+  serializeInstitutionTypes,
+  type InstitutionTypeKey,
   type SubmissionColumnKey,
   type SubmissionListRow,
+  type SubmissionSortKey,
 } from "@/lib/data/submission-report-columns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Lookups } from "@/lib/types";
 import { YearSelect } from "./year-select";
 import { PdfTitleLogoFields } from "./pdf-title-logo-fields";
+import { InstitutionTypeFilter } from "./institution-type-filter";
 
 export function SubmissionsReport({
-  rows,
+  rows: allRows,
   lookups,
   yearId,
   hasLogo,
@@ -41,6 +54,30 @@ export function SubmissionsReport({
   const [checked, setChecked] = React.useState<Set<SubmissionColumnKey>>(
     () => new Set(DEFAULT_SUBMISSION_LIST_COLUMNS),
   );
+  const [sort, setSort] = React.useState<SubmissionSortKey>(DEFAULT_SUBMISSION_SORT);
+  // Empty = every institution.
+  const [institutionKeys, setInstitutionKeys] = React.useState<Set<string>>(() => new Set());
+
+  // Empty = every type. Narrows both the institution checklist below and the rows.
+  const [types, setTypes] = React.useState<Set<InstitutionTypeKey>>(() => new Set());
+  const typeRows = React.useMemo(() => filterByInstitutionTypes(allRows, types), [allRows, types]);
+
+  const institutions = React.useMemo(() => institutionOptions(typeRows), [typeRows]);
+  // Drop selections that no longer exist (e.g. after switching academic year).
+  const activeKeys = React.useMemo(
+    () => new Set([...institutionKeys].filter((k) => institutions.some((i) => i.key === k))),
+    [institutionKeys, institutions],
+  );
+  const rows = React.useMemo(() => filterByInstitutions(typeRows, activeKeys), [typeRows, activeKeys]);
+
+  function toggleInstitution(key: string, value: boolean) {
+    setInstitutionKeys((prev) => {
+      const next = new Set(prev);
+      if (value) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }
   const [title, setTitle] = React.useState("");
   const [includeLogo, setIncludeLogo] = React.useState(true);
 
@@ -58,11 +95,14 @@ export function SubmissionsReport({
   }
 
   const columnsParam = activeColumns.map((c) => c.key).join(",");
+  const institutionParam =
+    (types.size > 0 ? `&types=${serializeInstitutionTypes(types)}` : "") +
+    (activeKeys.size > 0 ? `&institutions=${encodeURIComponent(serializeInstitutionFilter(activeKeys))}` : "");
   const excelQuery = yearId
-    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}`
+    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sort}${institutionParam}`
     : "";
   const pdfQuery = yearId
-    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&logo=${
+    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sort}${institutionParam}&logo=${
         includeLogo && hasLogo ? "on" : "off"
       }${title.trim() ? `&title=${encodeURIComponent(title.trim())}` : ""}`
     : "";
@@ -70,7 +110,7 @@ export function SubmissionsReport({
 
   // Grouped for preview the same way the exports group — one section per
   // Standard/course — capped to the first 500 rows total across groups.
-  const groups = groupSubmissionRows(rows);
+  const groups = groupSubmissionRows(rows, sort);
   let remaining = 500;
   const previewGroups = groups
     .map((g) => {
@@ -111,7 +151,12 @@ export function SubmissionsReport({
 
       <div className="flex flex-wrap items-center gap-2">
         <YearSelect lookups={lookups} />
-        {yearId && <Badge variant="secondary">{rows.length} approved applications</Badge>}
+        {yearId && (
+          <Badge variant="secondary">
+            {rows.length}
+            {rows.length !== allRows.length && ` of ${allRows.length}`} approved applications
+          </Badge>
+        )}
       </div>
 
       {!yearId ? (
@@ -151,6 +196,67 @@ export function SubmissionsReport({
                 {activeColumns.length === 0 && (
                   <p className="mt-3 text-[13px] text-warning">Select at least one column to preview or export.</p>
                 )}
+                <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-2">
+                <InstitutionTypeFilter value={types} onChange={setTypes} />
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-medium">Institutions to include</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background hover:bg-accent/50 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1"
+                      >
+                        <span className="truncate text-left">
+                          {activeKeys.size === 0 ? "All institutions" : `${activeKeys.size} selected`}
+                        </span>
+                        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-64" align="start">
+                      <div className="scrollbar-thin max-h-64 space-y-0.5 overflow-y-auto">
+                        {institutions.map((i) => (
+                          <label
+                            key={i.key}
+                            className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-[13px] hover:bg-accent"
+                          >
+                            <Checkbox
+                              checked={activeKeys.has(i.key)}
+                              onCheckedChange={(v) => toggleInstitution(i.key, v === true)}
+                            />
+                            <span className="truncate">{i.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {activeKeys.size > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="mt-2 w-full"
+                          onClick={() => setInstitutionKeys(new Set())}
+                        >
+                          Clear — include all
+                        </Button>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[13px] font-medium">Sort students within each Standard / course by</span>
+                  <Select value={sort} onValueChange={(v) => setSort(parseSubmissionSort(v))}>
+                    <SelectTrigger aria-label="Sort students by">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUBMISSION_SORT_OPTIONS.map((o) => (
+                        <SelectItem key={o.key} value={o.key}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -239,7 +345,7 @@ export function SubmissionsReport({
             <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
               <FileText className="h-4 w-4" />
               Previewing the first 500 of {rows.length.toLocaleString("en-IN")} rows. The PDF and Excel
-              export contain every approved application for this year.
+              export contain every application matching the selected institution types and institutions.
             </p>
           )}
         </>

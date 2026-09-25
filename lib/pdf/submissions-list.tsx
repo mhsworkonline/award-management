@@ -14,6 +14,7 @@ import {
   groupSubmissionRows,
   type SubmissionColumnKey,
   type SubmissionListRow,
+  type SubmissionSortKey,
 } from "@/lib/data/submission-report-columns";
 
 const styles = StyleSheet.create({
@@ -78,6 +79,7 @@ const COLUMN_WEIGHT: Record<SubmissionColumnKey, number> = {
 export type SubmissionsListPdfProps = {
   rows: SubmissionListRow[];
   columns: SubmissionColumnKey[];
+  sort: SubmissionSortKey;
   academicYearLabel: string;
   organizationName: string;
   /** Public URL of a raster (PNG/JPG/WEBP) logo, or null to omit it. */
@@ -90,6 +92,7 @@ export type SubmissionsListPdfProps = {
 export function SubmissionsListPdf({
   rows,
   columns,
+  sort,
   academicYearLabel,
   organizationName,
   logoUrl,
@@ -98,7 +101,7 @@ export function SubmissionsListPdf({
   const labels = new Map(SUBMISSION_LIST_COLUMNS.map((c) => [c.key, c.label]));
   const totalWeight = columns.reduce((sum, key) => sum + (COLUMN_WEIGHT[key] ?? 1), 0) || 1;
   const widthOf = (key: SubmissionColumnKey) => `${((COLUMN_WEIGHT[key] ?? 1) / totalWeight) * 100}%`;
-  const groups = groupSubmissionRows(rows);
+  const groups = groupSubmissionRows(rows, sort);
 
   return (
     <Document title={customTitle || "Approved Applications"} author={organizationName} subject={academicYearLabel}>

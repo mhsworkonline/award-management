@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { requireUser } from "@/lib/supabase/server";
 import { autoWidth, styleHeader } from "@/lib/excel/workbook";
 import { getApplicationsByStandard } from "@/lib/data/submission-reports";
+import { describeInstitutionTypes, parseInstitutionTypes } from "@/lib/data/submission-report-columns";
 import { T } from "@/lib/tables";
 
 export const maxDuration = 60;
@@ -14,8 +15,10 @@ export async function GET(request: Request) {
     const academicYearId = url.searchParams.get("academic_year_id");
     if (!academicYearId) return new Response("Missing academic_year_id", { status: 400 });
 
+    const institutionTypes = parseInstitutionTypes(url.searchParams.get("types"));
+
     const [report, year] = await Promise.all([
-      getApplicationsByStandard(academicYearId),
+      getApplicationsByStandard(academicYearId, institutionTypes),
       supabase.from(T.academicYears).select("label").eq("id", academicYearId).maybeSingle(),
     ]);
     const yearLabel = year.data?.label ?? "—";
@@ -55,6 +58,7 @@ export async function GET(request: Request) {
     const meta = wb.addWorksheet("Filters");
     meta.addRow(["Academic year", yearLabel]);
     meta.addRow(["Scope", "Approved applications only"]);
+    meta.addRow(["Institution types", describeInstitutionTypes(institutionTypes)]);
     meta.getColumn(1).font = { bold: true };
     meta.getColumn(1).width = 20;
     meta.getColumn(2).width = 60;

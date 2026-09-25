@@ -3,6 +3,7 @@ import { describeFilters, getReportRows, parseFilters } from "@/lib/data/reports
 import { getApplicationsByStandard, getApprovedSubmissionsList } from "@/lib/data/submission-reports";
 import type { StandardReport, SubmissionListRow } from "@/lib/data/submission-reports";
 import { getOrganization } from "@/lib/actions/organization";
+import { parseInstitutionTypes } from "@/lib/data/submission-report-columns";
 import { ReportsClient, type ReportsView } from "./reports-client";
 
 export const metadata = { title: "Reports" };
@@ -30,7 +31,7 @@ export default async function ReportsPage({
   const hasLogo = org.ok ? !!org.data.logo_path : false;
 
   if (view === "standards") {
-    const standardReport = yearId ? await getApplicationsByStandard(yearId) : EMPTY_STANDARD_REPORT;
+    const standardReport = yearId ? await getApplicationsByStandard(yearId, parseInstitutionTypes(searchParams.types)) : EMPTY_STANDARD_REPORT;
     return (
       <ReportsClient
         view="standards"

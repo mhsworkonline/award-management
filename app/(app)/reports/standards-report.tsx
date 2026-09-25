@@ -19,6 +19,12 @@ import type { StandardReport } from "@/lib/data/submission-reports";
 import type { Lookups } from "@/lib/types";
 import { YearSelect } from "./year-select";
 import { PdfTitleLogoFields } from "./pdf-title-logo-fields";
+import { InstitutionTypeFilter } from "./institution-type-filter";
+import { useQueryParams } from "@/hooks/use-query-params";
+import {
+  parseInstitutionTypes,
+  serializeInstitutionTypes,
+} from "@/lib/data/submission-report-columns";
 
 export function StandardsReport({
   report,
@@ -38,9 +44,15 @@ export function StandardsReport({
   const [title, setTitle] = React.useState("");
   const [includeLogo, setIncludeLogo] = React.useState(true);
 
-  const excelQuery = yearId ? `?academic_year_id=${yearId}` : "";
+  // The counts are computed server-side, so the type choice lives in the URL
+  // (?types=school) and reloads the table, rather than in local state.
+  const { searchParams, setParams } = useQueryParams();
+  const types = parseInstitutionTypes(searchParams.get("types"));
+  const typesParam = types.size > 0 ? `&types=${serializeInstitutionTypes(types)}` : "";
+
+  const excelQuery = yearId ? `?academic_year_id=${yearId}${typesParam}` : "";
   const pdfQuery = yearId
-    ? `?academic_year_id=${yearId}&logo=${includeLogo && hasLogo ? "on" : "off"}${
+    ? `?academic_year_id=${yearId}${typesParam}&logo=${includeLogo && hasLogo ? "on" : "off"}${
         title.trim() ? `&title=${encodeURIComponent(title.trim())}` : ""
       }`
     : "";
@@ -104,9 +116,14 @@ export function StandardsReport({
         <>
         <Card>
           <CardHeader>
-            <CardTitle>PDF options</CardTitle>
+            <CardTitle>Report options</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <InstitutionTypeFilter
+              value={types}
+              onChange={(next) => setParams({ types: serializeInstitutionTypes(next) || null })}
+            />
+            <div className="border-t pt-4">
             <PdfTitleLogoFields
               title={title}
               onTitleChange={setTitle}
@@ -114,6 +131,7 @@ export function StandardsReport({
               onIncludeLogoChange={setIncludeLogo}
               hasLogo={hasLogo}
             />
+            </div>
           </CardContent>
         </Card>
 

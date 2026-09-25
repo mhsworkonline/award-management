@@ -26,11 +26,122 @@ export type SubmissionListRow = {
    *  alphabetically — see getApprovedSubmissionsList. */
   group_label: string;
   group_sort: string;
+  /** Sort keys for SUBMISSION_SORT_OPTIONS — not columns. `sort_name` is
+   *  first, last, middle (not `applicant`, which starts with the salutation
+   *  and would sort everyone by "Mr"/"Ms" first). */
+  sort_name: string;
+  sort_percentage: number | null;
+  /** Null when the applicant typed an institution that isn't in the list —
+   *  see institutionKey(). */
+  institution_id: string | null;
+  institution_type: InstitutionTypeKey;
 };
 
 /** The subset of SubmissionListRow keys that are actual selectable columns —
- *  excludes group_label/group_sort, which are structural, not exportable. */
-export type SubmissionColumnKey = Exclude<keyof SubmissionListRow, "group_label" | "group_sort">;
+ *  excludes the structural group_*, sort_* and institution_* fields, which
+ *  are not exportable. */
+export type SubmissionColumnKey = Exclude<
+  keyof SubmissionListRow,
+  "group_label" | "group_sort" | "sort_name" | "sort_percentage" | "institution_id" | "institution_type"
+>;
+
+export const INSTITUTION_TYPE_OPTIONS = [
+  { key: "school", label: "Schools" },
+  { key: "college", label: "Colleges" },
+] as const;
+
+export type InstitutionTypeKey = (typeof INSTITUTION_TYPE_OPTIONS)[number]["key"];
+
+/** Query-string form of the selected types. Like the institution filter, an
+ *  empty selection means "all types". */
+export function parseInstitutionTypes(raw: string | null | undefined): Set<InstitutionTypeKey> {
+  const valid = new Set<string>(INSTITUTION_TYPE_OPTIONS.map((o) => o.key));
+  return new Set((raw ?? "").split(",").filter((k): k is InstitutionTypeKey => valid.has(k)));
+}
+
+export function serializeInstitutionTypes(types: ReadonlySet<InstitutionTypeKey>): string {
+  return [...types].join(",");
+}
+
+export function filterByInstitutionTypes(
+  rows: SubmissionListRow[],
+  types: ReadonlySet<InstitutionTypeKey>,
+): SubmissionListRow[] {
+  return types.size === 0 ? rows : rows.filter((r) => types.has(r.institution_type));
+}
+
+/** Human-readable form for the Excel "Filters" sheet. */
+export function describeInstitutionTypes(types: ReadonlySet<InstitutionTypeKey>): string {
+  return types.size === 0
+    ? "All"
+    : INSTITUTION_TYPE_OPTIONS.filter((o) => types.has(o.key))
+        .map((o) => o.label)
+        .join(", ");
+}
+
+/** Identifies an institution for the export filter: its id, or — for an
+ *  institution the applicant typed in free-text — `other:<name>`, since those
+ *  have no id. */
+export function institutionKey(row: SubmissionListRow): string {
+  return row.institution_id ?? `other:${row.institution}`;
+}
+
+/** Distinct institutions present in `rows`, A–Z, for the filter's checklist. */
+export function institutionOptions(rows: SubmissionListRow[]): { key: string; name: string }[] {
+  const map = new Map<string, string>();
+  for (const r of rows) map.set(institutionKey(r), r.institution);
+  return [...map.entries()]
+    .map(([key, name]) => ({ key, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+/** An empty selection means "all institutions". */
+export function filterByInstitutions(rows: SubmissionListRow[], keys: ReadonlySet<string>): SubmissionListRow[] {
+  return keys.size === 0 ? rows : rows.filter((r) => keys.has(institutionKey(r)));
+}
+
+/** Query-string form of a selection: each key URI-encoded (free-text names can
+ *  contain commas), comma-joined. */
+export function serializeInstitutionFilter(keys: ReadonlySet<string>): string {
+  return [...keys].map(encodeURIComponent).join(",");
+}
+
+export function parseInstitutionFilter(raw: string | null | undefined): Set<string> {
+  if (!raw) return new Set();
+  return new Set(raw.split(",").filter(Boolean).map(decodeURIComponent));
+}
+
+/** How students are ordered *within* each Standard/course section. To add
+ *  another ordering, add an entry here — the picker, the preview and both
+ *  exports all read this list. */
+export const SUBMISSION_SORT_OPTIONS = [
+  {
+    key: "name",
+    label: "Name (A–Z)",
+    compare: (a: SubmissionListRow, b: SubmissionListRow) =>
+      a.sort_name.localeCompare(b.sort_name, undefined, { sensitivity: "base" }),
+  },
+  {
+    key: "code",
+    label: "Code No.",
+    compare: (a: SubmissionListRow, b: SubmissionListRow) =>
+      a.code.localeCompare(b.code, undefined, { numeric: true }),
+  },
+  {
+    key: "percentage",
+    label: "Percentage (high to low)",
+    compare: (a: SubmissionListRow, b: SubmissionListRow) =>
+      (b.sort_percentage ?? -1) - (a.sort_percentage ?? -1),
+  },
+] as const;
+
+export type SubmissionSortKey = (typeof SUBMISSION_SORT_OPTIONS)[number]["key"];
+
+export const DEFAULT_SUBMISSION_SORT: SubmissionSortKey = "name";
+
+export function parseSubmissionSort(raw: string | null | undefined): SubmissionSortKey {
+  return SUBMISSION_SORT_OPTIONS.find((o) => o.key === raw)?.key ?? DEFAULT_SUBMISSION_SORT;
+}
 
 /** Every selectable column for the submissions list, in display order.
  *  `default: true` columns are checked on first load — everything else opts
@@ -63,7 +174,12 @@ export type SubmissionGroup = { key: string; label: string; rows: SubmissionList
  *  both exports, using the same grouping so what's shown on screen is
  *  exactly what's downloaded. Mirrors groupRows() in lib/pdf/distribution-list.tsx,
  *  just keyed by group_sort/group_label instead of institution name. */
-export function groupSubmissionRows(rows: SubmissionListRow[]): SubmissionGroup[] {
+export function groupSubmissionRows(
+  rows: SubmissionListRow[],
+  sort: SubmissionSortKey = DEFAULT_SUBMISSION_SORT,
+): SubmissionGroup[] {
+  const compare = SUBMISSION_SORT_OPTIONS.find((o) => o.key === sort)!.compare;
+  const byCode = SUBMISSION_SORT_OPTIONS.find((o) => o.key === "code")!.compare;
   const map = new Map<string, { label: string; rows: SubmissionListRow[] }>();
   for (const row of rows) {
     const existing = map.get(row.group_sort);
@@ -72,5 +188,5 @@ export function groupSubmissionRows(rows: SubmissionListRow[]): SubmissionGroup[
   }
   return [...map.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, g]) => ({ key, label: g.label, rows: g.rows }));
+    .map(([key, g]) => ({ key, label: g.label, rows: [...g.rows].sort((a, b) => compare(a, b) || byCode(a, b)) }));
 }

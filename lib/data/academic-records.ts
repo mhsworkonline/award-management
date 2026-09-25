@@ -16,27 +16,79 @@ const SELECT = `
   student_awards:am_student_awards ( id, subject_or_criteria, award_categories:am_award_categories ( id, name ) )
 `;
 
-// Own-table columns sort directly; `student`/`institution` sort through the
-// embedded resource via PostgREST's foreignTable ordering — `foreignTable`
-// must be the SELECT alias ("students"/"institutions"), not the physical
-// `am_*` table name, same convention the `.eq("institutions.type", …)`
-// filters above already use. Not sortable server-side: Std/Course (a school
-// record's Standard and a college record's Course are different columns on
-// different tables — there's no single column to order by across both) and
-// Awards (a count over a related table, not a plain column).
-const SORTABLE: Record<string, { column: string; foreignTable?: string }> = {
-  roll_no: { column: "roll_no" },
-  percentage: { column: "percentage" },
-  grade: { column: "grade" },
-  rank: { column: "rank" },
-  created_at: { column: "created_at" },
-  student: { column: "first_name", foreignTable: "students" },
-  institution: { column: "name", foreignTable: "institutions" },
+/** What a sortable column means, both ways it can be evaluated:
+ *  - `db`: PostgREST order terms. `rel(col)` orders the *parent* rows by a
+ *    to-one embedded column — the older `foreignTable` option only reorders
+ *    rows nested inside the embed and leaves the parents unsorted, which is
+ *    why the previous Student/Institution sort keys did nothing. The prefix
+ *    must be the SELECT alias ("students"), not the physical `am_*` name.
+ *  - `mem`: the same ordering computed in JS, for when the page is assembled
+ *    in memory (see listAcademicRecords). Awards has no `db` form — it's a
+ *    count over a related table, so it only exists in memory. */
+type LightRow = {
+  id: string;
+  roll_no: string | null;
+  percentage: number | null;
+  grade: string | null;
+  rank: number | null;
+  created_at: string;
+  students: { first_name: string; middle_name: string | null; last_name: string } | null;
+  institutions: { name: string } | null;
+  academic_years: { label: string } | null;
+  standards: { level: number } | null;
+  courses: { name: string } | null;
+  student_awards: { id: string }[] | null;
 };
+type SortValue = string | number | null;
+
+const SORTABLE: Record<string, { db?: string[]; mem: (r: LightRow) => SortValue[] }> = {
+  student: {
+    db: ["students(first_name)", "students(last_name)"],
+    mem: (r) => [r.students?.first_name ?? null, r.students?.last_name ?? null],
+  },
+  father: { db: ["students(middle_name)"], mem: (r) => [r.students?.middle_name ?? null] },
+  institution: { db: ["institutions(name)"], mem: (r) => [r.institutions?.name ?? null] },
+  // A school record's Standard and a college record's Course live in different
+  // tables, so order by Standard level first (schools), then Course name.
+  placement: {
+    db: ["standards(level)", "courses(name)"],
+    mem: (r) => [r.standards?.level ?? null, r.courses?.name ?? null],
+  },
+  year: { db: ["academic_years(label)"], mem: (r) => [r.academic_years?.label ?? null] },
+  roll_no: { db: ["roll_no"], mem: (r) => [r.roll_no] },
+  percentage: { db: ["percentage"], mem: (r) => [r.percentage] },
+  grade: { db: ["grade"], mem: (r) => [r.grade] },
+  rank: { db: ["rank"], mem: (r) => [r.rank] },
+  created_at: { db: ["created_at"], mem: (r) => [r.created_at] },
+  awards: { mem: (r) => [r.student_awards?.length ?? 0] },
+};
+
+const DEFAULT_SORT = "student";
+const FETCH_CHUNK = 1000; // PostgREST's default max-rows per request
+
+function compareValues(a: SortValue, b: SortValue, ascending: boolean) {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1; // nulls last, either direction — matches `nullslast` in SQL
+  if (b === null) return -1;
+  const result =
+    typeof a === "number" && typeof b === "number"
+      ? a - b
+      : String(a).localeCompare(String(b), undefined, { sensitivity: "base", numeric: true });
+  return ascending ? result : -result;
+}
 
 /** The roster — one row per student-year enrollment. This is what the Students
  *  list page actually filters and displays; the persistent Student record only
- *  surfaces on the detail panel and the add/edit forms. */
+ *  surfaces on the detail panel and the add/edit forms.
+ *
+ *  Two paths, same result shape. Normally the database filters, sorts and
+ *  pages. But a name/roll search (each word may hit first, father's or last
+ *  name, or the roll no — and roll_no lives on a different table than the
+ *  names, which PostgREST can't OR together) and sorting by Awards (a count)
+ *  can't be expressed as one query, so those fetch the matching rows'
+ *  lightweight columns, filter/sort them in memory, and only then load the
+ *  full rows for the requested page. Either way it spans *every* matching
+ *  record, never just the visible page. */
 export async function listAcademicRecords(
   filters: AcademicRecordFilters,
   options: { unawarded?: boolean } = {},
@@ -45,85 +97,123 @@ export async function listAcademicRecords(
   const page = filters.page ?? 1;
   const size = filters.size ?? PAGE_SIZE;
   const ascending = (filters.dir ?? "asc") === "asc";
+  const sortKey = filters.sort && SORTABLE[filters.sort] ? filters.sort : DEFAULT_SORT;
+  const sort = SORTABLE[sortKey];
+  const tokens = (filters.q ?? "")
+    .replace(/[%,]/g, " ")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  const inMemory = tokens.length > 0 || !sort.db;
+  const from = (page - 1) * size;
 
   // `unawarded` (the Awards page's "Not yet awarded" worklist) filters to
   // records with zero awards via a PostgREST anti-join — which needs the
   // awards embed spelled as an explicit left join. Only rewritten for that
   // case, so every other caller's query is byte-for-byte what it was.
+  const awardsEmbed = options.unawarded ? "am_student_awards!left" : "am_student_awards";
   const select = options.unawarded
     ? SELECT.replace("student_awards:am_student_awards (", "student_awards:am_student_awards!left (")
     : SELECT;
 
-  let query = supabase
-    .from(T.academicRecords)
-    .select(select, { count: "exact" })
-    .eq("org_id", ORG_ID);
-
-  if (options.unawarded) query = query.is("student_awards", null);
-
-  if (filters.academic_year_id) query = query.eq("academic_year_id", filters.academic_year_id);
-  if (filters.institution_id) query = query.eq("institution_id", filters.institution_id);
-  if (filters.standard_id) query = query.eq("standard_id", filters.standard_id);
-  if (filters.stream_id) query = query.eq("stream_id", filters.stream_id);
-  if (filters.course_id) query = query.eq("course_id", filters.course_id);
-  if (filters.institution_type) query = query.eq("institutions.type", filters.institution_type);
-  if (filters.board_id) query = query.eq("institutions.board_id", filters.board_id);
-  if (filters.medium_id) query = query.eq("institutions.medium_id", filters.medium_id);
-
-  if (filters.q) {
-    const term = filters.q.replace(/[%,]/g, " ").trim();
-    if (term) {
-      // roll_no lives on am_academic_records itself, not am_students, so it
-      // can't join the name conditions inside one `.or()` scoped to the
-      // students embed (referencedTable applies to the whole or-string) —
-      // that was throwing "column am_students_1.roll_no does not exist".
-      // Resolved the same way the award_category_id filter below already
-      // does it: look up matching student ids first, then filter this
-      // query's own table by roll_no OR student_id in that list.
-      const matchedStudents = await supabase
-        .from(T.students)
-        .select("id")
-        .eq("org_id", ORG_ID)
-        .or(`first_name.ilike.%${term}%,middle_name.ilike.%${term}%,last_name.ilike.%${term}%`);
-      const studentIds = (matchedStudents.data ?? []).map((s) => s.id);
-
-      query =
-        studentIds.length > 0
-          ? query.or(`roll_no.ilike.%${term}%,student_id.in.(${studentIds.join(",")})`)
-          : query.ilike("roll_no", `%${term}%`);
-    }
-  }
-
+  let awardedRecordIds: string[] | null = null;
   if (filters.award_category_id) {
     const awarded = await supabase
       .from(T.studentAwards)
       .select("academic_record_id")
       .eq("org_id", ORG_ID)
       .eq("award_category_id", filters.award_category_id);
-    const ids = (awarded.data ?? []).map((r) => r.academic_record_id);
-    if (ids.length === 0) return { rows: [] as AcademicRecordRow[], total: 0, page, size };
-    query = query.in("id", ids);
+    awardedRecordIds = (awarded.data ?? []).map((r) => r.academic_record_id);
+    if (awardedRecordIds.length === 0) return { rows: [] as AcademicRecordRow[], total: 0, page, size };
   }
 
-  const sort = SORTABLE[filters.sort ?? ""] ?? SORTABLE.created_at;
-  const from = (page - 1) * size;
-  const { data, count, error } = await query
-    .order(sort.column, { ascending, nullsFirst: false, foreignTable: sort.foreignTable })
-    .range(from, from + size - 1);
+  const filtered = (columns: string, withCount: boolean) => {
+    let query = supabase
+      .from(T.academicRecords)
+      .select(columns, withCount ? { count: "exact" } : undefined)
+      .eq("org_id", ORG_ID);
 
+    if (options.unawarded) query = query.is("student_awards", null);
+    if (filters.academic_year_id) query = query.eq("academic_year_id", filters.academic_year_id);
+    if (filters.institution_id) query = query.eq("institution_id", filters.institution_id);
+    if (filters.standard_id) query = query.eq("standard_id", filters.standard_id);
+    if (filters.stream_id) query = query.eq("stream_id", filters.stream_id);
+    if (filters.course_id) query = query.eq("course_id", filters.course_id);
+    if (filters.institution_type) query = query.eq("institutions.type", filters.institution_type);
+    if (filters.board_id) query = query.eq("institutions.board_id", filters.board_id);
+    if (filters.medium_id) query = query.eq("institutions.medium_id", filters.medium_id);
+    if (awardedRecordIds) query = query.in("id", awardedRecordIds);
+    return query;
+  };
+
+  if (!inMemory) {
+    let query = filtered(select, true);
+    for (const column of sort.db!) query = query.order(column, { ascending, nullsFirst: false });
+    // Unique tiebreaker so rows never shuffle or repeat across pages.
+    const { data, count, error } = await query.order("id").range(from, from + size - 1);
+    if (error) throw new Error(error.message);
+    return { rows: (data ?? []) as unknown as AcademicRecordRow[], total: count ?? 0, page, size };
+  }
+
+  const light = `id, roll_no, percentage, grade, rank, created_at,
+    students:am_students!inner ( first_name, middle_name, last_name ),
+    institutions:am_institutions!inner ( name ),
+    academic_years:am_academic_years ( label ),
+    standards:am_standards ( level ),
+    courses:am_courses ( name ),
+    student_awards:${awardsEmbed} ( id )`;
+
+  const all: LightRow[] = [];
+  for (let start = 0; ; start += FETCH_CHUNK) {
+    const { data, error } = await filtered(light, false)
+      .order("id")
+      .range(start, start + FETCH_CHUNK - 1);
+    if (error) throw new Error(error.message);
+    const chunk = (data ?? []) as unknown as LightRow[];
+    all.push(...chunk);
+    if (chunk.length < FETCH_CHUNK) break;
+  }
+
+  const matches =
+    tokens.length === 0
+      ? all
+      : all.filter((r) => {
+          const haystack = [r.students?.first_name, r.students?.middle_name, r.students?.last_name, r.roll_no]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return tokens.every((t) => haystack.includes(t));
+        });
+
+  const nameOrder = SORTABLE.student.mem;
+  matches.sort((a, b) => {
+    const [ka, kb] = [sort.mem(a), sort.mem(b)];
+    for (let i = 0; i < ka.length; i++) {
+      const result = compareValues(ka[i], kb[i], ascending);
+      if (result) return result;
+    }
+    // Ties (e.g. many students with no award) fall back to name, A–Z.
+    const [na, nb] = [nameOrder(a), nameOrder(b)];
+    for (let i = 0; i < na.length; i++) {
+      const result = compareValues(na[i], nb[i], true);
+      if (result) return result;
+    }
+    return a.id.localeCompare(b.id);
+  });
+
+  const pageIds = matches.slice(from, from + size).map((r) => r.id);
+  if (pageIds.length === 0) return { rows: [] as AcademicRecordRow[], total: matches.length, page, size };
+
+  const { data, error } = await supabase
+    .from(T.academicRecords)
+    .select(select)
+    .eq("org_id", ORG_ID)
+    .in("id", pageIds);
   if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as unknown as AcademicRecordRow[];
-  // Default view reads best alphabetically by student — done client-side since
-  // it spans a joined table that PostgREST can't order by directly.
-  if (!filters.sort) {
-    rows.sort((a, b) =>
-      (a.students?.first_name ?? "").localeCompare(b.students?.first_name ?? "") ||
-      (a.students?.last_name ?? "").localeCompare(b.students?.last_name ?? ""),
-    );
-  }
-
-  return { rows, total: count ?? 0, page, size };
+  const byId = new Map(((data ?? []) as unknown as AcademicRecordRow[]).map((r) => [r.id, r]));
+  const rows = pageIds.map((id) => byId.get(id)).filter((r): r is AcademicRecordRow => !!r);
+  return { rows, total: matches.length, page, size };
 }
 
 export async function getAcademicRecord(id: string) {

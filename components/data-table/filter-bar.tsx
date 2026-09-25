@@ -48,11 +48,18 @@ export function FilterBar({
   lookups,
   advanced,
   searchPlaceholder = "Search by name, father's name or roll no…",
+  yearDefault,
   children,
 }: {
   lookups: Lookups;
   advanced: FilterKey[];
   searchPlaceholder?: string;
+  /** Pass when the page falls back to a year (or to none, `null`) while the
+   *  URL has no `academic_year_id` — so the dropdown shows what's really
+   *  applied, and "All years" is kept in the URL as an explicit choice
+   *  instead of vanishing and snapping back to the default. Omit for pages
+   *  where an absent param already means "all years". */
+  yearDefault?: string | null;
   children?: React.ReactNode;
 }) {
   const { searchParams, setParams, clearParams } = useQueryParams();
@@ -124,8 +131,10 @@ export function FilterBar({
 
       {lookups.academicYears.length > 0 && (
         <Select
-          value={searchParams.get("academic_year_id") ?? "all"}
-          onValueChange={(v) => setParams({ academic_year_id: v })}
+          value={searchParams.get("academic_year_id") ?? yearDefault ?? "all"}
+          onValueChange={(v) =>
+            setParams({ academic_year_id: v }, yearDefault !== undefined ? { keepAllValue: true } : undefined)
+          }
         >
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="Academic year" />

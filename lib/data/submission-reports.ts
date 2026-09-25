@@ -6,6 +6,7 @@ import { T } from "@/lib/tables";
 import {
   SUBMISSION_LIST_COLUMNS,
   DEFAULT_SUBMISSION_LIST_COLUMNS,
+  type InstitutionTypeKey,
   type SubmissionListRow,
 } from "./submission-report-columns";
 
@@ -57,7 +58,10 @@ type ApprovedSubmissionForGrouping = {
  *  count per award category. Scoped to awards on students whose academic
  *  record traces back to an approved submission in this standard/year —
  *  never awards from any other source. */
-export async function getApplicationsByStandard(academicYearId: string): Promise<StandardReport> {
+export async function getApplicationsByStandard(
+  academicYearId: string,
+  types: ReadonlySet<InstitutionTypeKey> = new Set(),
+): Promise<StandardReport> {
   const supabase = createClient();
 
   const [categoriesResult, submissionsResult] = await Promise.all([
@@ -83,7 +87,12 @@ export async function getApplicationsByStandard(academicYearId: string): Promise
   if (submissionsResult.error) throw new Error(submissionsResult.error.message);
 
   const categories = categoriesResult.data ?? [];
-  const submissions = (submissionsResult.data ?? []) as unknown as ApprovedSubmissionForGrouping[];
+  // Empty selection = every type. Same school/college split the buckets below
+  // use: a school with a Standard is a school, everything else is pooled as
+  // "Colleges".
+  const submissions = ((submissionsResult.data ?? []) as unknown as ApprovedSubmissionForGrouping[]).filter(
+    (s) => types.size === 0 || types.has(s.institutions?.type === "school" && s.standards ? "school" : "college"),
+  );
 
   const STREAM_LEVELS = new Set([11, 12]);
   const buckets = new Map<
@@ -166,11 +175,12 @@ type ApprovedSubmissionRaw = {
   email: string | null;
   reviewed_by: string | null;
   academic_record_id: string | null;
+  institution_id: string | null;
   other_institution_name: string | null;
   other_course_name: string | null;
   other_course_structure: "year" | "semester" | null;
   period_no: number | null;
-  institutions: { name: string } | null;
+  institutions: { name: string; type: string } | null;
   boards: { name: string } | null;
   mediums: { name: string } | null;
   standards: { label: string; level: number } | null;
@@ -189,8 +199,8 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
     .select(
       `reference_code, salutation, first_name, middle_name, last_name,
        percentage, grade, roll_no, contact_no, email, reviewed_by, academic_record_id,
-       other_institution_name, other_course_name, other_course_structure, period_no,
-       institutions:am_institutions ( name ),
+       institution_id, other_institution_name, other_course_name, other_course_structure, period_no,
+       institutions:am_institutions ( name, type ),
        boards:am_boards ( name ),
        mediums:am_mediums ( name ),
        standards:am_standards ( label, level ),
@@ -257,7 +267,7 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
     // Report 1, streams and semesters don't split a group further here.
     const groupLabel = s.standards?.label ?? s.courses?.name ?? s.other_course_name ?? "Other";
     const groupSort = s.standards
-      ? `0-${String(s.standards.level).padStart(3, "0")}-${groupLabel}`
+      ? `0-${String(s.standards.level + 100).padStart(3, "0")}-${groupLabel}`
       : `1-${groupLabel}`;
 
     return {
@@ -281,6 +291,17 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
       reviewed_by: s.reviewed_by ?? "",
       group_label: groupLabel,
       group_sort: groupSort,
+      sort_name: [s.first_name, s.last_name, s.middle_name].filter(Boolean).join(" "),
+      sort_percentage: s.percentage,
+      institution_id: s.institution_id,
+      // Same rule as the Submissions table's Type column.
+      institution_type: s.institutions
+        ? s.institutions.type === "college"
+          ? "college"
+          : "school"
+        : s.courses || s.other_course_name
+          ? "college"
+          : "school",
     };
   });
 }

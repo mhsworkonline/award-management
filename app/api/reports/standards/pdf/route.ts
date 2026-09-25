@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/supabase/server";
 import { getApplicationsByStandard } from "@/lib/data/submission-reports";
+import { parseInstitutionTypes } from "@/lib/data/submission-report-columns";
 import { renderApplicationsByStandardPdf } from "@/lib/pdf/applications-by-standard";
 import { resolveReportBranding } from "@/lib/pdf/report-branding";
 import { T } from "@/lib/tables";
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
     const customTitle = url.searchParams.get("title")?.trim() || null;
 
     const [report, year, branding] = await Promise.all([
-      getApplicationsByStandard(academicYearId),
+      getApplicationsByStandard(academicYearId, parseInstitutionTypes(url.searchParams.get("types"))),
       supabase.from(T.academicYears).select("label").eq("id", academicYearId).maybeSingle(),
       resolveReportBranding(supabase, includeLogo),
     ]);

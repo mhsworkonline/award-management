@@ -8,13 +8,18 @@ export function SortHeader({
   column,
   children,
   className,
+  isDefault,
 }: {
   column: string;
   children: React.ReactNode;
   className?: string;
+  /** This column is the page's sort when no `sort` param is present (always
+   *  ascending), so it shows as active instead of leaving every header idle. */
+  isDefault?: boolean;
 }) {
   const { searchParams, setParams } = useQueryParams();
-  const active = searchParams.get("sort") === column;
+  const sortParam = searchParams.get("sort");
+  const active = sortParam === column || (isDefault === true && !sortParam);
   const dir = active ? (searchParams.get("dir") ?? "asc") : null;
 
   return (
