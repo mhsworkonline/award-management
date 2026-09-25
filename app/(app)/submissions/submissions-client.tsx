@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Filter, Inbox, Search, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Filter, GraduationCap, Inbox, School, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -575,7 +575,19 @@ export function SubmissionsClient({
                       {placementLabelFor(s)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="py-1 text-muted-foreground">{institutionTypeLabel(s)}</TableCell>
+                  <TableCell className="py-1">
+                    <Badge variant={institutionTypeLabel(s) === "College" ? "default" : "success"}>
+                      {institutionTypeLabel(s) === "College" ? (
+                        <>
+                          <GraduationCap className="h-3 w-3" /> College
+                        </>
+                      ) : (
+                        <>
+                          <School className="h-3 w-3" /> School
+                        </>
+                      )}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="tabular py-1 text-muted-foreground">
                     {s.percentage !== null ? `${s.percentage}%` : "—"}
                   </TableCell>

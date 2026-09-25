@@ -572,6 +572,7 @@ export const createUserSchema = z.object({
 
 export const updateUserRoleSchema = z.object({
   id: uuid,
+  full_name: optionalText,
   role_id: uuid.nullable(),
   is_admin: z.boolean(),
 });

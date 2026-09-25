@@ -91,7 +91,7 @@ export async function updateUserRole(raw: unknown): Promise<ActionResult<null>> 
 
     const { data, error } = await supabase
       .from(T.profiles)
-      .update({ role_id: parsed.data.role_id, is_admin: parsed.data.is_admin })
+      .update({ full_name: parsed.data.full_name, role_id: parsed.data.role_id, is_admin: parsed.data.is_admin })
       .eq("id", parsed.data.id)
       .select()
       .single();

@@ -54,6 +54,7 @@ export function UsersSection({ users, roles, currentUserId }: { users: UserRow[]
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Created</TableHead>
@@ -65,10 +66,11 @@ export function UsersSection({ users, roles, currentUserId }: { users: UserRow[]
                 <TableRow key={u.id}>
                   <TableCell className="font-medium">
                     <span className="inline-flex items-center gap-1.5">
-                      {u.email}
+                      {u.full_name || <span className="font-normal text-muted-foreground">—</span>}
                       {u.id === currentUserId && <Badge variant="secondary">You</Badge>}
                     </span>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell className="text-muted-foreground">
                     <span className="inline-flex items-center gap-1.5">
                       {u.roles?.name ?? "No role"}

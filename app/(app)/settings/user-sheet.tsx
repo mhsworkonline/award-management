@@ -82,7 +82,12 @@ export function UserSheet({
 
     try {
       const result = isEdit
-        ? await updateUserRole({ id: user!.id, role_id: values.role_id || null, is_admin: values.is_admin })
+        ? await updateUserRole({
+            id: user!.id,
+            full_name: values.full_name || null,
+            role_id: values.role_id || null,
+            is_admin: values.is_admin,
+          })
         : await createUser({
             email: values.email,
             password: values.password,
@@ -133,7 +138,7 @@ export function UserSheet({
             <SheetTitle>{isEdit ? "Edit user" : "New user"}</SheetTitle>
             <SheetDescription>
               {isEdit
-                ? "Change this user's role or admin status. Takes effect on their very next action."
+                ? "Change this user's name, role or admin status. Takes effect on their very next action."
                 : "You'll set a temp password here and hand it to them directly — there's no email invite yet."}
             </SheetDescription>
           </SheetHeader>
@@ -206,16 +211,14 @@ export function UserSheet({
               )
             )}
 
-            {!isEdit && (
-              <Field label="Full name" htmlFor="full_name">
-                <Input
-                  id="full_name"
-                  autoComplete="off"
-                  value={values.full_name}
-                  onChange={(e) => setValues((v) => ({ ...v, full_name: e.target.value }))}
-                />
-              </Field>
-            )}
+            <Field label="Full name" htmlFor="full_name">
+              <Input
+                id="full_name"
+                autoComplete="off"
+                value={values.full_name}
+                onChange={(e) => setValues((v) => ({ ...v, full_name: e.target.value }))}
+              />
+            </Field>
 
             <Field label="Role" hint="No role means no module access at all.">
               <Select

@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { MODULES, type ModuleName, type ModulePermissions, type CrudAction } from "@/lib/types";
+import { T } from "@/lib/tables";
 
 type CookiesToSet = { name: string; value: string; options: CookieOptions }[];
 
@@ -39,14 +40,22 @@ export function createClient() {
  *  it revalidates against a possibly-tampered cookie, unlike getSession()),
  *  so without memoizing this, a single page render was paying for that round
  *  trip once per independent call site instead of once total. cache() makes
- *  every call within one request's render reuse the first result. */
+ *  every call within one request's render reuse the first result.
+ *
+ *  `actor` is the single source for every "who did this" value this app
+ *  writes — am_audit_logs.actor, reviewed_by, created_by, distributed_by,
+ *  etc. It prefers the signed-in user's full name over their email, falling
+ *  back to email (then id) for accounts that never set one, so changing it
+ *  here is enough to make every one of those fields show a name instead of
+ *  an email without touching each call site. */
 export const requireUser = cache(async function requireUser() {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated");
-  return { supabase, user, actor: user.email ?? user.id };
+  const { data: profile } = await supabase.from(T.profiles).select("full_name").eq("id", user.id).single();
+  return { supabase, user, actor: profile?.full_name || user.email || user.id };
 });
 
 /** The signed-in user's profile — role name resolved for display, is_admin
