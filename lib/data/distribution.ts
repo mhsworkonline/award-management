@@ -91,13 +91,12 @@ export async function listDistribution(filters: {
   if (filters.award_category_id) {
     query = query.eq("gift_allocations.student_awards.award_category_id", filters.award_category_id);
   }
-  if (filters.q) {
-    const term = filters.q.replace(/[%,]/g, " ").trim();
-    if (term) {
-      query = query.or(`first_name.ilike.%${term}%,last_name.ilike.%${term}%`, {
-        referencedTable: T.students,
-      });
-    }
+  // The path is the nested embed, not the table name (PostgREST rejects the
+  // latter with "'am_students' is not an embedded resource in this request").
+  for (const word of (filters.q ?? "").replace(/[%,]/g, " ").split(/s+/).filter(Boolean)) {
+    query = query.or(`first_name.ilike.%${word}%,middle_name.ilike.%${word}%,last_name.ilike.%${word}%`, {
+      referencedTable: "gift_allocations.student_awards.academic_records.students",
+    });
   }
 
   const { data, error } = await query;

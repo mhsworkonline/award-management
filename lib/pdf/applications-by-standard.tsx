@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Document,
+  Font,
   Image,
   Page,
   StyleSheet,
@@ -11,6 +12,9 @@ import {
 } from "@react-pdf/renderer";
 import { pdfScale, type PdfTextSize } from "@/lib/pdf/text-size";
 import type { StandardReport } from "@/lib/data/submission-reports";
+
+// Wrap at spaces only — react-pdf's default hyphenation split header words ("STU-DENTS").
+Font.registerHyphenationCallback((word) => [word]);
 
 const createStyles = (scale: number) => {
   const f = (size: number) => Math.round(size * scale * 10) / 10;

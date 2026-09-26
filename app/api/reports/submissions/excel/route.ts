@@ -11,6 +11,7 @@ import {
   filterByStandards,
   groupSubmissionRows,
   institutionOptions,
+  submissionColumnLabels,
   parseInstitutionFilter,
   parseInstitutionTypes,
   parseStandardFilter,
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
       standardIds,
     );
 
-    const labels = new Map(SUBMISSION_LIST_COLUMNS.map((c) => [c.key, c.label]));
+    const labels = submissionColumnLabels(rows);
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Award Management";

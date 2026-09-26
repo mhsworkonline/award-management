@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Document,
+  Font,
   Image,
   Page,
   StyleSheet,
@@ -11,6 +12,9 @@ import {
 } from "@react-pdf/renderer";
 import { pdfScale, type PdfTextSize } from "@/lib/pdf/text-size";
 import type { ReportRow } from "@/lib/data/reports";
+
+// Wrap at spaces only — react-pdf's default hyphenation split header words ("STU-DENTS").
+Font.registerHyphenationCallback((word) => [word]);
 
 const createStyles = (scale: number) => {
   const f = (size: number) => Math.round(size * scale * 10) / 10;
@@ -121,15 +125,9 @@ export function DistributionListPdf({
             No records match the selected filters.
           </Text>
         ) : (
-          groups.map((group) => (
-            <View key={group.title ?? "all"} wrap>
-              {group.title && (
-                <Text style={styles.groupTitle}>
-                  {group.title} — {group.rows.length} student{group.rows.length === 1 ? "" : "s"}
-                </Text>
-              )}
-
-              <View style={styles.headRow} fixed={!group.title}>
+          groups.map((group) => {
+            const headRow = (fixed: boolean) => (
+              <View style={styles.headRow} fixed={fixed}>
                 <Text style={[styles.cell, styles.headCell, styles.cSr]}>#</Text>
                 <Text style={[styles.cell, styles.headCell, styles.cName]}>Student</Text>
                 <Text style={[styles.cell, styles.headCell, styles.cFather]}>Father</Text>
@@ -140,22 +138,41 @@ export function DistributionListPdf({
                   {showSignatureColumn ? "Signature" : "Status"}
                 </Text>
               </View>
-
-              {group.rows.map((row, index) => (
-                <View key={`${group.title}-${index}`} style={styles.row} wrap={false}>
-                  <Text style={[styles.cell, styles.cSr]}>{index + 1}</Text>
-                  <Text style={[styles.cell, styles.cName]}>{row.student_name}</Text>
-                  <Text style={[styles.cell, styles.cFather]}>{row.father_name || "—"}</Text>
-                  <Text style={[styles.cell, styles.cPlacement]}>{row.placement}</Text>
-                  <Text style={[styles.cell, styles.cAward]}>{row.awards || "—"}</Text>
-                  <Text style={[styles.cell, styles.cGift]}>{row.gifts || "—"}</Text>
-                  <Text style={[styles.cell, styles.cSign]}>
-                    {showSignatureColumn ? "" : row.distribution}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ))
+            );
+            const renderRow = (row: ReportRow, index: number) => (
+              <View key={`${group.title}-${index}`} style={styles.row} wrap={false}>
+                <Text style={[styles.cell, styles.cSr]}>{index + 1}</Text>
+                <Text style={[styles.cell, styles.cName]}>{row.student_name}</Text>
+                <Text style={[styles.cell, styles.cFather]}>{row.father_name || "—"}</Text>
+                <Text style={[styles.cell, styles.cPlacement]}>{row.placement}</Text>
+                <Text style={[styles.cell, styles.cAward]}>{row.awards || "—"}</Text>
+                <Text style={[styles.cell, styles.cGift]}>{row.gifts || "—"}</Text>
+                <Text style={[styles.cell, styles.cSign]}>
+                  {showSignatureColumn ? "" : row.distribution}
+                </Text>
+              </View>
+            );
+            return (
+              <View key={group.title ?? "all"} wrap>
+                {group.title ? (
+                  // Heading, column headers and first row form one unbreakable block, so a
+                  // heading can never be stranded (and clipped) at the foot of a page.
+                  <View wrap={false}>
+                    <Text style={styles.groupTitle}>
+                      {group.title} — {group.rows.length} student{group.rows.length === 1 ? "" : "s"}
+                    </Text>
+                    {headRow(false)}
+                    {group.rows.slice(0, 1).map((row, i) => renderRow(row, i))}
+                  </View>
+                ) : (
+                  headRow(true)
+                )}
+                {(group.title ? group.rows.slice(1) : group.rows).map((row, i) =>
+                  renderRow(row, group.title ? i + 1 : i),
+                )}
+              </View>
+            );
+          })
         )}
 
         {rows.length > 0 && (

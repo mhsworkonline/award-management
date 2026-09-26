@@ -322,6 +322,8 @@ export type TopPerformerGroup = {
 export async function listTopPerformers(input: {
   academic_year_id: string;
   institution_id?: string;
+  /** Search words — every one must appear in the student's name (first, father's or last). */
+  q?: string;
   limit?: number;
 }): Promise<TopPerformerGroup[]> {
   const supabase = createClient();
@@ -364,8 +366,15 @@ export async function listTopPerformers(input: {
     student_awards: { id: string }[];
   };
 
+  const words = (input.q ?? "").toLowerCase().split(/s+/).filter(Boolean);
+  const matchesSearch = (r: Row) => {
+    if (words.length === 0) return true;
+    const name = [r.students?.first_name, r.students?.middle_name, r.students?.last_name].join(" ").toLowerCase();
+    return words.every((w) => name.includes(w));
+  };
+
   const eligible = ((data ?? []) as unknown as Row[]).filter(
-    (r) => r.students && r.student_awards.length === 0,
+    (r) => r.students && r.student_awards.length === 0 && matchesSearch(r),
   );
 
   const toPerformer = (r: Row): TopPerformer => ({

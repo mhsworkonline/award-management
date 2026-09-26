@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Document,
+  Font,
   Image,
   Page,
   StyleSheet,
@@ -11,12 +12,15 @@ import {
 } from "@react-pdf/renderer";
 import { pdfScale, type PdfTextSize } from "@/lib/pdf/text-size";
 import {
-  SUBMISSION_LIST_COLUMNS,
   groupSubmissionRows,
+  submissionColumnLabels,
   type SubmissionColumnKey,
   type SubmissionListRow,
   type SubmissionSortKey,
 } from "@/lib/data/submission-report-columns";
+
+// Wrap at spaces only — react-pdf's default hyphenation split header words ("STU-DENTS").
+Font.registerHyphenationCallback((word) => [word]);
 
 const createStyles = (scale: number) => {
   const f = (size: number) => Math.round(size * scale * 10) / 10;
@@ -70,8 +74,8 @@ const COLUMN_WEIGHT: Record<SubmissionColumnKey, number> = {
   institution: 1.6,
   placement: 1.1,
   awards: 1.4,
-  percentage: 0.7,
-  grade: 0.6,
+  percentage: 1.2,
+  grade: 0.85,
   board: 1,
   medium: 0.9,
   roll_no: 0.9,
@@ -79,6 +83,34 @@ const COLUMN_WEIGHT: Record<SubmissionColumnKey, number> = {
   email: 1.5,
   reviewed_by: 1.1,
 };
+
+// A4 landscape minus the 26pt page margins, and the header font / cell padding the
+// stylesheet uses — enough to estimate whether a header word fits its column.
+const USABLE_WIDTH = 841.89 - 52;
+const HEAD_FONT = 7.5;
+const HEAD_CHAR_EM = 0.72; // average width of a bold uppercase character, in ems
+const CELL_PADDING = 8;
+
+/** The text scale actually used: the requested one, stepped down (never below
+ *  Normal) until the longest word of every column heading fits its column.
+ *  Without this, picking many columns at a large size printed headings on top
+ *  of each other — a heading like "PERCENTAGE" can't wrap, so it must fit. */
+function fitScale(
+  requested: number,
+  columns: SubmissionColumnKey[],
+  labels: Map<SubmissionColumnKey, string>,
+): number {
+  const totalWeight = columns.reduce((sum, key) => sum + (COLUMN_WEIGHT[key] ?? 1), 0) || 1;
+  for (let scale = requested; scale > 1; scale = Math.round((scale - 0.05) * 100) / 100) {
+    const fits = columns.every((key) => {
+      const longestWord = Math.max(...(labels.get(key) ?? "").split(/\s+/).map((w) => w.length));
+      const width = ((COLUMN_WEIGHT[key] ?? 1) / totalWeight) * USABLE_WIDTH;
+      return longestWord * HEAD_FONT * scale * HEAD_CHAR_EM + CELL_PADDING <= width;
+    });
+    if (fits) return scale;
+  }
+  return 1;
+}
 
 export type SubmissionsListPdfProps = {
   /** Scales every font size — see lib/pdf/text-size.ts. */
@@ -105,8 +137,8 @@ export function SubmissionsListPdf({
   customTitle,
   textSize,
 }: SubmissionsListPdfProps) {
-  const styles = createStyles(pdfScale(textSize));
-  const labels = new Map(SUBMISSION_LIST_COLUMNS.map((c) => [c.key, c.label]));
+  const labels = submissionColumnLabels(rows);
+  const styles = createStyles(fitScale(pdfScale(textSize), columns, labels));
   const totalWeight = columns.reduce((sum, key) => sum + (COLUMN_WEIGHT[key] ?? 1), 0) || 1;
   const widthOf = (key: SubmissionColumnKey) => `${((COLUMN_WEIGHT[key] ?? 1) / totalWeight) * 100}%`;
   const groups = groupSubmissionRows(rows, sort);
@@ -130,31 +162,35 @@ export function SubmissionsListPdf({
         {rows.length === 0 ? (
           <Text style={styles.emptyBox}>No approved applications for this academic year.</Text>
         ) : (
-          groups.map((group) => (
-            <View key={group.key} wrap>
-              <Text style={styles.groupTitle}>
-                {group.label}
-              </Text>
-
-              <View style={styles.headRow}>
+          groups.map((group) => {
+            const renderRow = (row: SubmissionListRow, index: number) => (
+              <View key={`${group.key}-${row.code}-${index}`} style={styles.row} wrap={false}>
                 {columns.map((key) => (
-                  <Text key={key} style={[styles.cell, styles.headCell, { width: widthOf(key) }]}>
-                    {labels.get(key)}
+                  <Text key={key} style={[styles.cell, { width: widthOf(key) }]}>
+                    {row[key] || "—"}
                   </Text>
                 ))}
               </View>
-
-              {group.rows.map((row, index) => (
-                <View key={`${group.key}-${row.code}-${index}`} style={styles.row} wrap={false}>
-                  {columns.map((key) => (
-                    <Text key={key} style={[styles.cell, { width: widthOf(key) }]}>
-                      {row[key] || "—"}
-                    </Text>
-                  ))}
+            );
+            return (
+              <View key={group.key} wrap>
+                {/* Heading, column headers and first row are one unbreakable block, so a heading can
+                 *  never be stranded (and clipped) at the foot of a page — the block moves to the next. */}
+                <View wrap={false}>
+                  <Text style={styles.groupTitle}>{group.label}</Text>
+                  <View style={styles.headRow}>
+                    {columns.map((key) => (
+                      <Text key={key} style={[styles.cell, styles.headCell, { width: widthOf(key) }]}>
+                        {labels.get(key)}
+                      </Text>
+                    ))}
+                  </View>
+                  {group.rows.slice(0, 1).map((row, i) => renderRow(row, i))}
                 </View>
-              ))}
-            </View>
-          ))
+                {group.rows.slice(1).map((row, i) => renderRow(row, i + 1))}
+              </View>
+            );
+          })
         )}
 
         {rows.length > 0 && (

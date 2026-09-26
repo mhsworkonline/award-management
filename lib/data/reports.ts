@@ -73,14 +73,21 @@ export async function getReportRows(filters: AcademicRecordFilters, limit = 1000
   if (filters.institution_type) query = query.eq("institutions.type", filters.institution_type);
   if (filters.board_id) query = query.eq("institutions.board_id", filters.board_id);
   if (filters.medium_id) query = query.eq("institutions.medium_id", filters.medium_id);
-  if (filters.q) {
-    const term = filters.q.replace(/[%,]/g, " ").trim();
-    if (term) {
-      query = query.or(
-        `first_name.ilike.%${term}%,middle_name.ilike.%${term}%,last_name.ilike.%${term}%,roll_no.ilike.%${term}%`,
-        { referencedTable: T.students },
-      );
-    }
+  // Each word must match a name or the roll no. roll_no lives on this table,
+  // not on am_students, so it can't share one `or` scoped to the students
+  // embed (that fails with "column am_students_1.roll_no does not exist") —
+  // look up the students matching the word first, then OR them with roll_no here.
+  for (const word of (filters.q ?? "").replace(/[%,]/g, " ").split(/s+/).filter(Boolean)) {
+    const matched = await supabase
+      .from(T.students)
+      .select("id")
+      .eq("org_id", ORG_ID)
+      .or(`first_name.ilike.%${word}%,middle_name.ilike.%${word}%,last_name.ilike.%${word}%`);
+    const studentIds = (matched.data ?? []).map((s) => s.id);
+    query =
+      studentIds.length > 0
+        ? query.or(`roll_no.ilike.%${word}%,student_id.in.(${studentIds.join(",")})`)
+        : query.ilike("roll_no", `%${word}%`);
   }
 
   if (filters.award_category_id) {

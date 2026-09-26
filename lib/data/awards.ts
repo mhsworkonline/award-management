@@ -11,10 +11,15 @@ export type AwardRow = {
   student_name: string;
   father_name: string | null;
   student_salutation: string | null;
+  institution_id: string | null;
   institution_name: string;
   institution_type: InstitutionType;
+  standard_id: string | null;
+  course_id: string | null;
+  stream_id: string | null;
   placement: string;
   academic_year_label: string;
+  category_id: string | null;
   category_name: string;
   category_sort: number;
   subject_or_criteria: string | null;
@@ -29,11 +34,16 @@ export type AwardRow = {
 type Raw = {
   id: string;
   academic_record_id: string;
+  award_category_id: string | null;
   subject_or_criteria: string | null;
   award_categories: { name: string; sort_order: number } | null;
   academic_records: {
     id: string;
     period_no: number | null;
+    institution_id: string | null;
+    standard_id: string | null;
+    course_id: string | null;
+    stream_id: string | null;
     academic_years: { label: string } | null;
     standards: { label: string } | null;
     streams: { name: string } | null;
@@ -71,10 +81,10 @@ export async function listAwards(filters: {
     .from(T.studentAwards)
     .select(
       `
-      id, academic_record_id, subject_or_criteria,
+      id, academic_record_id, award_category_id, subject_or_criteria,
       award_categories:am_award_categories ( name, sort_order ),
       academic_records:am_academic_records!inner (
-        id, period_no, academic_year_id,
+        id, period_no, academic_year_id, institution_id, standard_id, course_id, stream_id,
         academic_years:am_academic_years ( label ),
         standards:am_standards ( label ),
         streams:am_streams ( name ),
@@ -101,14 +111,15 @@ export async function listAwards(filters: {
   if (filters.board_id) query = query.eq("academic_records.institutions.board_id", filters.board_id);
   if (filters.standard_id) query = query.eq("academic_records.standard_id", filters.standard_id);
   if (filters.stream_id) query = query.eq("academic_records.stream_id", filters.stream_id);
-  if (filters.q) {
-    const term = filters.q.replace(/[%,]/g, " ").trim();
-    if (term) {
-      query = query.or(
-        `first_name.ilike.%${term}%,middle_name.ilike.%${term}%,last_name.ilike.%${term}%`,
-        { referencedTable: T.students },
-      );
-    }
+  // Every word must match the first, father's or last name (separate `or`
+  // params are ANDed). The path is the nested embed — `academic_records.students`
+  // — not the physical table name, which PostgREST rejects with "'am_students' is
+  // not an embedded resource in this request".
+  for (const word of (filters.q ?? "").replace(/[%,]/g, " ").split(/\s+/).filter(Boolean)) {
+    query = query.or(
+      `first_name.ilike.%${word}%,middle_name.ilike.%${word}%,last_name.ilike.%${word}%`,
+      { referencedTable: "academic_records.students" },
+    );
   }
 
   const { data, error } = await query;
@@ -126,10 +137,15 @@ export async function listAwards(filters: {
         student_name: `${student.first_name} ${student.last_name}`,
         father_name: student.middle_name,
         student_salutation: student.salutation,
+        institution_id: record.institution_id,
         institution_name: record.institutions?.name ?? "—",
         institution_type: record.institutions?.type ?? "school",
+        standard_id: record.standard_id,
+        course_id: record.course_id,
+        stream_id: record.stream_id,
         placement: placementLabel(record),
         academic_year_label: record.academic_years?.label ?? "—",
+        category_id: r.award_category_id,
         category_name: r.award_categories?.name ?? "—",
         category_sort: r.award_categories?.sort_order ?? 0,
         subject_or_criteria: r.subject_or_criteria,

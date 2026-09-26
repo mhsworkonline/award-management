@@ -30,6 +30,7 @@ import {
   serializeInstitutionFilter,
   serializeInstitutionTypes,
   serializeStandardFilter,
+  submissionColumnLabels,
   standardOptions,
   type InstitutionTypeKey,
   type SubmissionColumnKey,
@@ -106,6 +107,8 @@ export function SubmissionsReport({
   const [title, setTitle] = React.useState("");
   const [includeLogo, setIncludeLogo] = React.useState(true);
   const [textSize, setTextSize] = React.useState<PdfTextSize>(DEFAULT_PDF_TEXT_SIZE);
+
+  const columnLabels = submissionColumnLabels(rows);
 
   // Always render in the fixed, sensible order from SUBMISSION_LIST_COLUMNS —
   // not the order columns happened to be checked in.
@@ -216,7 +219,7 @@ export function SubmissionsReport({
                         checked={checked.has(col.key)}
                         onCheckedChange={(v) => toggle(col.key, v === true)}
                       />
-                      {col.label}
+                      {columnLabels.get(col.key)}
                     </label>
                   ))}
                 </div>
@@ -359,7 +362,7 @@ export function SubmissionsReport({
                 <TableRow>
                   {activeColumns.map((col) => (
                     <TableHead key={col.key} style={{ width: 160 }}>
-                      {col.label}
+                      {columnLabels.get(col.key)}
                     </TableHead>
                   ))}
                 </TableRow>

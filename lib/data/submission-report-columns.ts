@@ -192,6 +192,21 @@ export const SUBMISSION_LIST_COLUMNS: { key: SubmissionColumnKey; label: string;
   { key: "reviewed_by", label: "Reviewed By", default: false },
 ];
 
+/** What the placement column is called for the rows being reported: "Standard"
+ *  when they are all school students, "Course" when all college, and
+ *  "Standard / Course" only when the report mixes both (or has no rows yet). */
+export function placementColumnLabel(rows: readonly SubmissionListRow[]): string {
+  const types = new Set(rows.map((r) => r.institution_type));
+  if (types.size === 1) return types.has("school") ? "Standard" : "Course";
+  return "Standard / Course";
+}
+
+/** Column key → heading, with the placement column named for these rows. */
+export function submissionColumnLabels(rows: readonly SubmissionListRow[]): Map<SubmissionColumnKey, string> {
+  const placement = placementColumnLabel(rows);
+  return new Map(SUBMISSION_LIST_COLUMNS.map((c) => [c.key, c.key === "placement" ? placement : c.label]));
+}
+
 export const DEFAULT_SUBMISSION_LIST_COLUMNS = SUBMISSION_LIST_COLUMNS.filter((c) => c.default).map(
   (c) => c.key,
 );

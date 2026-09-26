@@ -59,6 +59,7 @@ export default async function AwardsPage({
       ? listTopPerformers({
           academic_year_id: yearId,
           institution_id: searchParams.institution_id,
+          q: searchParams.q,
           limit: 10,
         })
       : Promise.resolve([]),

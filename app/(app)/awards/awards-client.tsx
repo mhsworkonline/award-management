@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Award, Gift, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { Award, Filter, Gift, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,9 +26,12 @@ import { LocalSortHeader } from "@/components/data-table/local-sort-header";
 import { Pagination } from "@/components/data-table/pagination";
 import { SortHeader } from "@/components/data-table/sort-header";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MultiSelectFilter } from "@/components/data-table/multi-select-filter";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmDialog } from "@/components/form/confirm-dialog";
 import { AwardSheet } from "./award-sheet";
+import { AssignAwardsButton } from "./assign-awards-button";
 import { AllocateSheet } from "./allocate-sheet";
 import { SuggestedPerformers } from "./suggested-performers";
 import { deleteAward } from "@/lib/actions/awards";
@@ -83,14 +86,102 @@ export function AwardsClient({
   // opens with that student already chosen.
   const [assignFor, setAssignFor] = React.useState<RecordOption | null>(null);
 
+  // The Awarded tab's list is loaded whole, so it filters in the browser with the
+  // strip below (like Submissions); the Not-yet-awarded tab is paginated on the
+  // server, so it keeps the URL-driven advanced filters.
   const advancedFilters: FilterKey[] =
-    view === "candidates" && !includeAwarded
-      ? ["institution_id", "institution_type", "standard_id", "stream_id"]
-      : ["institution_id", "institution_type", "standard_id", "stream_id", "award_category_id"];
+    view === "awarded"
+      ? []
+      : !includeAwarded
+        ? ["institution_id", "institution_type", "standard_id", "stream_id"]
+        : ["institution_id", "institution_type", "standard_id", "stream_id", "award_category_id"];
   const [allocating, setAllocating] = React.useState<AwardRow | null>(null);
   const [pendingDelete, setPendingDelete] = React.useState<AwardRow | null>(null);
 
-  const withoutGift = rows.filter((r) => r.allocations.length === 0).length;
+  // ---- Awarded tab filters (all in the browser; empty set / "all" = no filter)
+  const [typeFilter, setTypeFilter] = React.useState<"all" | "school" | "college">("all");
+  const [institutionIds, setInstitutionIds] = React.useState<Set<string>>(new Set());
+  const [placementIds, setPlacementIds] = React.useState<Set<string>>(new Set()); // standard or course ids
+  const [streamIds, setStreamIds] = React.useState<Set<string>>(new Set());
+  const [categoryIds, setCategoryIds] = React.useState<Set<string>>(new Set());
+  const [giftFilter, setGiftFilter] = React.useState<"all" | "none" | "allocated" | "distributed" | "pending">("all");
+
+  // Options come from the awards actually loaded, so every choice returns rows.
+  const institutionOptions = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      if ((typeFilter === "all" || r.institution_type === typeFilter) && r.institution_id) {
+        map.set(r.institution_id, r.institution_name);
+      }
+    }
+    return [...map.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [rows, typeFilter]);
+  const placementOptions = React.useMemo(() => {
+    const present = new Set<string>();
+    for (const r of rows) {
+      if (typeFilter !== "all" && r.institution_type !== typeFilter) continue;
+      if (r.standard_id) present.add(r.standard_id);
+      if (r.course_id) present.add(r.course_id);
+    }
+    return [
+      ...lookups.standards.filter((x) => present.has(x.id)).map((x) => ({ value: x.id, label: x.label })),
+      ...lookups.courses.filter((x) => present.has(x.id)).map((x) => ({ value: x.id, label: x.name })),
+    ];
+  }, [rows, typeFilter, lookups.standards, lookups.courses]);
+  const streamOptions = React.useMemo(() => {
+    const present = new Set(rows.map((r) => r.stream_id).filter((x): x is string => !!x));
+    return lookups.streams.filter((x) => present.has(x.id)).map((x) => ({ value: x.id, label: x.name }));
+  }, [rows, lookups.streams]);
+  const categoryOptions = React.useMemo(() => {
+    const present = new Set(rows.map((r) => r.category_id).filter((x): x is string => !!x));
+    return lookups.awardCategories.filter((x) => present.has(x.id)).map((x) => ({ value: x.id, label: x.name }));
+  }, [rows, lookups.awardCategories]);
+
+  // A pick that no longer exists (another year, another type) stops applying
+  // rather than silently hiding rows with no way to see why.
+  const stillValid = (set: Set<string>, options: { value: string }[]) =>
+    new Set([...set].filter((v) => options.some((o) => o.value === v)));
+  const activeInstitutions = stillValid(institutionIds, institutionOptions);
+  const activePlacements = stillValid(placementIds, placementOptions);
+  const activeStreams = stillValid(streamIds, streamOptions);
+  const activeCategories = stillValid(categoryIds, categoryOptions);
+
+  const filteredRows = rows.filter((r) => {
+    if (typeFilter !== "all" && r.institution_type !== typeFilter) return false;
+    if (activeInstitutions.size > 0 && !(r.institution_id && activeInstitutions.has(r.institution_id))) return false;
+    if (
+      activePlacements.size > 0 &&
+      !((r.standard_id && activePlacements.has(r.standard_id)) || (r.course_id && activePlacements.has(r.course_id)))
+    ) {
+      return false;
+    }
+    if (activeStreams.size > 0 && !(r.stream_id && activeStreams.has(r.stream_id))) return false;
+    if (activeCategories.size > 0 && !(r.category_id && activeCategories.has(r.category_id))) return false;
+    if (giftFilter === "none" && r.allocations.length > 0) return false;
+    if (giftFilter === "allocated" && r.allocations.length === 0) return false;
+    if (giftFilter === "distributed" && !r.allocations.some((a) => a.distribution_status === "distributed")) return false;
+    if (giftFilter === "pending" && !r.allocations.some((a) => a.distribution_status !== "distributed")) return false;
+    return true;
+  });
+  const hasActiveFilters =
+    typeFilter !== "all" ||
+    activeInstitutions.size > 0 ||
+    activePlacements.size > 0 ||
+    activeStreams.size > 0 ||
+    activeCategories.size > 0 ||
+    giftFilter !== "all";
+  function clearFilters() {
+    setTypeFilter("all");
+    setInstitutionIds(new Set());
+    setPlacementIds(new Set());
+    setStreamIds(new Set());
+    setCategoryIds(new Set());
+    setGiftFilter("all");
+  }
+
+  const withoutGift = filteredRows.filter((r) => r.allocations.length === 0).length;
 
   // The Awarded table isn't paginated — `rows` is the complete, already-
   // filtered result — so every column sorts client-side, same pattern as
@@ -106,13 +197,13 @@ export function AwardsClient({
     }
   }
   const sortedRows = React.useMemo(() => {
-    return [...rows].sort((a, b) => {
+    return [...filteredRows].sort((a, b) => {
       const av = AWARD_SORT_VALUE[awardSortKey](a);
       const bv = AWARD_SORT_VALUE[awardSortKey](b);
       const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
       return awardSortDir === "asc" ? cmp : -cmp;
     });
-  }, [rows, awardSortKey, awardSortDir]);
+  }, [filteredRows, awardSortKey, awardSortDir]);
 
   return (
     <>
@@ -121,9 +212,17 @@ export function AwardsClient({
         description="Assign merit awards, then allocate a gift against each one."
         actions={
           canCreate && (
-            <Button onClick={() => setAssignOpen(true)}>
-              <Plus /> Assign award
-            </Button>
+            <>
+              {canUpdate && canDelete && (
+                <AssignAwardsButton
+                  yearId={defaultYearId}
+                  yearLabel={lookups.academicYears.find((y) => y.id === defaultYearId)?.label ?? "this year"}
+                />
+              )}
+              <Button onClick={() => setAssignOpen(true)}>
+                <Plus /> Assign award
+              </Button>
+            </>
           )
         }
       />
@@ -149,6 +248,53 @@ export function AwardsClient({
           </Badge>
         )}
       </FilterBar>
+
+      {view === "awarded" && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+          <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-muted-foreground">
+            <Filter className="h-3.5 w-3.5" />
+            Filters
+          </span>
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | "school" | "college")}>
+            <SelectTrigger className="w-[170px]" aria-label="Institution type">
+              <SelectValue placeholder="Institution Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Institution Type</SelectItem>
+              <SelectItem value="school">School</SelectItem>
+              <SelectItem value="college">College</SelectItem>
+            </SelectContent>
+          </Select>
+          <MultiSelectFilter label="Institution" options={institutionOptions} selected={activeInstitutions} onChange={setInstitutionIds} searchable />
+          <MultiSelectFilter label="Standard / Course" options={placementOptions} selected={activePlacements} onChange={setPlacementIds} />
+          {streamOptions.length > 0 && (
+            <MultiSelectFilter label="Stream" options={streamOptions} selected={activeStreams} onChange={setStreamIds} />
+          )}
+          <MultiSelectFilter label="Award" options={categoryOptions} selected={activeCategories} onChange={setCategoryIds} />
+          <Select value={giftFilter} onValueChange={(v) => setGiftFilter(v as typeof giftFilter)}>
+            <SelectTrigger className="w-[170px]" aria-label="Gift status">
+              <SelectValue placeholder="Gift" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Gift status</SelectItem>
+              <SelectItem value="none">No gift yet</SelectItem>
+              <SelectItem value="allocated">Gift allocated</SelectItem>
+              <SelectItem value="distributed">Distributed</SelectItem>
+              <SelectItem value="pending">Not yet distributed</SelectItem>
+            </SelectContent>
+          </Select>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X /> Clear filters
+            </Button>
+          )}
+          <span className="ml-auto text-[12px] text-muted-foreground">
+            {filteredRows.length === rows.length
+              ? `${rows.length} award${rows.length === 1 ? "" : "s"}`
+              : `${filteredRows.length} of ${rows.length} awards`}
+          </span>
+        </div>
+      )}
 
       {view === "candidates" && candidates && (
         <>
@@ -285,36 +431,24 @@ export function AwardsClient({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[20%]">
-                <LocalSortHeader sortKey="student" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
-                  Student
-                </LocalSortHeader>
-              </TableHead>
-              <TableHead className="w-[19%]">
-                <LocalSortHeader sortKey="institution" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
-                  Institution
-                </LocalSortHeader>
-              </TableHead>
-              <TableHead className="w-[12%]">
-                <LocalSortHeader sortKey="placement" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
-                  Std / Course
-                </LocalSortHeader>
-              </TableHead>
-              <TableHead className="w-[12%]">
-                <LocalSortHeader sortKey="category" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
-                  Award
-                </LocalSortHeader>
-              </TableHead>
-              <TableHead className="w-[13%]">
-                <LocalSortHeader sortKey="subject" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
-                  Subject / criteria
-                </LocalSortHeader>
-              </TableHead>
-              <TableHead className="w-[20%]">
-                <LocalSortHeader sortKey="gift" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort}>
-                  Gift
-                </LocalSortHeader>
-              </TableHead>
+              <LocalSortHeader sortKey="student" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort} className="w-[20%]">
+                Student
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="institution" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort} className="w-[19%]">
+                Institution
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="placement" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort} className="w-[12%]">
+                Std / Course
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="category" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort} className="w-[12%]">
+                Award
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="subject" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort} className="w-[13%]">
+                Subject / criteria
+              </LocalSortHeader>
+              <LocalSortHeader sortKey="gift" current={awardSortKey} dir={awardSortDir} onSort={toggleAwardSort} className="w-[20%]">
+                Gift
+              </LocalSortHeader>
               <TableHead className="w-[4%] text-right">
                 <span className="sr-only">Actions</span>
               </TableHead>
