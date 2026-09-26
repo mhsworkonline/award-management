@@ -30,7 +30,7 @@ import { useQueryParams } from "@/hooks/use-query-params";
 import { PAGE_SIZE_OPTIONS } from "@/lib/constants";
 import { placementLabel } from "@/lib/placement";
 import { formatDateTime, parentRelation, studentName } from "@/lib/utils";
-import type { Lookups, PublicSubmissionRow, SubmissionStatus } from "@/lib/types";
+import type { Lookups, PublicSubmissionRow, SubmissionNote, SubmissionStatus } from "@/lib/types";
 
 // Everything is already loaded client-side (up to 500), so bigger pages cost
 // nothing — extra options beyond the app-wide 25/50/100 for this table only.
@@ -133,11 +133,13 @@ export function SubmissionsClient({
   lookups,
   status,
   counts,
+  notesBySubmission,
 }: {
   submissions: PublicSubmissionRow[];
   lookups: Lookups;
   status: SubmissionStatus | "all";
   counts: Record<SubmissionStatus | "all", number>;
+  notesBySubmission: Record<string, SubmissionNote[]>;
 }) {
   const { setParams } = useQueryParams();
   const [active, setActive] = React.useState<PublicSubmissionRow | null>(null);
@@ -153,6 +155,10 @@ export function SubmissionsClient({
   const [localCounts, setLocalCounts] = React.useState(counts);
   React.useEffect(() => setLocalSubmissions(submissions), [submissions]);
   React.useEffect(() => setLocalCounts(counts), [counts]);
+  // Same idea for follow-up notes: a note added in the sheet lands here at once,
+  // so reopening the application shows it without waiting on a server round trip.
+  const [localNotes, setLocalNotes] = React.useState(notesBySubmission);
+  React.useEffect(() => setLocalNotes(notesBySubmission), [notesBySubmission]);
 
   function handleDecided(id: string, fromStatus: SubmissionStatus, toStatus: SubmissionStatus) {
     setLocalSubmissions((prev) =>
@@ -775,6 +781,8 @@ export function SubmissionsClient({
       <SubmissionReviewSheet
         submission={active}
         lookups={lookups}
+        initialNotes={active ? (localNotes[active.id] ?? []) : []}
+        onNoteAdded={(id, note) => setLocalNotes((prev) => ({ ...prev, [id]: [...(prev[id] ?? []), note] }))}
         onOpenChange={(open) => !open && setActive(null)}
         onDecided={handleDecided}
       />

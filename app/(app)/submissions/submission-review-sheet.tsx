@@ -44,11 +44,13 @@ import { QuickAddCourse } from "@/components/form/quick-add-course";
 import { QuickAddBoard } from "@/components/form/quick-add-board";
 import {
   addSubmissionAttachment,
+  addSubmissionNote,
   approveSubmission,
   checkSubmissionDuplicates,
   deleteSubmissionAttachment,
   getAttachmentSignedUrl,
   getSubmissionHistory,
+  listSubmissionNotes,
   markSubmissionDoubtful,
   rejectSubmission,
   replaceSubmissionAttachment,
@@ -62,7 +64,15 @@ import { formatDateTime } from "@/lib/utils";
 import { usePermissions } from "@/components/providers/permissions-provider";
 import { SALUTATIONS } from "@/lib/types";
 import { statusBadgeVariant } from "./submissions-client";
-import type { AuditLog, Board, Course, Lookups, PublicSubmissionRow, SubmissionStatus } from "@/lib/types";
+import type {
+  AuditLog,
+  Board,
+  Course,
+  Lookups,
+  PublicSubmissionRow,
+  SubmissionNote,
+  SubmissionStatus,
+} from "@/lib/types";
 
 type DecisionKind = "approve" | "reject" | "doubtful";
 
@@ -111,11 +121,18 @@ type Values = {
 export function SubmissionReviewSheet({
   submission,
   lookups,
+  initialNotes = [],
+  onNoteAdded,
   onOpenChange,
   onDecided,
 }: {
   submission: PublicSubmissionRow | null;
   lookups: Lookups;
+  /** Follow-up notes already loaded with the page — shown the moment the sheet
+   *  opens; a background fetch then picks up anything added by someone else. */
+  initialNotes?: SubmissionNote[];
+  /** A note was just saved — lets the list keep it for the next time this sheet opens. */
+  onNoteAdded?: (submissionId: string, note: SubmissionNote) => void;
   onOpenChange: (open: boolean) => void;
   /** Called the instant a decision succeeds, before router.refresh() (a real
    *  server round trip) has any chance to come back — lets the table update
@@ -139,6 +156,13 @@ export function SubmissionReviewSheet({
   const [decisionNote, setDecisionNote] = React.useState("");
   const [duplicates, setDuplicates] = React.useState<string[]>([]);
   const [history, setHistory] = React.useState<AuditLog[]>([]);
+  // Follow-up notes: an append-only log, separate from the decision note.
+  // `followUp` is the optional extra field shown while approving/rejecting;
+  // `newNote` is the standalone box for adding one without deciding.
+  const [notes, setNotes] = React.useState<SubmissionNote[]>([]);
+  const [followUp, setFollowUp] = React.useState("");
+  const [newNote, setNewNote] = React.useState("");
+  const [addingNote, setAddingNote] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pendingInstitutions, setPendingInstitutions] = React.useState<Lookups["institutions"]>([]);
   const [pendingCourses, setPendingCourses] = React.useState<
@@ -361,6 +385,9 @@ export function SubmissionReviewSheet({
     if (!submission) return;
     setDecisionKind(null);
     setDecisionNote("");
+    setFollowUp("");
+    setNewNote("");
+    setNotes(initialNotes);
     setError(null);
     setPendingInstitutions([]);
     setPendingCourses([]);
@@ -387,6 +414,14 @@ export function SubmissionReviewSheet({
       grade: submission.grade ?? "",
     });
 
+    // The page already delivered the notes, so they show instantly. This
+    // refresh (called first: server actions run one at a time) only picks up
+    // notes another reviewer added meanwhile; a failure leaves what's shown.
+    let cancelled = false;
+    listSubmissionNotes(submission.id).then((r) => {
+      if (!cancelled && r.ok) setNotes(r.data);
+    });
+
     checkSubmissionDuplicates({
       first_name: submission.first_name,
       middle_name: submission.middle_name,
@@ -397,7 +432,47 @@ export function SubmissionReviewSheet({
     }).then((r) => setDuplicates(r.ok ? r.data : []));
 
     getSubmissionHistory(submission.id).then((r) => setHistory(r.ok ? r.data : []));
+
+    return () => {
+      cancelled = true;
+    };
   }, [submission, reset]);
+
+  async function onAddNote() {
+    if (!submission || !newNote.trim()) return;
+    setAddingNote(true);
+    const result = await addSubmissionNote(submission.id, newNote);
+    setAddingNote(false);
+    if (!result.ok) {
+      toast.error("Could not add the note", { description: result.error });
+      return;
+    }
+    setNotes((prev) => [...prev, result.data]);
+    onNoteAdded?.(submission.id, result.data);
+    setNewNote("");
+  }
+
+  /** Saves any follow-up text still sitting in either note box. Typing a note
+   *  and then hitting Save changes / Approve / Reject (without clicking "Add
+   *  note") used to drop it silently — every save path calls this instead.
+   *  Returns false if a note failed, so the caller can keep the sheet open
+   *  rather than close it on top of unsaved text. */
+  async function flushPendingNotes(): Promise<boolean> {
+    if (!submission) return true;
+    const pending = [newNote, followUp].map((t) => t.trim()).filter(Boolean);
+    for (const text of pending) {
+      const result = await addSubmissionNote(submission.id, text);
+      if (!result.ok) {
+        toast.error("Could not save the follow-up note", { description: result.error });
+        return false;
+      }
+      setNotes((prev) => [...prev, result.data]);
+      onNoteAdded?.(submission.id, result.data);
+    }
+    setNewNote("");
+    setFollowUp("");
+    return true;
+  }
 
   function copyCode() {
     if (!submission) return;
@@ -449,6 +524,10 @@ export function SubmissionReviewSheet({
   async function onSave(values: Values) {
     const saved = await saveDraft(values);
     if (!saved) return;
+    if (!(await flushPendingNotes())) {
+      router.refresh();
+      return;
+    }
     toast.success(isApproved ? "Saved — the student's roster record was updated too" : "Changes saved");
     router.refresh();
     onOpenChange(false);
@@ -481,6 +560,10 @@ export function SubmissionReviewSheet({
       toast.error(`Could not ${DECISION_LABEL[kind].toLowerCase()}`, { description: result.error });
       return;
     }
+    // The decision has already gone through — a follow-up note that fails to
+    // save must not undo or hide that, just say so.
+    const notesSaved = await flushPendingNotes();
+    if (!notesSaved) toast.warning("Decision saved, but the follow-up note wasn't — reopen the application and add it again");
     toast.success(
       kind === "approve" ? "Approved — added to the roster" : kind === "reject" ? "Submission rejected" : "Marked doubtful",
     );
@@ -974,6 +1057,46 @@ export function SubmissionReviewSheet({
                 </Field>
               )}
 
+              {(notes.length > 0 || canUpdateSubmission) && (
+                <Field label="Follow-up notes">
+                  {notes.length > 0 && (
+                    <ul className="scrollbar-thin mb-2 max-h-48 space-y-2 overflow-y-auto rounded-md border bg-muted/20 p-3 text-[13px]">
+                      {notes.map((n) => (
+                        <li key={n.id} className="leading-snug">
+                          <p className="text-[12px] text-muted-foreground">
+                            <span className="font-medium text-foreground">{n.created_by ?? "unknown"}</span> ·{" "}
+                            {formatDateTime(n.created_at)}
+                          </p>
+                          <p className="whitespace-pre-wrap">{n.note}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {canUpdateSubmission && (
+                    <div className="space-y-2">
+                      <Textarea
+                        rows={2}
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        maxLength={2000}
+                        placeholder="Add a follow-up note (called the parent, waiting on a marksheet…)"
+                        aria-label="Add a follow-up note"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={onAddNote}
+                        disabled={addingNote || !newNote.trim()}
+                      >
+                        {addingNote && <Loader2 className="animate-spin" />}
+                        Add note
+                      </Button>
+                    </div>
+                  )}
+                </Field>
+              )}
+
               {decisionKind && (
                 <Field label={`Note for ${DECISION_LABEL[decisionKind].toLowerCase()}`} htmlFor="decision-note" required>
                   <Textarea
@@ -983,6 +1106,23 @@ export function SubmissionReviewSheet({
                     value={decisionNote}
                     onChange={(e) => setDecisionNote(e.target.value)}
                     placeholder="Why? This is required and stays on record."
+                  />
+                </Field>
+              )}
+
+              {decisionKind && (
+                <Field
+                  label="Follow-up note"
+                  htmlFor="decision-followup"
+                  hint="Optional. Added to this application's follow-up notes above, alongside the ones already there."
+                >
+                  <Textarea
+                    id="decision-followup"
+                    rows={2}
+                    value={followUp}
+                    onChange={(e) => setFollowUp(e.target.value)}
+                    maxLength={2000}
+                    placeholder="e.g. Called the parent — marksheet arriving Friday"
                   />
                 </Field>
               )}
@@ -1007,6 +1147,7 @@ export function SubmissionReviewSheet({
                       onClick={() => {
                         setDecisionKind(null);
                         setDecisionNote("");
+                        setFollowUp("");
                       }}
                     >
                       Cancel

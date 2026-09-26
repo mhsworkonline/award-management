@@ -33,6 +33,7 @@ export const T = {
   applicationForms: "am_application_forms",
   submissionAttachments: "am_submission_attachments",
   shortLinks: "am_short_links",
+  submissionNotes: "am_submission_notes",
   dataConfirmations: "am_data_confirmations",
 } as const;
 

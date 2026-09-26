@@ -89,7 +89,7 @@ export async function saveAcademicRecord(raw: unknown): Promise<ActionResult<{ i
       return {
         ok: false,
         error: error.message.includes("duplicate key")
-          ? "This student already has a record for that academic year"
+          ? "This student already has this exact enrollment (same institution and course/standard) for that academic year"
           : friendly(error.message),
       };
     }

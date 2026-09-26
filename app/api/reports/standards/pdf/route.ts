@@ -3,6 +3,7 @@ import { getApplicationsByStandard } from "@/lib/data/submission-reports";
 import { parseInstitutionTypes } from "@/lib/data/submission-report-columns";
 import { renderApplicationsByStandardPdf } from "@/lib/pdf/applications-by-standard";
 import { resolveReportBranding } from "@/lib/pdf/report-branding";
+import { parsePdfTextSize } from "@/lib/pdf/text-size";
 import { T } from "@/lib/tables";
 
 export const maxDuration = 60;
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
     if (!academicYearId) return new Response("Missing academic_year_id", { status: 400 });
     const includeLogo = url.searchParams.get("logo") === "on";
     const customTitle = url.searchParams.get("title")?.trim() || null;
+    const textSize = parsePdfTextSize(url.searchParams.get("size"));
 
     const [report, year, branding] = await Promise.all([
       getApplicationsByStandard(academicYearId, parseInstitutionTypes(url.searchParams.get("types"))),
@@ -24,6 +26,7 @@ export async function GET(request: Request) {
     ]);
 
     const buffer = await renderApplicationsByStandardPdf({
+      textSize,
       report,
       academicYearLabel: year.data?.label ?? "—",
       organizationName: branding.organizationName,

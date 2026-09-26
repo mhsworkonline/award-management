@@ -89,7 +89,9 @@ touches Storage or the audit log. Migration 0037 also gates the three buckets' D
 **Identity vs. per-year data — the core data model split.** `am_students` is a student's
 *permanent identity* (name, contact) — one row per person, never duplicated across years.
 Everything year-specific lives in `am_academic_records` (one row per student per academic
-year: standard/course, percentage, grade, rank). Awards, gift allocations, and distribution
+year *per placement* — a student applying twice in one year for a different institution or
+course gets two records, each with its own awards; an identical placement is unique, see
+migration 0050 — holding standard/course, percentage, grade, rank). Awards, gift allocations, and distribution
 records all chain off `academic_record_id`, not off the student directly — so an award is
 architecturally tied to one specific year, and a student's history across multiple years is
 just multiple academic-record rows against the same student. `am_persons` mirrors `am_students`'

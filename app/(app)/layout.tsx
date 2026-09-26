@@ -46,7 +46,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               />
             }
           />
-          <main className="scrollbar-thin flex-1 overflow-y-auto">
+          {/* `relative`: contains absolutely positioned children (sr-only file inputs) so they can't stretch the page. */}
+          <main className="scrollbar-thin relative flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[1400px] space-y-6 px-5 py-6 lg:px-8">
               {children}
             </div>

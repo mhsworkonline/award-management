@@ -24,6 +24,7 @@ import type { Lookups } from "@/lib/types";
 import { StandardsReport } from "./standards-report";
 import { SubmissionsReport } from "./submissions-report";
 import { PdfTitleLogoFields } from "./pdf-title-logo-fields";
+import { DEFAULT_PDF_TEXT_SIZE, type PdfTextSize } from "@/lib/pdf/text-size";
 
 export type ReportsView = "roster" | "standards" | "submissions";
 
@@ -53,10 +54,11 @@ export function ReportsClient({
   const [signatureColumn, setSignatureColumn] = React.useState(true);
   const [title, setTitle] = React.useState("");
   const [includeLogo, setIncludeLogo] = React.useState(true);
+  const [textSize, setTextSize] = React.useState<PdfTextSize>(DEFAULT_PDF_TEXT_SIZE);
 
   const pdfHref = `/api/reports/pdf${query}${query ? "&" : "?"}group=${
     groupByInstitution ? "on" : "off"
-  }&signature=${signatureColumn ? "on" : "off"}&logo=${includeLogo && hasLogo ? "on" : "off"}${
+  }&signature=${signatureColumn ? "on" : "off"}&size=${textSize}&logo=${includeLogo && hasLogo ? "on" : "off"}${
     title.trim() ? `&title=${encodeURIComponent(title.trim())}` : ""
   }`;
 
@@ -169,6 +171,8 @@ export function ReportsClient({
                 includeLogo={includeLogo}
                 onIncludeLogoChange={setIncludeLogo}
                 hasLogo={hasLogo}
+                textSize={textSize}
+                onTextSizeChange={setTextSize}
               />
             </div>
           </CardContent>

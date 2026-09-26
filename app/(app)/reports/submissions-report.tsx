@@ -42,6 +42,7 @@ import type { Lookups } from "@/lib/types";
 import { YearSelect } from "./year-select";
 import { PdfTitleLogoFields } from "./pdf-title-logo-fields";
 import { InstitutionTypeFilter } from "./institution-type-filter";
+import { DEFAULT_PDF_TEXT_SIZE, type PdfTextSize } from "@/lib/pdf/text-size";
 
 export function SubmissionsReport({
   rows: allRows,
@@ -104,6 +105,7 @@ export function SubmissionsReport({
   }
   const [title, setTitle] = React.useState("");
   const [includeLogo, setIncludeLogo] = React.useState(true);
+  const [textSize, setTextSize] = React.useState<PdfTextSize>(DEFAULT_PDF_TEXT_SIZE);
 
   // Always render in the fixed, sensible order from SUBMISSION_LIST_COLUMNS —
   // not the order columns happened to be checked in.
@@ -127,7 +129,7 @@ export function SubmissionsReport({
     ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sort}${institutionParam}`
     : "";
   const pdfQuery = yearId
-    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sort}${institutionParam}&logo=${
+    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sort}${institutionParam}&size=${textSize}&logo=${
         includeLogo && hasLogo ? "on" : "off"
       }${title.trim() ? `&title=${encodeURIComponent(title.trim())}` : ""}`
     : "";
@@ -341,6 +343,8 @@ export function SubmissionsReport({
                   includeLogo={includeLogo}
                   onIncludeLogoChange={setIncludeLogo}
                   hasLogo={hasLogo}
+                  textSize={textSize}
+                  onTextSizeChange={setTextSize}
                 />
               </CardContent>
             </Card>

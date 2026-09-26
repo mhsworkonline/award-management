@@ -9,59 +9,65 @@ import {
   renderToBuffer,
   type DocumentProps,
 } from "@react-pdf/renderer";
+import { pdfScale, type PdfTextSize } from "@/lib/pdf/text-size";
 import type { ReportRow } from "@/lib/data/reports";
 
-const styles = StyleSheet.create({
-  page: { paddingTop: 34, paddingBottom: 44, paddingHorizontal: 30, fontSize: 9, color: "#1c2029" },
-  headerRow: { flexDirection: "row", alignItems: "center" },
-  logo: { width: 38, height: 38, marginRight: 10, objectFit: "contain" },
-  title: { fontSize: 15, fontWeight: 700 },
-  subtitle: { fontSize: 9, color: "#5b6472", marginTop: 3 },
-  headerBar: { borderBottomWidth: 1.5, borderBottomColor: "#1c2029", paddingBottom: 7, marginBottom: 11 },
-  meta: { flexDirection: "row", justifyContent: "space-between", marginTop: 5, fontSize: 8, color: "#5b6472" },
+const createStyles = (scale: number) => {
+  const f = (size: number) => Math.round(size * scale * 10) / 10;
+  return StyleSheet.create({
+    page: { paddingTop: 34, paddingBottom: 44, paddingHorizontal: 30, fontSize: f(9), color: "#1c2029" },
+    headerRow: { flexDirection: "row", alignItems: "center" },
+    logo: { width: 38, height: 38, marginRight: 10, objectFit: "contain" },
+    title: { fontSize: f(15), fontWeight: 700 },
+    subtitle: { fontSize: f(9), color: "#5b6472", marginTop: 3 },
+    headerBar: { borderBottomWidth: 1.5, borderBottomColor: "#1c2029", paddingBottom: 7, marginBottom: 11 },
+    meta: { flexDirection: "row", justifyContent: "space-between", marginTop: 5, fontSize: f(8), color: "#5b6472" },
 
-  groupTitle: {
-    marginTop: 13,
-    marginBottom: 5,
-    fontSize: 10.5,
-    fontWeight: 700,
-    backgroundColor: "#f1f3f7",
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
+    groupTitle: {
+      marginTop: 13,
+      marginBottom: 5,
+      fontSize: f(10.5),
+      fontWeight: 700,
+      backgroundColor: "#f1f3f7",
+      paddingVertical: 4,
+      paddingHorizontal: 6,
+    },
 
-  row: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: "#dfe3ea", minHeight: 19, alignItems: "center" },
-  headRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#9aa3b0", backgroundColor: "#fafbfc", minHeight: 20, alignItems: "center" },
-  cell: { paddingVertical: 3.5, paddingHorizontal: 4 },
-  headCell: { fontWeight: 700, fontSize: 8, color: "#3a4250", textTransform: "uppercase" },
+    row: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: "#dfe3ea", minHeight: 19, alignItems: "center" },
+    headRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#9aa3b0", backgroundColor: "#fafbfc", minHeight: 20, alignItems: "center" },
+    cell: { paddingVertical: 3.5, paddingHorizontal: 4 },
+    headCell: { fontWeight: 700, fontSize: f(8), color: "#3a4250", textTransform: "uppercase" },
 
-  cSr: { width: "5%" },
-  cName: { width: "23%" },
-  cFather: { width: "18%" },
-  cPlacement: { width: "14%" },
-  cAward: { width: "13%" },
-  cGift: { width: "17%" },
-  cSign: { width: "10%", textAlign: "center" },
+    cSr: { width: "5%" },
+    cName: { width: "23%" },
+    cFather: { width: "18%" },
+    cPlacement: { width: "14%" },
+    cAward: { width: "13%" },
+    cGift: { width: "17%" },
+    cSign: { width: "10%", textAlign: "center" },
 
-  emptyBox: { marginTop: 30, textAlign: "center", color: "#5b6472", fontSize: 10 },
+    emptyBox: { marginTop: 30, textAlign: "center", color: "#5b6472", fontSize: f(10) },
 
-  footer: {
-    position: "absolute",
-    bottom: 22,
-    left: 30,
-    right: 30,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    fontSize: 7.5,
-    color: "#8a93a1",
-    borderTopWidth: 0.5,
-    borderTopColor: "#dfe3ea",
-    paddingTop: 5,
-  },
-  totals: { marginTop: 14, flexDirection: "row", gap: 22, fontSize: 8.5, color: "#3a4250" },
-});
+    footer: {
+      position: "absolute",
+      bottom: 22,
+      left: 30,
+      right: 30,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      fontSize: f(7.5),
+      color: "#8a93a1",
+      borderTopWidth: 0.5,
+      borderTopColor: "#dfe3ea",
+      paddingTop: 5,
+    },
+    totals: { marginTop: 14, flexDirection: "row", gap: 22, fontSize: f(8.5), color: "#3a4250" },
+  });
+};
 
 export type DistributionListProps = {
+  /** Scales every font size — see lib/pdf/text-size.ts. */
+  textSize: PdfTextSize;
   rows: ReportRow[];
   filterDescription: string;
   organizationName: string;
@@ -83,7 +89,9 @@ export function DistributionListPdf({
   customTitle,
   groupByInstitution,
   showSignatureColumn,
+  textSize,
 }: DistributionListProps) {
+  const styles = createStyles(pdfScale(textSize));
   const groups = groupByInstitution ? groupRows(rows) : [{ title: null, rows }];
   const distributed = rows.filter((r) => r.distribution === "Distributed").length;
   const pending = rows.filter((r) => r.distribution === "Pending").length;

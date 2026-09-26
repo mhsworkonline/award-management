@@ -317,6 +317,15 @@ export type PublicSubmissionRow = PublicSubmission & {
   attachments?: SubmissionAttachment[];
 };
 
+/** One entry in a submission's append-only follow-up log. */
+export type SubmissionNote = {
+  id: string;
+  submission_id: string;
+  note: string;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type SubmissionAttachment = {
   id: string;
   submission_id: string;

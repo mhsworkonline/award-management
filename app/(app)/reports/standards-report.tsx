@@ -20,6 +20,7 @@ import type { Lookups } from "@/lib/types";
 import { YearSelect } from "./year-select";
 import { PdfTitleLogoFields } from "./pdf-title-logo-fields";
 import { InstitutionTypeFilter } from "./institution-type-filter";
+import { DEFAULT_PDF_TEXT_SIZE, type PdfTextSize } from "@/lib/pdf/text-size";
 import { useQueryParams } from "@/hooks/use-query-params";
 import {
   parseInstitutionTypes,
@@ -43,6 +44,7 @@ export function StandardsReport({
 
   const [title, setTitle] = React.useState("");
   const [includeLogo, setIncludeLogo] = React.useState(true);
+  const [textSize, setTextSize] = React.useState<PdfTextSize>(DEFAULT_PDF_TEXT_SIZE);
 
   // The counts are computed server-side, so the type choice lives in the URL
   // (?types=school) and reloads the table, rather than in local state.
@@ -52,7 +54,7 @@ export function StandardsReport({
 
   const excelQuery = yearId ? `?academic_year_id=${yearId}${typesParam}` : "";
   const pdfQuery = yearId
-    ? `?academic_year_id=${yearId}${typesParam}&logo=${includeLogo && hasLogo ? "on" : "off"}${
+    ? `?academic_year_id=${yearId}${typesParam}&size=${textSize}&logo=${includeLogo && hasLogo ? "on" : "off"}${
         title.trim() ? `&title=${encodeURIComponent(title.trim())}` : ""
       }`
     : "";
@@ -130,6 +132,8 @@ export function StandardsReport({
               includeLogo={includeLogo}
               onIncludeLogoChange={setIncludeLogo}
               hasLogo={hasLogo}
+              textSize={textSize}
+              onTextSizeChange={setTextSize}
             />
             </div>
           </CardContent>

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ORG_ID } from "@/lib/constants";
 import { FN, T } from "@/lib/tables";
-import type { PublicSubmissionRow, SubmissionStatus } from "@/lib/types";
+import type { PublicSubmissionRow, SubmissionNote, SubmissionStatus } from "@/lib/types";
 
 /** Goes through a SECURITY DEFINER RPC (am_list_submissions), not a plain
  *  `.select()` with embedded joins — a role scoped to only Submissions:Read
@@ -19,6 +19,32 @@ export async function listSubmissions(status: SubmissionStatus | "all" = "pendin
   });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as PublicSubmissionRow[];
+}
+
+/** Follow-up notes for the submissions in the tab being shown, grouped by
+ *  submission id and oldest first. Loaded with the page so the review sheet
+ *  has them the instant it opens — fetching them from inside the sheet went
+ *  through a server action that took seconds, long enough to look like the
+ *  note hadn't been saved. RLS applies (Submissions: Read). */
+export async function listSubmissionNotesFor(
+  status: SubmissionStatus | "all",
+): Promise<Record<string, SubmissionNote[]>> {
+  const supabase = createClient();
+  let query = supabase
+    .from(T.submissionNotes)
+    .select("id, submission_id, note, created_by, created_at, submission:am_public_submissions!inner(status)")
+    .eq("org_id", ORG_ID)
+    .order("created_at", { ascending: true })
+    .limit(5000);
+  if (status !== "all") query = query.eq("submission.status", status);
+
+  const { data } = await query;
+  const bySubmission: Record<string, SubmissionNote[]> = {};
+  for (const row of (data ?? []) as unknown as (SubmissionNote & { submission: unknown })[]) {
+    const { submission: _joined, ...note } = row;
+    (bySubmission[note.submission_id] ??= []).push(note);
+  }
+  return bySubmission;
 }
 
 export async function getPendingSubmissionCount() {

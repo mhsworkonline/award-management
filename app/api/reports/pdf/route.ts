@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { describeFilters, getReportRows, parseFilters } from "@/lib/data/reports";
 import { renderDistributionListPdf } from "@/lib/pdf/distribution-list";
 import { resolveReportBranding } from "@/lib/pdf/report-branding";
+import { parsePdfTextSize } from "@/lib/pdf/text-size";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
     const showSignatureColumn = url.searchParams.get("signature") === "on";
     const includeLogo = url.searchParams.get("logo") === "on";
     const customTitle = url.searchParams.get("title")?.trim() || null;
+    const textSize = parsePdfTextSize(url.searchParams.get("size"));
 
     const [rows, filterDescription, branding] = await Promise.all([
       getReportRows(filters, 5000),
@@ -24,6 +26,7 @@ export async function GET(request: Request) {
     ]);
 
     const buffer = await renderDistributionListPdf({
+      textSize,
       rows,
       filterDescription,
       organizationName: branding.organizationName,

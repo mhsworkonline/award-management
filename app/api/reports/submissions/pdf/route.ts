@@ -14,6 +14,7 @@ import {
 } from "@/lib/data/submission-report-columns";
 import { renderSubmissionsListPdf } from "@/lib/pdf/submissions-list";
 import { resolveReportBranding } from "@/lib/pdf/report-branding";
+import { parsePdfTextSize } from "@/lib/pdf/text-size";
 import { T } from "@/lib/tables";
 
 export const maxDuration = 60;
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
     const standardIds = parseStandardFilter(url.searchParams.get("standards"));
     const includeLogo = url.searchParams.get("logo") === "on";
     const customTitle = url.searchParams.get("title")?.trim() || null;
+    const textSize = parsePdfTextSize(url.searchParams.get("size"));
 
     const [allRows, year, branding] = await Promise.all([
       getApprovedSubmissionsList(academicYearId),
@@ -53,6 +55,7 @@ export async function GET(request: Request) {
     );
 
     const buffer = await renderSubmissionsListPdf({
+      textSize,
       rows,
       columns,
       sort,

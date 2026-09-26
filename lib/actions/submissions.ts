@@ -10,7 +10,7 @@ import { submissionEditSchema } from "@/lib/validators";
 import { findDuplicateStudents } from "@/lib/data/students";
 import { ATTACHMENTS_BUCKET, FN, T } from "@/lib/tables";
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
-import type { ActionResult, AuditLog, SubmissionStatus } from "@/lib/types";
+import type { ActionResult, AuditLog, SubmissionNote, SubmissionStatus } from "@/lib/types";
 
 function revalidateAll() {
   revalidatePath("/submissions");
@@ -279,27 +279,51 @@ export async function approveSubmission(
       );
     }
 
-    const { data: record, error: recordError } = await admin
+    // One student can apply more than once in a year. A different placement
+    // (another institution or course) gets its own record and its own awards;
+    // an identical one is the same enrollment, so this submission links to it
+    // instead of tripping the unique placement index. (NULLs need .is(), not
+    // .eq(), to match — hence the per-column branches.)
+    let existingQuery = admin
       .from(T.academicRecords)
-      .insert({
-        org_id: ORG_ID,
-        student_id: studentId,
-        institution_id: sub.institution_id,
-        academic_year_id: sub.academic_year_id,
-        standard_id: sub.standard_id,
-        stream_id: sub.stream_id,
-        course_id: sub.course_id,
-        period_no: sub.period_no,
-        roll_no: sub.roll_no,
-        percentage: sub.percentage,
-        grade: sub.grade,
-        grade_source: "self_reported",
-        remarks: sub.notes,
-      })
-      .select()
-      .single();
+      .select("id")
+      .eq("org_id", ORG_ID)
+      .eq("student_id", studentId)
+      .eq("academic_year_id", sub.academic_year_id)
+      .eq("institution_id", sub.institution_id);
+    existingQuery = sub.standard_id ? existingQuery.eq("standard_id", sub.standard_id) : existingQuery.is("standard_id", null);
+    existingQuery = sub.course_id ? existingQuery.eq("course_id", sub.course_id) : existingQuery.is("course_id", null);
+    existingQuery = sub.period_no ? existingQuery.eq("period_no", sub.period_no) : existingQuery.is("period_no", null);
+    const { data: existingRecord } = await existingQuery.maybeSingle();
 
-    if (recordError) return { ok: false, error: friendly(recordError.message) };
+    let record: { id: string };
+    const linkedExistingRecord = Boolean(existingRecord);
+    if (existingRecord) {
+      record = existingRecord as { id: string };
+    } else {
+      const { data: created, error: recordError } = await admin
+        .from(T.academicRecords)
+        .insert({
+          org_id: ORG_ID,
+          student_id: studentId,
+          institution_id: sub.institution_id,
+          academic_year_id: sub.academic_year_id,
+          standard_id: sub.standard_id,
+          stream_id: sub.stream_id,
+          course_id: sub.course_id,
+          period_no: sub.period_no,
+          roll_no: sub.roll_no,
+          percentage: sub.percentage,
+          grade: sub.grade,
+          grade_source: "self_reported",
+          remarks: sub.notes,
+        })
+        .select()
+        .single();
+
+      if (recordError) return { ok: false, error: friendly(recordError.message) };
+      record = created as { id: string };
+    }
 
     const { error: updateError } = await supabase
       .from(T.publicSubmissions)
@@ -320,16 +344,24 @@ export async function approveSubmission(
         entityId: id,
         action: "update",
         actor,
-        diff: { status: { from: sub.status, to: "approved" }, note: trimmedNote },
-      }),
-      writeAudit(supabase, {
-        entity: "academic_records",
-        entityId: record.id,
-        action: "create",
-        actor,
-        diff: { approved_from_submission: id, self_reported: true },
+        diff: {
+          status: { from: sub.status, to: "approved" },
+          note: trimmedNote,
+          ...(linkedExistingRecord ? { linked_existing_record: record.id } : {}),
+        },
       }),
     );
+    if (!linkedExistingRecord) {
+      auditWrites.push(
+        writeAudit(supabase, {
+          entity: "academic_records",
+          entityId: record.id,
+          action: "create",
+          actor,
+          diff: { approved_from_submission: id, self_reported: true },
+        }),
+      );
+    }
     await Promise.all(auditWrites);
 
     revalidateAll();
@@ -580,6 +612,46 @@ export async function rejectSubmission(id: string, note: string): Promise<Action
  *  looked at yet"). */
 export async function markSubmissionDoubtful(id: string, note: string): Promise<ActionResult<null>> {
   return setReviewStatus(id, "doubtful", note);
+}
+
+/** Follow-up notes are an append-only log — separate from the single
+ *  review_note (the reason for the latest decision), which the next decision
+ *  overwrites. Anyone who can review (Submissions: Update) can add one, at
+ *  any status, and nothing edits or deletes them afterwards. */
+export async function addSubmissionNote(id: string, note: string): Promise<ActionResult<SubmissionNote>> {
+  const trimmed = note.trim();
+  if (!trimmed) return { ok: false, error: "Write a note first" };
+  if (trimmed.length > 2000) return { ok: false, error: "Notes are limited to 2000 characters" };
+
+  try {
+    const { supabase, actor } = await requirePermission("submissions", "update");
+    const { data, error } = await supabase
+      .from(T.submissionNotes)
+      .insert({ org_id: ORG_ID, submission_id: id, note: trimmed, created_by: actor })
+      .select("id, submission_id, note, created_by, created_at")
+      .single();
+    if (error) return { ok: false, error: friendly(error.message) };
+    return { ok: true, data: data as SubmissionNote };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+/** Oldest first, so the log reads like a conversation. */
+export async function listSubmissionNotes(id: string): Promise<ActionResult<SubmissionNote[]>> {
+  try {
+    const { supabase } = await requirePermission("submissions", "read");
+    const { data, error } = await supabase
+      .from(T.submissionNotes)
+      .select("id, submission_id, note, created_by, created_at")
+      .eq("org_id", ORG_ID)
+      .eq("submission_id", id)
+      .order("created_at", { ascending: true });
+    if (error) return { ok: false, error: friendly(error.message) };
+    return { ok: true, data: (data ?? []) as SubmissionNote[] };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
 }
 
 /** Every approve/reject/doubtful/edit against this submission, newest

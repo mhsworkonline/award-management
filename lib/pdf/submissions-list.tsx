@@ -9,6 +9,7 @@ import {
   renderToBuffer,
   type DocumentProps,
 } from "@react-pdf/renderer";
+import { pdfScale, type PdfTextSize } from "@/lib/pdf/text-size";
 import {
   SUBMISSION_LIST_COLUMNS,
   groupSubmissionRows,
@@ -17,46 +18,49 @@ import {
   type SubmissionSortKey,
 } from "@/lib/data/submission-report-columns";
 
-const styles = StyleSheet.create({
-  page: { paddingTop: 34, paddingBottom: 44, paddingHorizontal: 26, fontSize: 8.5, color: "#1c2029" },
-  headerRow: { flexDirection: "row", alignItems: "center" },
-  logo: { width: 38, height: 38, marginRight: 10, objectFit: "contain" },
-  title: { fontSize: 15, fontWeight: 700 },
-  subtitle: { fontSize: 9, color: "#5b6472", marginTop: 3 },
-  headerBar: { borderBottomWidth: 1.5, borderBottomColor: "#1c2029", paddingBottom: 7, marginBottom: 11 },
-  meta: { flexDirection: "row", justifyContent: "space-between", marginTop: 5, fontSize: 8, color: "#5b6472" },
+const createStyles = (scale: number) => {
+  const f = (size: number) => Math.round(size * scale * 10) / 10;
+  return StyleSheet.create({
+    page: { paddingTop: 34, paddingBottom: 44, paddingHorizontal: 26, fontSize: f(8.5), color: "#1c2029" },
+    headerRow: { flexDirection: "row", alignItems: "center" },
+    logo: { width: 38, height: 38, marginRight: 10, objectFit: "contain" },
+    title: { fontSize: f(15), fontWeight: 700 },
+    subtitle: { fontSize: f(9), color: "#5b6472", marginTop: 3 },
+    headerBar: { borderBottomWidth: 1.5, borderBottomColor: "#1c2029", paddingBottom: 7, marginBottom: 11 },
+    meta: { flexDirection: "row", justifyContent: "space-between", marginTop: 5, fontSize: f(8), color: "#5b6472" },
 
-  groupTitle: {
-    marginTop: 12,
-    marginBottom: 4,
-    fontSize: 9.5,
-    fontWeight: 700,
-    backgroundColor: "#f1f3f7",
-    paddingVertical: 3.5,
-    paddingHorizontal: 5,
-  },
+    groupTitle: {
+      marginTop: 12,
+      marginBottom: 4,
+      fontSize: f(9.5),
+      fontWeight: 700,
+      backgroundColor: "#f1f3f7",
+      paddingVertical: 3.5,
+      paddingHorizontal: 5,
+    },
 
-  row: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: "#dfe3ea", minHeight: 18, alignItems: "center" },
-  headRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#9aa3b0", backgroundColor: "#fafbfc", minHeight: 20, alignItems: "center" },
-  cell: { paddingVertical: 3, paddingHorizontal: 4 },
-  headCell: { fontWeight: 700, fontSize: 7.5, color: "#3a4250", textTransform: "uppercase" },
+    row: { flexDirection: "row", borderBottomWidth: 0.5, borderBottomColor: "#dfe3ea", minHeight: 18, alignItems: "center" },
+    headRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#9aa3b0", backgroundColor: "#fafbfc", minHeight: 20, alignItems: "center" },
+    cell: { paddingVertical: 3, paddingHorizontal: 4 },
+    headCell: { fontWeight: 700, fontSize: f(7.5), color: "#3a4250", textTransform: "uppercase" },
 
-  emptyBox: { marginTop: 30, textAlign: "center", color: "#5b6472", fontSize: 10 },
+    emptyBox: { marginTop: 30, textAlign: "center", color: "#5b6472", fontSize: f(10) },
 
-  footer: {
-    position: "absolute",
-    bottom: 22,
-    left: 26,
-    right: 26,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    fontSize: 7.5,
-    color: "#8a93a1",
-    borderTopWidth: 0.5,
-    borderTopColor: "#dfe3ea",
-    paddingTop: 5,
-  },
-});
+    footer: {
+      position: "absolute",
+      bottom: 22,
+      left: 26,
+      right: 26,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      fontSize: f(7.5),
+      color: "#8a93a1",
+      borderTopWidth: 0.5,
+      borderTopColor: "#dfe3ea",
+      paddingTop: 5,
+    },
+  });
+};
 
 // Relative weights so wide free-text columns get more room than short ones —
 // normalized against whatever's actually selected, not a fixed percentage.
@@ -77,6 +81,8 @@ const COLUMN_WEIGHT: Record<SubmissionColumnKey, number> = {
 };
 
 export type SubmissionsListPdfProps = {
+  /** Scales every font size — see lib/pdf/text-size.ts. */
+  textSize: PdfTextSize;
   rows: SubmissionListRow[];
   columns: SubmissionColumnKey[];
   sort: SubmissionSortKey;
@@ -97,7 +103,9 @@ export function SubmissionsListPdf({
   organizationName,
   logoUrl,
   customTitle,
+  textSize,
 }: SubmissionsListPdfProps) {
+  const styles = createStyles(pdfScale(textSize));
   const labels = new Map(SUBMISSION_LIST_COLUMNS.map((c) => [c.key, c.label]));
   const totalWeight = columns.reduce((sum, key) => sum + (COLUMN_WEIGHT[key] ?? 1), 0) || 1;
   const widthOf = (key: SubmissionColumnKey) => `${((COLUMN_WEIGHT[key] ?? 1) / totalWeight) * 100}%`;
@@ -125,7 +133,7 @@ export function SubmissionsListPdf({
           groups.map((group) => (
             <View key={group.key} wrap>
               <Text style={styles.groupTitle}>
-                {group.label} — {group.rows.length} student{group.rows.length === 1 ? "" : "s"}
+                {group.label}
               </Text>
 
               <View style={styles.headRow}>
@@ -150,7 +158,7 @@ export function SubmissionsListPdf({
         )}
 
         {rows.length > 0 && (
-          <Text style={{ marginTop: 12, fontSize: 8.5, color: "#3a4250" }}>Total: {rows.length}</Text>
+          <Text style={{ marginTop: 12, fontSize: 8.5 * pdfScale(textSize), color: "#3a4250" }}>Total: {rows.length}</Text>
         )}
 
         <View style={styles.footer} fixed>
