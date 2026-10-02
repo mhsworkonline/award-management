@@ -48,13 +48,16 @@ import {
   approveSubmission,
   checkSubmissionDuplicates,
   deleteSubmissionAttachment,
+  getApprovalReversalImpact,
   getAttachmentSignedUrl,
   getSubmissionHistory,
   listSubmissionNotes,
   markSubmissionDoubtful,
   rejectSubmission,
   replaceSubmissionAttachment,
+  reverseApproval,
   updateSubmission,
+  type ApprovalReversalImpact,
 } from "@/lib/actions/submissions";
 import { createClient } from "@/lib/supabase/client";
 import { ATTACHMENTS_BUCKET, STUDENT_PHOTOS_BUCKET } from "@/lib/tables";
@@ -80,6 +83,13 @@ const DECISION_LABEL: Record<DecisionKind, string> = {
   approve: "Approve",
   reject: "Reject",
   doubtful: "Mark doubtful",
+};
+
+const STATUS_LABEL: Record<SubmissionStatus, string> = {
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+  doubtful: "Doubtful",
 };
 
 /** Renders one History entry from its audit diff — the shape approve/reject/
@@ -141,7 +151,7 @@ export function SubmissionReviewSheet({
   onDecided?: (id: string, fromStatus: SubmissionStatus, toStatus: SubmissionStatus) => void;
 }) {
   const router = useRouter();
-  const { can } = usePermissions();
+  const { can, isAdmin } = usePermissions();
   const canUpdateSubmission = can("submissions", "update");
   // Deleting an attachment removes the stored file itself — needs its own
   // Delete grant, not just Update.
@@ -154,6 +164,14 @@ export function SubmissionReviewSheet({
   const [deciding, setDeciding] = React.useState(false);
   const [decisionKind, setDecisionKind] = React.useState<DecisionKind | null>(null);
   const [decisionNote, setDecisionNote] = React.useState("");
+  // Admin-only "reverse an Approved submission" flow — separate from
+  // decisionKind because it needs a target-status picker and a destructive-
+  // delete warning that the normal Reject/Doubtful path doesn't.
+  const [reversing, setReversing] = React.useState(false);
+  const [reversalImpact, setReversalImpact] = React.useState<ApprovalReversalImpact | null>(null);
+  const [reversalTarget, setReversalTarget] = React.useState<"pending" | "rejected" | "doubtful">("pending");
+  const [reversalNote, setReversalNote] = React.useState("");
+  const [reversingBusy, setReversingBusy] = React.useState(false);
   const [duplicates, setDuplicates] = React.useState<string[]>([]);
   const [history, setHistory] = React.useState<AuditLog[]>([]);
   // Follow-up notes: an append-only log, separate from the decision note.
@@ -385,6 +403,10 @@ export function SubmissionReviewSheet({
     if (!submission) return;
     setDecisionKind(null);
     setDecisionNote("");
+    setReversing(false);
+    setReversalImpact(null);
+    setReversalTarget("pending");
+    setReversalNote("");
     setFollowUp("");
     setNewNote("");
     setNotes(initialNotes);
@@ -569,6 +591,46 @@ export function SubmissionReviewSheet({
     );
     const toStatus: SubmissionStatus = kind === "approve" ? "approved" : kind === "reject" ? "rejected" : "doubtful";
     onDecided?.(submission.id, submission.status, toStatus);
+    router.refresh();
+    onOpenChange(false);
+  }
+
+  /** Opens the reversal panel and loads what it would delete — fetched fresh
+   *  each time rather than kept in state, since an award or gift could have
+   *  been added since the sheet opened. */
+  async function startReversal() {
+    if (!submission) return;
+    setReversing(true);
+    setReversalImpact(null);
+    const result = await getApprovalReversalImpact(submission.id);
+    if (!result.ok) {
+      toast.error("Could not check what this would affect", { description: result.error });
+      setReversing(false);
+      return;
+    }
+    setReversalImpact(result.data);
+  }
+
+  /** Deletes the roster entry (and, by cascade, its awards/gifts/distribution)
+   *  that approving created, and moves the submission to the chosen status.
+   *  Irreversible — reversalImpact is what the confirm button's warning is
+   *  built from. */
+  async function confirmReversal() {
+    if (!submission) return;
+    const note = reversalNote.trim();
+    if (!note) {
+      setError("A note is required");
+      return;
+    }
+    setReversingBusy(true);
+    const result = await reverseApproval(submission.id, reversalTarget, note);
+    setReversingBusy(false);
+    if (!result.ok) {
+      toast.error("Could not reverse the approval", { description: result.error });
+      return;
+    }
+    toast.success(`Reversed — moved back to ${STATUS_LABEL[reversalTarget]}`);
+    onDecided?.(submission.id, submission.status, reversalTarget);
     router.refresh();
     onOpenChange(false);
   }
@@ -1127,6 +1189,83 @@ export function SubmissionReviewSheet({
                 </Field>
               )}
 
+              {reversing && (
+                <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/[0.04] p-3.5">
+                  <p className="text-[13px] font-semibold text-destructive">Reverse this approval</p>
+                  {reversalImpact === null ? (
+                    <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking what this would affect…
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-[13px] leading-relaxed">
+                        {reversalImpact.academicRecordId ? (
+                          reversalImpact.sharedWithOtherSubmissions > 0 ? (
+                            <>
+                              This roster entry is also claimed by {reversalImpact.sharedWithOtherSubmissions} other
+                              application{reversalImpact.sharedWithOtherSubmissions === 1 ? "" : "s"} for the same
+                              student and placement (likely a duplicate submission already approved into it). It
+                              will only be <span className="font-semibold">unlinked</span> from this submission —
+                              the roster entry itself, its awards, and the other application are left exactly as
+                              they are.
+                            </>
+                          ) : (
+                            <>
+                              This permanently deletes the roster entry this approval created
+                              {reversalImpact.awards > 0 && (
+                                <>
+                                  {" "}
+                                  along with {reversalImpact.awards} award{reversalImpact.awards === 1 ? "" : "s"}
+                                </>
+                              )}
+                              {reversalImpact.giftAllocations > 0 && (
+                                <> and {reversalImpact.giftAllocations} gift allocation{reversalImpact.giftAllocations === 1 ? "" : "s"}</>
+                              )}
+                              {reversalImpact.distributed > 0 && (
+                                <span className="font-semibold">
+                                  {" "}
+                                  — {reversalImpact.distributed} of those gift{reversalImpact.distributed === 1 ? "" : "s"} already
+                                  marked distributed
+                                </span>
+                              )}
+                              . The student's own record isn't affected — only this year's enrollment. This cannot
+                              be undone.
+                            </>
+                          )
+                        ) : (
+                          "This submission has no linked roster entry to remove — only its status will change."
+                        )}
+                      </p>
+                      <Field label="New status">
+                        <Select
+                          value={reversalTarget}
+                          onValueChange={(v) => setReversalTarget(v as typeof reversalTarget)}
+                        >
+                          <SelectTrigger aria-label="New status">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="rejected">Rejected</SelectItem>
+                            <SelectItem value="doubtful">Doubtful</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label="Note for reversing" htmlFor="reversal-note" required>
+                        <Textarea
+                          id="reversal-note"
+                          rows={2}
+                          autoFocus
+                          value={reversalNote}
+                          onChange={(e) => setReversalNote(e.target.value)}
+                          placeholder="Why? This is required and stays on record."
+                        />
+                      </Field>
+                    </>
+                  )}
+                </div>
+              )}
+
               {error && (
                 <p className="rounded-md bg-destructive/10 px-3 py-2 text-[13px] font-medium text-destructive">
                   {error}
@@ -1134,9 +1273,9 @@ export function SubmissionReviewSheet({
               )}
             </SheetBody>
 
-            {/* Approved submissions still get the footer — just with Save
-             *  only: their fields stay editable (corrections sync into the
-             *  student/academic record), but there's no status to move to. */}
+            {/* Approved submissions still get the footer — with Save (corrections
+             *  sync into the student/academic record) and, for admins only, the
+             *  one way out of Approved: Reverse approval. */}
             {(canUpdateSubmission || canApproveSubmission) && (
               <SheetFooter className="flex-wrap justify-between">
                 {decisionKind ? (
@@ -1162,6 +1301,21 @@ export function SubmissionReviewSheet({
                       Confirm — {DECISION_LABEL[decisionKind]}
                     </Button>
                   </div>
+                ) : reversing ? (
+                  <div className="ml-auto flex gap-2">
+                    <Button type="button" variant="ghost" onClick={() => setReversing(false)} disabled={reversingBusy}>
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={confirmReversal}
+                      disabled={reversingBusy || reversalImpact === null || !reversalNote.trim()}
+                    >
+                      {reversingBusy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                      Confirm — move to {STATUS_LABEL[reversalTarget]}
+                    </Button>
+                  </div>
                 ) : (
                   <>
                     <div className="flex gap-2">
@@ -1173,6 +1327,11 @@ export function SubmissionReviewSheet({
                       {!isApproved && canUpdateSubmission && submission.status !== "doubtful" && (
                         <Button type="button" variant="outline" onClick={() => setDecisionKind("doubtful")}>
                           <AlertTriangle /> Mark doubtful
+                        </Button>
+                      )}
+                      {isApproved && isAdmin && (
+                        <Button type="button" variant="outline" onClick={() => void startReversal()}>
+                          <RefreshCw /> Reverse approval
                         </Button>
                       )}
                     </div>

@@ -11,12 +11,16 @@ import {
   BAND_ORDER,
   RULE_MAX_LEVEL,
   bandFor,
+  isBlankGrade,
   type AwardBand,
 } from "@/lib/awards/percentage-rule";
+import { COLLEGE_RANK_FLOOR, rankCourseGroup } from "@/lib/awards/college-rank-rule";
+import { type AwardRuleKey } from "@/lib/awards/rules";
+import { placementLabel } from "@/lib/placement";
 import type { ActionResult } from "@/lib/types";
 
 export type AssignmentSummary = {
-  /** School records (Play Group to Std 12) in the year — everyone the rule looked at. */
+  /** Every record the chosen rule looked at. */
   eligible: number;
   /** Students who get a rank/consolation award they don't have yet. */
   toCreate: number;
@@ -26,13 +30,55 @@ export type AssignmentSummary = {
   toRemove: number;
   /** Already correct. */
   unchanged: number;
-  /** Grade but no percentage — left alone for staff to decide. */
-  skipped: { count: number; students: { name: string; standard: string; grade: string | null }[] };
+  /** Left alone for staff to decide — a grade but no percentage to rank/band by. */
+  skipped: { count: number; students: { name: string; group: string; grade: string | null }[] };
   /** How many students end up in each band once applied. */
   byBand: Record<AwardBand, number>;
 };
 
-type PlanRow = {
+/** One record's outcome under whichever rule is running — the shape buildPlan's
+ *  diff logic works from, regardless of how school vs. college arrived at `band`. */
+type Candidate = {
+  id: string; // academic_record_id
+  band: AwardBand | "skip";
+  studentName: string;
+  /** Standard label (school) or course name (college) — only shown in the skipped list. */
+  groupLabel: string;
+  grade: string | null;
+  studentAwards: { id: string; award_category_id: string }[] | null;
+};
+
+const FETCH_CHUNK = 1000; // PostgREST's default max-rows per request
+const WRITE_CHUNK = 100; // keeps `.in("id", …)` URLs comfortably short
+
+function chunks<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+type Supa = Awaited<ReturnType<typeof requirePermission>>["supabase"];
+
+/** Pages through a query in FETCH_CHUNK-sized batches (PostgREST's own cap per
+ *  request). `query` is loosely typed because Supabase infers a slightly
+ *  different (but compatible) shape for embedded relations than the plain
+ *  row type callers want to work with — same cast every row-fetcher already
+ *  needed before this was pulled out into one place. */
+async function fetchAll<T>(
+  query: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let start = 0; ; start += FETCH_CHUNK) {
+    const { data, error } = await query(start, start + FETCH_CHUNK - 1);
+    if (error) throw new Error(friendly(error.message));
+    const chunk = (data ?? []) as T[];
+    rows.push(...chunk);
+    if (chunk.length < FETCH_CHUNK) break;
+  }
+  return rows;
+}
+
+type SchoolRow = {
   id: string;
   percentage: number | null;
   grade: string | null;
@@ -41,23 +87,110 @@ type PlanRow = {
   student_awards: { id: string; award_category_id: string }[] | null;
 };
 
-const FETCH_CHUNK = 1000; // PostgREST's default max-rows per request
-const WRITE_CHUNK = 100; // keeps `.in("id", …)` URLs comfortably short
-const SKIPPED_SHOWN = 30;
+/** School rule ("school_percentage"): every school record from Play Group to
+ *  Std 12, one band per row via bandFor() — see lib/awards/percentage-rule.ts. */
+async function collectSchoolCandidates(supabase: Supa, academicYearId: string): Promise<Candidate[]> {
+  const rows = await fetchAll<SchoolRow>((from, to) =>
+    supabase
+      .from(T.academicRecords)
+      .select(
+        `id, percentage, grade,
+         students:am_students!inner ( first_name, middle_name, last_name ),
+         institutions:am_institutions!inner ( type ),
+         standards:am_standards!inner ( level, label ),
+         student_awards:am_student_awards ( id, award_category_id )`,
+      )
+      .eq("org_id", ORG_ID)
+      .eq("academic_year_id", academicYearId)
+      .eq("institutions.type", "school")
+      .lte("standards.level", RULE_MAX_LEVEL)
+      .order("id")
+      .range(from, to),
+  );
 
-function chunks<T>(items: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
+  return rows.map((row) => ({
+    id: row.id,
+    band: bandFor(row.percentage === null ? null : Number(row.percentage), row.grade, row.standards?.level ?? RULE_MAX_LEVEL),
+    studentName: [row.students?.first_name, row.students?.last_name].filter(Boolean).join(" ") || "—",
+    groupLabel: row.standards?.label ?? "—",
+    grade: row.grade,
+    studentAwards: row.student_awards,
+  }));
 }
 
-/** Works out what the rule would do, without changing anything — the same plan
- *  drives both the preview and the real run, so the numbers shown before
- *  confirming are exactly what the run then does. */
-async function buildPlan(
-  supabase: Awaited<ReturnType<typeof requirePermission>>["supabase"],
-  academicYearId: string,
-) {
+type CollegeRow = {
+  id: string;
+  percentage: number | null;
+  grade: string | null;
+  course_id: string | null;
+  period_no: number | null;
+  students: { first_name: string; middle_name: string | null; last_name: string } | null;
+  courses: { name: string; structure_type: "year" | "semester" } | null;
+  student_awards: { id: string; award_category_id: string }[] | null;
+};
+
+/** College rule ("college_rank_1", a.k.a. "Rule 1"): every college record with
+ *  a matched course (a custom "Other" course can't be grouped, so it's
+ *  skipped like a grade-only school record is). Grouped by course *and*
+ *  year/semester — BCom Year 1 is judged separately from BCom Year 2, per the
+ *  conversation that designed this — then ranked within each group by
+ *  rankCourseGroup(). See lib/awards/college-rank-rule.ts. */
+async function collectCollegeCandidates(supabase: Supa, academicYearId: string): Promise<Candidate[]> {
+  const rows = await fetchAll<CollegeRow>((from, to) =>
+    supabase
+      .from(T.academicRecords)
+      .select(
+        `id, percentage, grade, course_id, period_no,
+         students:am_students!inner ( first_name, middle_name, last_name ),
+         institutions:am_institutions!inner ( type ),
+         courses:am_courses ( name, structure_type ),
+         student_awards:am_student_awards ( id, award_category_id )`,
+      )
+      .eq("org_id", ORG_ID)
+      .eq("academic_year_id", academicYearId)
+      .eq("institutions.type", "college")
+      .not("course_id", "is", null)
+      .order("id")
+      .range(from, to),
+  );
+
+  const byCoursePeriod = new Map<string, CollegeRow[]>();
+  for (const row of rows) {
+    const key = `${row.course_id}:${row.period_no ?? "none"}`;
+    const list = byCoursePeriod.get(key);
+    if (list) list.push(row);
+    else byCoursePeriod.set(key, [row]);
+  }
+
+  const candidates: Candidate[] = [];
+  for (const group of byCoursePeriod.values()) {
+    const rankable = group.filter((r) => r.percentage !== null && Number(r.percentage) > COLLEGE_RANK_FLOOR);
+    const ranks = rankCourseGroup(rankable.map((r) => ({ id: r.id, percentage: Number(r.percentage) })));
+
+    for (const row of group) {
+      const band: AwardBand | "skip" =
+        row.percentage !== null
+          ? (ranks.get(row.id) ?? "consolation") // ranked above the floor, or at/below it
+          : isBlankGrade(row.grade)
+            ? "consolation"
+            : "skip";
+      candidates.push({
+        id: row.id,
+        band,
+        studentName: [row.students?.first_name, row.students?.last_name].filter(Boolean).join(" ") || "—",
+        groupLabel: placementLabel(row),
+        grade: row.grade,
+        studentAwards: row.student_awards,
+      });
+    }
+  }
+  return candidates;
+}
+
+/** Works out what the chosen rule would do, without changing anything — the
+ *  same plan drives both the preview and the real run, so the numbers shown
+ *  before confirming are exactly what the run then does. */
+async function buildPlan(supabase: Supa, academicYearId: string, ruleKey: AwardRuleKey) {
   const { data: categories, error: catError } = await supabase
     .from(T.awardCategories)
     .select("id, name")
@@ -77,72 +210,47 @@ async function buildPlan(
   }
   const bandByCategoryId = new Map(BAND_ORDER.map((b) => [categoryId[b], b]));
 
-  const rows: PlanRow[] = [];
-  for (let start = 0; ; start += FETCH_CHUNK) {
-    const { data, error } = await supabase
-      .from(T.academicRecords)
-      .select(
-        `id, percentage, grade,
-         students:am_students!inner ( first_name, middle_name, last_name ),
-         institutions:am_institutions!inner ( type ),
-         standards:am_standards!inner ( level, label ),
-         student_awards:am_student_awards ( id, award_category_id )`,
-      )
-      .eq("org_id", ORG_ID)
-      .eq("academic_year_id", academicYearId)
-      .eq("institutions.type", "school")
-      .lte("standards.level", RULE_MAX_LEVEL)
-      .order("id")
-      .range(start, start + FETCH_CHUNK - 1);
-    if (error) throw new Error(friendly(error.message));
-    const chunk = (data ?? []) as unknown as PlanRow[];
-    rows.push(...chunk);
-    if (chunk.length < FETCH_CHUNK) break;
-  }
+  const candidates =
+    ruleKey === "school_percentage"
+      ? await collectSchoolCandidates(supabase, academicYearId)
+      : await collectCollegeCandidates(supabase, academicYearId);
 
   const inserts: { org_id: string; academic_record_id: string; award_category_id: string }[] = [];
-  const updates: { id: string; to: string; fromBand: AwardBand; toBand: AwardBand }[] = [];
+  const updates: { id: string; to: string }[] = [];
   const deletes: string[] = [];
   const byBand: Record<AwardBand, number> = { first: 0, second: 0, third: 0, consolation: 0 };
   const skippedStudents: AssignmentSummary["skipped"]["students"] = [];
+  const SKIPPED_SHOWN = 30;
   let skippedCount = 0;
   let unchanged = 0;
 
-  for (const row of rows) {
-    const band = bandFor(
-      row.percentage === null ? null : Number(row.percentage),
-      row.grade,
-      row.standards?.level ?? RULE_MAX_LEVEL,
-    );
+  for (const c of candidates) {
+    const band = c.band;
     if (band === "skip") {
       skippedCount += 1;
       if (skippedStudents.length < SKIPPED_SHOWN) {
-        skippedStudents.push({
-          name: [row.students?.first_name, row.students?.last_name].filter(Boolean).join(" ") || "—",
-          standard: row.standards?.label ?? "—",
-          grade: row.grade,
-        });
+        skippedStudents.push({ name: c.studentName, group: c.groupLabel, grade: c.grade });
       }
       continue;
     }
     byBand[band] += 1;
 
-    const existing = (row.student_awards ?? []).filter((a) => bandByCategoryId.has(a.award_category_id));
+    const existing = (c.studentAwards ?? []).filter((a) => bandByCategoryId.has(a.award_category_id));
     const correct = existing.find((a) => a.award_category_id === categoryId[band]);
     if (correct) {
       unchanged += existing.length === 1 ? 1 : 0;
       for (const extra of existing) if (extra.id !== correct.id) deletes.push(extra.id);
     } else if (existing.length > 0) {
       const [keep, ...extras] = existing;
-      updates.push({ id: keep.id, to: categoryId[band], fromBand: bandByCategoryId.get(keep.award_category_id)!, toBand: band });
+      updates.push({ id: keep.id, to: categoryId[band] });
       for (const extra of extras) deletes.push(extra.id);
     } else {
-      inserts.push({ org_id: ORG_ID, academic_record_id: row.id, award_category_id: categoryId[band] });
+      inserts.push({ org_id: ORG_ID, academic_record_id: c.id, award_category_id: categoryId[band] });
     }
   }
 
   const summary: AssignmentSummary = {
-    eligible: rows.length,
+    eligible: candidates.length,
     toCreate: inserts.length,
     toChange: updates.length,
     toRemove: deletes.length,
@@ -161,25 +269,31 @@ async function requireAwardManagement() {
   return requirePermission("awards", "delete");
 }
 
-/** Read-only: what "Assign Awards" would do for this year. */
-export async function previewPercentageAwards(academicYearId: string): Promise<ActionResult<AssignmentSummary>> {
+/** Read-only: what "Assign Awards" would do for this year under the given rule. */
+export async function previewAwardAssignment(
+  academicYearId: string,
+  ruleKey: AwardRuleKey,
+): Promise<ActionResult<AssignmentSummary>> {
   try {
     const { supabase } = await requireAwardManagement();
-    const { summary } = await buildPlan(supabase, academicYearId);
+    const { summary } = await buildPlan(supabase, academicYearId, ruleKey);
     return { ok: true, data: summary };
   } catch (e) {
     return { ok: false, error: message(e) };
   }
 }
 
-/** Applies the school award rule to every school record in the year (Play Group to Std 12).
- *  Safe to run repeatedly: it only touches the four rank/consolation awards,
- *  switches an existing one in place (so gifts and distribution already tied
- *  to it survive) and leaves any other award category alone. */
-export async function applyPercentageAwards(academicYearId: string): Promise<ActionResult<AssignmentSummary>> {
+/** Applies the chosen rule to every record it covers for the year. Safe to run
+ *  repeatedly: it only touches the four rank/consolation awards, switches an
+ *  existing one in place (so gifts and distribution already tied to it
+ *  survive) and leaves any other award category alone. */
+export async function applyAwardAssignment(
+  academicYearId: string,
+  ruleKey: AwardRuleKey,
+): Promise<ActionResult<AssignmentSummary>> {
   try {
     const { supabase, actor } = await requireAwardManagement();
-    const { summary, inserts, updates, deletes } = await buildPlan(supabase, academicYearId);
+    const { summary, inserts, updates, deletes } = await buildPlan(supabase, academicYearId, ruleKey);
 
     // Removals first, so a switch below can never collide on the
     // one-award-per-category-per-record rule.
@@ -223,13 +337,14 @@ export async function applyPercentageAwards(academicYearId: string): Promise<Act
       action: "update",
       actor,
       diff: {
-        assigned_by_percentage_rule: {
+        assigned_by_rule: {
+          rule: ruleKey,
           academic_year_id: academicYearId,
           created: summary.toCreate,
           changed: summary.toChange,
           removed: summary.toRemove,
           unchanged: summary.unchanged,
-          skipped_grade_only: summary.skipped.count,
+          skipped: summary.skipped.count,
           by_band: summary.byBand,
         },
       },

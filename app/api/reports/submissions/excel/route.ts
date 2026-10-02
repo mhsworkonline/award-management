@@ -16,7 +16,7 @@ import {
   parseInstitutionTypes,
   parseStandardFilter,
   standardOptions,
-  parseSubmissionSort,
+  parseSubmissionSorts,
   type SubmissionColumnKey,
 } from "@/lib/data/submission-report-columns";
 import { T } from "@/lib/tables";
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     const academicYearId = url.searchParams.get("academic_year_id");
     if (!academicYearId) return new Response("Missing academic_year_id", { status: 400 });
     const columns = parseColumns(url);
-    const sort = parseSubmissionSort(url.searchParams.get("sort"));
+    const sorts = parseSubmissionSorts(url.searchParams.get("sort"));
     const institutionKeys = parseInstitutionFilter(url.searchParams.get("institutions"));
     const institutionTypes = parseInstitutionTypes(url.searchParams.get("types"));
     const standardIds = parseStandardFilter(url.searchParams.get("standards"));
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     // One section per Standard/course — a bold, filled divider row ahead of
     // each group's students, same grouping as the preview table and the PDF.
     const GROUP_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F3F7" } };
-    for (const group of groupSubmissionRows(rows, sort)) {
+    for (const group of groupSubmissionRows(rows, sorts)) {
       const groupRow = sheet.addRow([`${group.label} (${group.rows.length})`]);
       const lastColumn = Math.max(columns.length, 1);
       sheet.mergeCells(groupRow.number, 1, groupRow.number, lastColumn);

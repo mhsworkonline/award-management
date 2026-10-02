@@ -18,6 +18,11 @@ import {
 export { SUBMISSION_LIST_COLUMNS, DEFAULT_SUBMISSION_LIST_COLUMNS };
 export type { SubmissionListRow };
 
+/** Std 11/12 split further by Stream (Arts/Commerce/Science) in both reports
+ *  below — those students sit entirely different subjects, so a raw
+ *  percentage isn't comparable across streams the way it is within one. */
+const STREAM_LEVELS = new Set([11, 12]);
+
 /** Both reports below share the same population: approved public submissions
  *  for one academic year. Unlike the roster report (which reads
  *  am_academic_records — every enrolled student, awarded or not, for any
@@ -94,7 +99,6 @@ export async function getApplicationsByStandard(
     (s) => types.size === 0 || types.has(s.institutions?.type === "school" && s.standards ? "school" : "college"),
   );
 
-  const STREAM_LEVELS = new Set([11, 12]);
   const buckets = new Map<
     string,
     { label: string; level: number; streamName: string; recordIds: string[] }
@@ -184,7 +188,7 @@ type ApprovedSubmissionRaw = {
   boards: { name: string } | null;
   mediums: { name: string } | null;
   standards: { id: string; label: string; level: number } | null;
-  streams: { name: string } | null;
+  streams: { id: string; name: string } | null;
   courses: { name: string; structure_type: "year" | "semester" } | null;
 };
 
@@ -204,7 +208,7 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
        boards:am_boards ( name ),
        mediums:am_mediums ( name ),
        standards:am_standards ( id, label, level ),
-       streams:am_streams ( name ),
+       streams:am_streams ( id, name ),
        courses:am_courses ( name, structure_type )`,
     )
     .eq("org_id", ORG_ID)
@@ -263,12 +267,36 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
       .map((a) => (a.subject ? `${a.name} (${a.subject})` : a.name))
       .join(", ");
 
-    // Every Standard (or course, for colleges) is its own group — unlike
-    // Report 1, streams and semesters don't split a group further here.
-    const groupLabel = s.standards?.label ?? s.courses?.name ?? s.other_course_name ?? "Other";
+    // Every Standard (or course+year, for colleges) is its own group. Std
+    // 11/12 split one level further by Stream (Arts/Commerce/Science); a
+    // college course splits by year/semester (BCom Year 1 is its own section,
+    // separate from BCom Year 2) — same rule the award rule (Rule 1) uses,
+    // since those cohorts sit different subjects/years entirely and lumping
+    // them under one "BCom" section would mix non-comparable percentages the
+    // way the rest of the app never does.
+    const splitByStream = s.standards ? STREAM_LEVELS.has(s.standards.level) : false;
+    const streamName = splitByStream ? (s.streams?.name ?? "Unspecified stream") : null;
+    const groupLabel = s.standards
+      ? splitByStream
+        ? `${s.standards.label} — ${streamName}`
+        : s.standards.label
+      : placement !== "—"
+        ? placement // "BCom · Year 1" (placementLabel) or the other-course label — both already include the year/semester
+        : "Other";
     const groupSort = s.standards
       ? `0-${String(s.standards.level + 100).padStart(3, "0")}-${groupLabel}`
-      : `1-${groupLabel}`;
+      : s.courses
+        ? `1-${s.courses.name}-${String(s.period_no ?? 0).padStart(3, "0")}`
+        : `1-${groupLabel}`;
+    // Filter key for the "Standards to include" picker — Std 11/12 get one
+    // key per stream, so each stream can be picked independently; every other
+    // Standard keeps a single key. Reuses groupLabel as the display text so
+    // the dropdown's wording always matches the section heading it produces.
+    const standardGroupKey = s.standards
+      ? splitByStream
+        ? `${s.standards.id}:${s.streams?.id ?? "unspecified"}`
+        : s.standards.id
+      : null;
 
     return {
       code: s.reference_code,
@@ -294,8 +322,10 @@ export async function getApprovedSubmissionsList(academicYearId: string): Promis
       group_sort: groupSort,
       sort_name: [s.first_name, s.last_name, s.middle_name].filter(Boolean).join(" "),
       sort_percentage: s.percentage,
+      sort_rank: awardsForStudent.length > 0 ? Math.min(...awardsForStudent.map((a) => a.sort_order)) : 999,
       institution_id: s.institution_id,
-      standard_id: s.standards?.id ?? null,
+      standard_group_key: standardGroupKey,
+      standard_group_label: groupLabel,
       standard_level: s.standards?.level ?? null,
       // Same rule as the Submissions table's Type column.
       institution_type: s.institutions

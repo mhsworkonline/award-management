@@ -18,7 +18,7 @@ import {
 import { EmptyState, PageHeader } from "@/components/shell/page-header";
 import {
   DEFAULT_SUBMISSION_LIST_COLUMNS,
-  DEFAULT_SUBMISSION_SORT,
+  SUBMISSION_SORT_LEVELS,
   SUBMISSION_LIST_COLUMNS,
   SUBMISSION_SORT_OPTIONS,
   filterByInstitutionTypes,
@@ -26,7 +26,7 @@ import {
   filterByStandards,
   groupSubmissionRows,
   institutionOptions,
-  parseSubmissionSort,
+  parseSubmissionSorts,
   serializeInstitutionFilter,
   serializeInstitutionTypes,
   serializeStandardFilter,
@@ -59,7 +59,12 @@ export function SubmissionsReport({
   const [checked, setChecked] = React.useState<Set<SubmissionColumnKey>>(
     () => new Set(DEFAULT_SUBMISSION_LIST_COLUMNS),
   );
-  const [sort, setSort] = React.useState<SubmissionSortKey>(DEFAULT_SUBMISSION_SORT);
+  // 1st / 2nd / 3rd sort. "none" = that level is unused (1st always has a value).
+  const [sortLevels, setSortLevels] = React.useState<(SubmissionSortKey | "none")[]>(["name", "none", "none"]);
+  const sorts = parseSubmissionSorts(sortLevels.filter((k) => k !== "none").join(","));
+  function setSortLevel(level: number, value: string) {
+    setSortLevels((prev) => prev.map((k, i) => (i === level ? (value as SubmissionSortKey | "none") : k)));
+  }
   // Empty = every institution.
   const [institutionKeys, setInstitutionKeys] = React.useState<Set<string>>(() => new Set());
 
@@ -109,6 +114,7 @@ export function SubmissionsReport({
   const [textSize, setTextSize] = React.useState<PdfTextSize>(DEFAULT_PDF_TEXT_SIZE);
 
   const columnLabels = submissionColumnLabels(rows);
+  const placementText = columnLabels.get("placement")!.toLowerCase();
 
   // Always render in the fixed, sensible order from SUBMISSION_LIST_COLUMNS —
   // not the order columns happened to be checked in.
@@ -129,10 +135,10 @@ export function SubmissionsReport({
     (activeKeys.size > 0 ? `&institutions=${encodeURIComponent(serializeInstitutionFilter(activeKeys))}` : "") +
     (activeStandards.size > 0 ? `&standards=${serializeStandardFilter(activeStandards)}` : "");
   const excelQuery = yearId
-    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sort}${institutionParam}`
+    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sorts.join(",")}${institutionParam}`
     : "";
   const pdfQuery = yearId
-    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sort}${institutionParam}&size=${textSize}&logo=${
+    ? `?academic_year_id=${yearId}${columnsParam ? `&columns=${columnsParam}` : ""}&sort=${sorts.join(",")}${institutionParam}&size=${textSize}&logo=${
         includeLogo && hasLogo ? "on" : "off"
       }${title.trim() ? `&title=${encodeURIComponent(title.trim())}` : ""}`
     : "";
@@ -140,7 +146,7 @@ export function SubmissionsReport({
 
   // Grouped for preview the same way the exports group — one section per
   // Standard/course — capped to the first 500 rows total across groups.
-  const groups = groupSubmissionRows(rows, sort);
+  const groups = groupSubmissionRows(rows, sorts);
   let remaining = 500;
   const previewGroups = groups
     .map((g) => {
@@ -316,20 +322,34 @@ export function SubmissionsReport({
                     </Popover>
                   </div>
                 )}
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[13px] font-medium">Sort students within each Standard / course by</span>
-                  <Select value={sort} onValueChange={(v) => setSort(parseSubmissionSort(v))}>
-                    <SelectTrigger aria-label="Sort students by">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SUBMISSION_SORT_OPTIONS.map((o) => (
-                        <SelectItem key={o.key} value={o.key}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <span className="text-[13px] font-medium">Sort students within each {placementText} by</span>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {Array.from({ length: SUBMISSION_SORT_LEVELS }, (_, level) => (
+                      <div key={level} className="flex flex-col gap-1">
+                        <span className="text-[12px] text-muted-foreground">
+                          {["1st", "2nd", "3rd"][level]} sort
+                        </span>
+                        <Select value={sortLevels[level]} onValueChange={(v) => setSortLevel(level, v)}>
+                          <SelectTrigger aria-label={`${["1st", "2nd", "3rd"][level]} sort`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {level > 0 && <SelectItem value="none">None</SelectItem>}
+                            {SUBMISSION_SORT_OPTIONS.map((o) => (
+                              <SelectItem
+                                key={o.key}
+                                value={o.key}
+                                disabled={sortLevels.some((k, i) => i !== level && k === o.key)}
+                              >
+                                {o.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 </div>
               </CardContent>

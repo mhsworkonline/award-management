@@ -9,7 +9,7 @@ import {
   parseInstitutionFilter,
   parseInstitutionTypes,
   parseStandardFilter,
-  parseSubmissionSort,
+  parseSubmissionSorts,
   type SubmissionColumnKey,
 } from "@/lib/data/submission-report-columns";
 import { renderSubmissionsListPdf } from "@/lib/pdf/submissions-list";
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     const academicYearId = url.searchParams.get("academic_year_id");
     if (!academicYearId) return new Response("Missing academic_year_id", { status: 400 });
     const columns = parseColumns(url);
-    const sort = parseSubmissionSort(url.searchParams.get("sort"));
+    const sorts = parseSubmissionSorts(url.searchParams.get("sort"));
     const institutionKeys = parseInstitutionFilter(url.searchParams.get("institutions"));
     const institutionTypes = parseInstitutionTypes(url.searchParams.get("types"));
     const standardIds = parseStandardFilter(url.searchParams.get("standards"));
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       textSize,
       rows,
       columns,
-      sort,
+      sorts,
       academicYearLabel: year.data?.label ?? "—",
       organizationName: branding.organizationName,
       logoUrl: branding.logoUrl,

@@ -117,7 +117,7 @@ export type SubmissionsListPdfProps = {
   textSize: PdfTextSize;
   rows: SubmissionListRow[];
   columns: SubmissionColumnKey[];
-  sort: SubmissionSortKey;
+  sorts: SubmissionSortKey[];
   academicYearLabel: string;
   organizationName: string;
   /** Public URL of a raster (PNG/JPG/WEBP) logo, or null to omit it. */
@@ -130,7 +130,7 @@ export type SubmissionsListPdfProps = {
 export function SubmissionsListPdf({
   rows,
   columns,
-  sort,
+  sorts,
   academicYearLabel,
   organizationName,
   logoUrl,
@@ -141,7 +141,7 @@ export function SubmissionsListPdf({
   const styles = createStyles(fitScale(pdfScale(textSize), columns, labels));
   const totalWeight = columns.reduce((sum, key) => sum + (COLUMN_WEIGHT[key] ?? 1), 0) || 1;
   const widthOf = (key: SubmissionColumnKey) => `${((COLUMN_WEIGHT[key] ?? 1) / totalWeight) * 100}%`;
-  const groups = groupSubmissionRows(rows, sort);
+  const groups = groupSubmissionRows(rows, sorts);
 
   return (
     <Document title={customTitle || "Approved Applications"} author={organizationName} subject={academicYearLabel}>

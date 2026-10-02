@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { canAccess, requirePermission } from "@/lib/supabase/server";
+import { canAccess, requireAdmin, requirePermission } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ORG_ID } from "@/lib/constants";
 import { buildDiff, writeAudit } from "@/lib/audit";
@@ -605,6 +605,193 @@ async function setReviewStatus(
 
 export async function rejectSubmission(id: string, note: string): Promise<ActionResult<null>> {
   return setReviewStatus(id, "rejected", note);
+}
+
+/** What reversing this approval would destroy — shown before the admin
+ *  confirms, since the delete below can't be undone. Counts, not full rows:
+ *  this is a warning label, not an audit of what's attached. */
+export type ApprovalReversalImpact = {
+  academicRecordId: string | null;
+  awards: number;
+  giftAllocations: number;
+  distributed: number;
+  /** Other approved submissions still pointing at the same roster entry — a
+   *  duplicate application approved into the same enrollment (see
+   *  approveSubmission's "link to an identical existing enrollment" step).
+   *  When this is > 0, reversing only unlinks *this* submission; the record,
+   *  its awards and the other submission(s) are left alone. */
+  sharedWithOtherSubmissions: number;
+};
+
+export async function getApprovalReversalImpact(id: string): Promise<ActionResult<ApprovalReversalImpact>> {
+  try {
+    const { supabase } = await requireAdmin();
+    const { data: sub, error: subError } = await supabase
+      .from(T.publicSubmissions)
+      .select("academic_record_id")
+      .eq("id", id)
+      .eq("org_id", ORG_ID)
+      .single();
+    if (subError || !sub) return { ok: false, error: "Submission not found" };
+
+    if (!sub.academic_record_id) {
+      return {
+        ok: true,
+        data: { academicRecordId: null, awards: 0, giftAllocations: 0, distributed: 0, sharedWithOtherSubmissions: 0 },
+      };
+    }
+
+    const { count: sharedCount, error: sharedError } = await supabase
+      .from(T.publicSubmissions)
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", ORG_ID)
+      .eq("academic_record_id", sub.academic_record_id)
+      .neq("id", id);
+    if (sharedError) return { ok: false, error: friendly(sharedError.message) };
+
+    const { data: awards, error: awardsError } = await supabase
+      .from(T.studentAwards)
+      .select("id, gift_allocations:am_gift_allocations ( id, distribution_records:am_distribution_records ( status ) )")
+      .eq("org_id", ORG_ID)
+      .eq("academic_record_id", sub.academic_record_id);
+    if (awardsError) return { ok: false, error: friendly(awardsError.message) };
+
+    // am_distribution_records.gift_allocation_id is unique, so PostgREST embeds
+    // it as a single object (or null) here, not an array — unlike student_awards
+    // -> gift_allocations above, which is a genuine one-to-many.
+    type Row = { id: string; gift_allocations: { id: string; distribution_records: { status: string } | null }[] };
+    const rows = (awards ?? []) as unknown as Row[];
+    const allocations = rows.flatMap((r) => r.gift_allocations ?? []);
+    const distributed = allocations.filter((a) => a.distribution_records?.status === "distributed").length;
+
+    return {
+      ok: true,
+      data: {
+        academicRecordId: sub.academic_record_id,
+        awards: rows.length,
+        giftAllocations: allocations.length,
+        distributed,
+        sharedWithOtherSubmissions: sharedCount ?? 0,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
+}
+
+/** Admin-only reversal of an Approved submission back to Pending, Rejected or
+ *  Doubtful — the one path out of Approved (see the module notes above: every
+ *  other decision goes through setReviewStatus/approveSubmission, which
+ *  deliberately can't move *away* from Approved). Reachable only here, and
+ *  only for admins, because approving created a real roster entry: this
+ *  deletes that am_academic_records row outright (cascading, via the FKs in
+ *  migration 0002, to its awards, their gift allocations, and any
+ *  distribution record — the same stock-restore trigger a manual gift
+ *  deallocation uses fires here too), rather than leaving an orphaned
+ *  enrollment the submission no longer points to. The persistent am_students
+ *  row is never touched — it may still be the same person's record for
+ *  another year.
+ *
+ *  EXCEPT when another submission still points at the same academic_record_id
+ *  — a duplicate application that approveSubmission linked into the same
+ *  enrollment instead of creating a second one (identical institution/
+ *  standard-or-course/period for the same student — see its "link to an
+ *  existing enrollment" step). Deleting the record there would silently
+ *  orphan the *other* submission too, via academic_record_id's `on delete set
+ *  null` — exactly what happened once in production before this check
+ *  existed. So when it's shared, this only unlinks the submission being
+ *  reversed; the record, its awards, and the other submission are untouched. */
+export async function reverseApproval(
+  id: string,
+  toStatus: Extract<SubmissionStatus, "pending" | "rejected" | "doubtful">,
+  note: string,
+): Promise<ActionResult<null>> {
+  const trimmedNote = note.trim();
+  if (!trimmedNote) return { ok: false, error: "A note is required" };
+
+  try {
+    const { supabase, actor } = await requireAdmin();
+    const admin = createAdminClient();
+
+    const { data: before, error: beforeError } = await supabase
+      .from(T.publicSubmissions)
+      .select("*")
+      .eq("id", id)
+      .eq("org_id", ORG_ID)
+      .single();
+    if (beforeError || !before) return { ok: false, error: "Submission not found" };
+    if (before.status !== "approved") return { ok: false, error: "Only an approved submission can be reversed" };
+
+    if (before.academic_record_id) {
+      const { count: sharedCount, error: sharedError } = await supabase
+        .from(T.publicSubmissions)
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", ORG_ID)
+        .eq("academic_record_id", before.academic_record_id)
+        .neq("id", id);
+      if (sharedError) return { ok: false, error: friendly(sharedError.message) };
+
+      if (sharedCount && sharedCount > 0) {
+        // Another submission owns this enrollment too — leave the record (and
+        // its awards) alone and just stop this submission from claiming it.
+        await writeAudit(supabase, {
+          entity: "academic_records",
+          entityId: before.academic_record_id,
+          action: "update",
+          actor,
+          diff: {
+            unlinked_from_submission: id,
+            note: trimmedNote,
+            reason: "record is shared with another submission — not deleted",
+          },
+        });
+      } else {
+        const { data: removed, error: deleteError } = await admin
+          .from(T.academicRecords)
+          .delete()
+          .eq("id", before.academic_record_id)
+          .eq("org_id", ORG_ID)
+          .select("id");
+        if (deleteError) return { ok: false, error: friendly(deleteError.message) };
+        if (!removed?.length) return { ok: false, error: NOTHING_DELETED };
+
+        await writeAudit(supabase, {
+          entity: "academic_records",
+          entityId: before.academic_record_id,
+          action: "delete",
+          actor,
+          diff: { reversed_from_submission: id, note: trimmedNote },
+        });
+      }
+    }
+
+    const { error: updateError } = await supabase
+      .from(T.publicSubmissions)
+      .update({
+        status: toStatus,
+        student_id: null,
+        academic_record_id: null,
+        reviewed_by: actor,
+        reviewed_at: new Date().toISOString(),
+        review_note: trimmedNote,
+      })
+      .eq("id", id)
+      .eq("org_id", ORG_ID);
+    if (updateError) return { ok: false, error: friendly(updateError.message) };
+
+    await writeAudit(supabase, {
+      entity: "public_submissions",
+      entityId: id,
+      action: "update",
+      actor,
+      diff: { status: { from: "approved", to: toStatus }, note: trimmedNote, reversed: true },
+    });
+
+    revalidateAll();
+    return { ok: true, data: null };
+  } catch (e) {
+    return { ok: false, error: message(e) };
+  }
 }
 
 /** Processed, but staff aren't confident about this student — a resolution
