@@ -195,11 +195,16 @@ export function AssignAwardsButton({ yearId, yearLabel }: { yearId: string | nul
                   {summary.skipped.count > 0 && (
                     <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
                       <p className="font-medium">
-                        {summary.skipped.count} student{summary.skipped.count === 1 ? " has" : "s have"} a grade but
-                        no percentage — not touched
+                        {summary.skipped.count} student{summary.skipped.count === 1 ? " needs" : "s need"} your
+                        attention — not touched
                       </p>
                       <p className="mt-0.5 text-[12px] text-muted-foreground">
-                        {summary.skipped.students.map((s) => `${s.name} (${s.group}, ${s.grade})`).join(" · ")}
+                        A grade but no percentage to rank by, or no Standard/Course set (it may have been deleted):
+                      </p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        {summary.skipped.students
+                          .map((s) => `${s.name} (${s.group}${s.grade ? `, ${s.grade}` : ""})`)
+                          .join(" · ")}
                         {summary.skipped.count > summary.skipped.students.length &&
                           ` · and ${summary.skipped.count - summary.skipped.students.length} more`}
                       </p>

@@ -7,8 +7,15 @@ import { buildDiff, writeAudit } from "@/lib/audit";
 import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
 import { academicRecordSchema, gradeEntrySchema } from "@/lib/validators";
 import { listRosterForGrading } from "@/lib/data/academic-records";
+import { clearBandAwards } from "@/lib/actions/award-assignment";
 import { T } from "@/lib/tables";
 import type { ActionResult } from "@/lib/types";
+
+/** Fields that decide which Assign Awards band a record falls into (see
+ *  lib/awards/percentage-rule.ts and lib/awards/college-rank-rule.ts) — a
+ *  change to any of these can make an existing rank/consolation award wrong,
+ *  so saveAcademicRecord clears it rather than leave a stale one in place. */
+const BAND_AFFECTING_FIELDS = ["standard_id", "course_id", "period_no", "percentage", "grade"] as const;
 
 export type RosterEntry = Awaited<ReturnType<typeof listRosterForGrading>>[number];
 
@@ -76,6 +83,10 @@ export async function saveAcademicRecord(raw: unknown): Promise<ActionResult<{ i
         actor,
         diff: buildDiff(before ?? null, data),
       });
+
+      const bandAffectingChange = BAND_AFFECTING_FIELDS.some((field) => before && before[field] !== data[field]);
+      if (bandAffectingChange) await clearBandAwards(supabase, actor, [id]);
+
       revalidateRecords();
       return { ok: true, data: { id } };
     }
@@ -145,16 +156,23 @@ export async function saveGrades(
   try {
     const { supabase, actor } = await requireUser();
 
+    // Percentage/grade feed straight into Assign Awards' bands, so a bulk
+    // correction here needs the same stale-award clearing saveAcademicRecord
+    // does — fetched up front as one query rather than once per row.
+    const parsedEntries = entries
+      .map((raw) => gradeEntrySchema.safeParse(raw))
+      .filter((p): p is Extract<typeof p, { success: true }> => p.success);
+    const ids = parsedEntries.map((p) => p.data.id);
+    const { data: beforeRows } = ids.length
+      ? await supabase.from(T.academicRecords).select("id, percentage, grade").in("id", ids)
+      : { data: [] as { id: string; percentage: number | null; grade: string | null }[] };
+    const beforeById = new Map((beforeRows ?? []).map((r) => [r.id, r]));
+
     let saved = 0;
-    let failed = 0;
+    let failed = entries.length - parsedEntries.length;
+    const bandAffectedIds: string[] = [];
 
-    for (const raw of entries) {
-      const parsed = gradeEntrySchema.safeParse(raw);
-      if (!parsed.success) {
-        failed += 1;
-        continue;
-      }
-
+    for (const parsed of parsedEntries) {
       const { id, ...values } = parsed.data;
       const { error } = await supabase
         .from(T.academicRecords)
@@ -162,9 +180,18 @@ export async function saveGrades(
         .eq("id", id)
         .eq("org_id", ORG_ID);
 
-      if (error) failed += 1;
-      else saved += 1;
+      if (error) {
+        failed += 1;
+        continue;
+      }
+      saved += 1;
+      const before = beforeById.get(id);
+      if (before && (before.percentage !== values.percentage || before.grade !== values.grade)) {
+        bandAffectedIds.push(id);
+      }
     }
+
+    if (bandAffectedIds.length > 0) await clearBandAwards(supabase, actor, bandAffectedIds);
 
     await writeAudit(supabase, {
       entity: "academic_records",

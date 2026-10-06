@@ -59,6 +59,50 @@ function chunks<T>(items: T[], size: number): T[][] {
 
 type Supa = Awaited<ReturnType<typeof requirePermission>>["supabase"];
 
+type OrphanRow = {
+  id: string;
+  students: { first_name: string; middle_name: string | null; last_name: string } | null;
+};
+
+/** Records that *used* to have a placement but no longer do — almost always
+ *  because the Standard/Course they were on got deleted (the FK is `on delete
+ *  set null`, so the record itself survives with a gap where the group used
+ *  to be). Without this, such a record is invisible to its rule entirely (the
+ *  main query requires a non-null group to rank within) and any award it
+ *  already had would sit there unverified forever. Surfaced as "skip" so a
+ *  human notices and re-places them, same as a grade-only record. */
+async function collectOrphanedCandidates(
+  supabase: Supa,
+  academicYearId: string,
+  institutionType: "school" | "college",
+  nullColumn: "standard_id" | "course_id",
+  groupLabel: string,
+): Promise<Candidate[]> {
+  const rows = await fetchAll<OrphanRow>((from, to) =>
+    supabase
+      .from(T.academicRecords)
+      .select(
+        `id, students:am_students!inner ( first_name, middle_name, last_name ),
+         institutions:am_institutions!inner ( type )`,
+      )
+      .eq("org_id", ORG_ID)
+      .eq("academic_year_id", academicYearId)
+      .eq("institutions.type", institutionType)
+      .is(nullColumn, null)
+      .order("id")
+      .range(from, to),
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    band: "skip" as const,
+    studentName: [row.students?.first_name, row.students?.last_name].filter(Boolean).join(" ") || "—",
+    groupLabel,
+    grade: null,
+    studentAwards: null,
+  }));
+}
+
 /** Pages through a query in FETCH_CHUNK-sized batches (PostgREST's own cap per
  *  request). `query` is loosely typed because Supabase infers a slightly
  *  different (but compatible) shape for embedded relations than the plain
@@ -108,7 +152,7 @@ async function collectSchoolCandidates(supabase: Supa, academicYearId: string): 
       .range(from, to),
   );
 
-  return rows.map((row) => ({
+  const placed: Candidate[] = rows.map((row) => ({
     id: row.id,
     band: bandFor(row.percentage === null ? null : Number(row.percentage), row.grade, row.standards?.level ?? RULE_MAX_LEVEL),
     studentName: [row.students?.first_name, row.students?.last_name].filter(Boolean).join(" ") || "—",
@@ -116,6 +160,8 @@ async function collectSchoolCandidates(supabase: Supa, academicYearId: string): 
     grade: row.grade,
     studentAwards: row.student_awards,
   }));
+  const orphaned = await collectOrphanedCandidates(supabase, academicYearId, "school", "standard_id", "No standard set");
+  return [...placed, ...orphaned];
 }
 
 type CollegeRow = {
@@ -184,13 +230,14 @@ async function collectCollegeCandidates(supabase: Supa, academicYearId: string):
       });
     }
   }
-  return candidates;
+  const orphaned = await collectOrphanedCandidates(supabase, academicYearId, "college", "course_id", "No course set");
+  return [...candidates, ...orphaned];
 }
 
-/** Works out what the chosen rule would do, without changing anything — the
- *  same plan drives both the preview and the real run, so the numbers shown
- *  before confirming are exactly what the run then does. */
-async function buildPlan(supabase: Supa, academicYearId: string, ruleKey: AwardRuleKey) {
+/** The four rule-driven categories' ids, keyed by band — shared by buildPlan
+ *  (to compare/assign them) and clearBandAwards (to know which award rows
+ *  count as "rule-driven" and are therefore safe to clear automatically). */
+export async function resolveBandCategoryIds(supabase: Supa): Promise<Record<AwardBand, string>> {
   const { data: categories, error: catError } = await supabase
     .from(T.awardCategories)
     .select("id, name")
@@ -208,6 +255,52 @@ async function buildPlan(supabase: Supa, academicYearId: string, ruleKey: AwardR
   if (missing.length > 0) {
     throw new Error(`Add these award categories in Settings first: ${missing.join(", ")}`);
   }
+  return categoryId;
+}
+
+/** Deletes any of the four rule-driven awards (1st/2nd/3rd Rank, Consolation)
+ *  on the given academic records — called wherever a record's course/standard/
+ *  period/percentage/grade changes in a way that could invalidate whichever
+ *  band it was last placed in, so a now-possibly-wrong award is never left
+ *  sitting there looking valid. The next "Assign Awards" run fills it back in
+ *  correctly (or leaves it blank if the record can no longer be placed at
+ *  all — see the "no course/standard set" skip entries in buildPlan). A
+ *  manually-assigned award outside these four categories is never touched. */
+export async function clearBandAwards(supabase: Supa, actor: string, academicRecordIds: string[]): Promise<number> {
+  if (academicRecordIds.length === 0) return 0;
+  const categoryId = await resolveBandCategoryIds(supabase);
+  const bandCategoryIds = Object.values(categoryId);
+
+  let cleared = 0;
+  for (const ids of chunks(academicRecordIds, WRITE_CHUNK)) {
+    const { data, error } = await supabase
+      .from(T.studentAwards)
+      .delete()
+      .in("academic_record_id", ids)
+      .in("award_category_id", bandCategoryIds)
+      .eq("org_id", ORG_ID)
+      .select("id");
+    if (error) throw new Error(friendly(error.message));
+    cleared += data?.length ?? 0;
+  }
+
+  if (cleared > 0) {
+    await writeAudit(supabase, {
+      entity: "student_awards",
+      entityId: null,
+      action: "delete",
+      actor,
+      diff: { cleared_stale_band_awards: { academic_record_ids: academicRecordIds, count: cleared } },
+    });
+  }
+  return cleared;
+}
+
+/** Works out what the chosen rule would do, without changing anything — the
+ *  same plan drives both the preview and the real run, so the numbers shown
+ *  before confirming are exactly what the run then does. */
+async function buildPlan(supabase: Supa, academicYearId: string, ruleKey: AwardRuleKey) {
+  const categoryId = await resolveBandCategoryIds(supabase);
   const bandByCategoryId = new Map(BAND_ORDER.map((b) => [categoryId[b], b]));
 
   const candidates =

@@ -8,6 +8,7 @@ import { buildDiff, writeAudit } from "@/lib/audit";
 import { friendly, message, NOTHING_DELETED } from "@/lib/actions/crud";
 import { submissionEditSchema } from "@/lib/validators";
 import { findDuplicateStudents } from "@/lib/data/students";
+import { clearBandAwards } from "@/lib/actions/award-assignment";
 import { ATTACHMENTS_BUCKET, FN, T } from "@/lib/tables";
 import { ALLOWED_ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES } from "@/lib/attachments";
 import type { ActionResult, AuditLog, SubmissionNote, SubmissionStatus } from "@/lib/types";
@@ -18,6 +19,10 @@ function revalidateAll() {
   revalidatePath("/academic-records");
   revalidatePath("/dashboard");
 }
+
+/** Fields that decide which Assign Awards band a record falls into — see the
+ *  identical constant (and fuller explanation) in lib/actions/academic-records.ts. */
+const BAND_AFFECTING_FIELDS = ["standard_id", "course_id", "period_no", "percentage", "grade"] as const;
 
 /** The same "is this actually placeable" bar approving has always enforced —
  *  reused when editing could just as easily un-resolve one of these (e.g.
@@ -151,6 +156,13 @@ export async function updateSubmission(raw: unknown): Promise<ActionResult<null>
         actor,
         diff: { synced_from_submission_edit: id },
       });
+
+      // The submission and its linked record are kept in sync by this same
+      // function, so the submission's own before-snapshot doubles as the
+      // record's — no extra fetch needed to see whether anything that could
+      // change the record's Assign Awards band just changed.
+      const bandAffectingChange = BAND_AFFECTING_FIELDS.some((field) => before[field] !== values[field]);
+      if (bandAffectingChange) await clearBandAwards(supabase, actor, [before.academic_record_id]);
     }
 
     await writeAudit(supabase, {

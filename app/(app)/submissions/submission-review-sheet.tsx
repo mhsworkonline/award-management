@@ -876,7 +876,20 @@ export function SubmissionReviewSheet({
                 <FieldGrid>
                   <Field label="Course">
                     <div className="flex gap-2">
-                      <Select value={courseId} onValueChange={(v) => setValue("course_id", v)} disabled={!canEdit}>
+                      <Select
+                        value={courseId}
+                        onValueChange={(v) => {
+                          setValue("course_id", v);
+                          // A Year/Period number only means something relative to its
+                          // own course (and for some courses — CA Intermediate's Group
+                          // 1/2, say — isn't a sequential year at all), so a value left
+                          // over from the previous course is never safe to carry across.
+                          // Clearing it forces an explicit re-pick instead of silently
+                          // saving a period that may not even exist on the new course.
+                          setValue("period_no", "");
+                        }}
+                        disabled={!canEdit}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select course" />
                         </SelectTrigger>
@@ -896,6 +909,7 @@ export function SubmissionReviewSheet({
                           onCreated={(c) => {
                             setPendingCourses((p) => [...p, c]);
                             setValue("course_id", c.id);
+                            setValue("period_no", "");
                           }}
                         />
                       )}

@@ -141,6 +141,9 @@ export function friendly(raw: string) {
   if (raw.includes("am_students_placement_ck")) {
     return "Select a standard (school) or a course (college)";
   }
+  if (raw.includes("am_academic_records_placement_ck")) {
+    return "Students are still enrolled under this — move them to a different standard/course first";
+  }
   if (raw.includes("Insufficient stock")) {
     return raw.slice(raw.indexOf("Insufficient stock"));
   }

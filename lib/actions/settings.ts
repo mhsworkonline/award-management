@@ -5,6 +5,7 @@ import { ORG_ID } from "@/lib/constants";
 import { CONFIG_TABLES, T } from "@/lib/tables";
 import { writeAudit } from "@/lib/audit";
 import { deleteEntity, friendly, message, saveEntity } from "@/lib/actions/crud";
+import { clearBandAwards } from "@/lib/actions/award-assignment";
 import {
   academicYearSchema,
   awardCategorySchema,
@@ -60,18 +61,58 @@ export async function saveConfig(
   });
 }
 
+/** A Course or Standard is `on delete set null` on am_academic_records — but
+ *  am_academic_records_placement_ck requires every record to keep *some*
+ *  placement (standard_id or course_id, never neither), so deleting one
+ *  while a record's *only* placement actually fails outright with a
+ *  constraint error, rather than silently blanking it. That still leaves one
+ *  real gap: a record that happens to carry both (data from before this rule
+ *  existed, say) loses just the one being deleted and keeps the other,
+ *  quietly changing which rule governs it — so any rank/consolation award it
+ *  had is cleared too, once the delete is confirmed to have gone through
+ *  (never before: clearing an award for a delete that then fails would wipe
+ *  it for nothing). See lib/actions/award-assignment.ts's "No course/standard
+ *  set" skip entries for how staff are shown anything this still misses. */
+const PLACEMENT_COLUMN: Partial<Record<ConfigTable, "course_id" | "standard_id">> = {
+  courses: "course_id",
+  standards: "standard_id",
+};
+
 export async function deleteConfig(
   entity: ConfigTable,
   id: string,
 ): Promise<ActionResult<null>> {
   if (!REGISTRY[entity]) return { ok: false, error: "Unknown configuration table" };
-  return deleteEntity({
+
+  const placementColumn = PLACEMENT_COLUMN[entity];
+  let affectedRecordIds: string[] = [];
+  if (placementColumn) {
+    const { supabase } = await requireUser();
+    const { data: affected } = await supabase.from(T.academicRecords).select("id").eq(placementColumn, id);
+    affectedRecordIds = (affected ?? []).map((r) => r.id as string);
+  }
+
+  const result = await deleteEntity({
     table: CONFIG_TABLES[entity],
     entity,
     module: CONFIG_MODULE[entity],
     id,
     revalidate: REVALIDATE[entity],
   });
+  if (!result.ok) return result;
+
+  if (affectedRecordIds.length > 0) {
+    try {
+      const { supabase, actor } = await requireUser();
+      await clearBandAwards(supabase, actor, affectedRecordIds);
+    } catch (e) {
+      // The course/standard is already gone — a cleanup failure here
+      // shouldn't be reported as the delete itself having failed.
+      console.error("[deleteConfig] clearBandAwards failed after delete:", message(e));
+    }
+  }
+
+  return result;
 }
 
 /** Which module's Delete permission each config entity falls under — mirrors
